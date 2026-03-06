@@ -12,7 +12,8 @@ import type {
 import {
   createPaymentRequired,
   createPaymentRequirement,
-  verifyAndSettle,
+  verifyPayment,
+  settlePayment,
   encodePaymentResponse,
 } from "./payment.js";
 
@@ -29,26 +30,7 @@ interface Response {
   setHeader(name: string, value: string): void;
 }
 
-type NextFunction = () => void;
-
-/**
- * Options for payment middleware
- */
-export interface PaymentMiddlewareOptions {
-  /** 
-   * Timing strategy for EVM payments:
-   * - "verify-first": Verify → Deliver → Settle (faster, but risky)
-   * - "settle-first": Verify → Settle → Deliver (safer, default)
-   */
-  evmStrategy?: "verify-first" | "settle-first";
-  
-  /**
-   * Timing strategy for FastSet payments:
-   * - "verify-only": Verify only (tx already on-chain) - default for FastSet
-   * - "settle-first": Also call settle endpoint
-   */
-  fastsetStrategy?: "verify-only" | "settle-first";
-}
+type NextFunction = () => void | Promise<void>;
 
 /**
  * Match a route pattern to a request
@@ -96,6 +78,7 @@ function findRouteConfig(
 
 /**
  * Check if network is FastSet
+ * FastSet payments are already on-chain, so no settlement needed
  */
 function isFastSetNetwork(network: string): boolean {
   return network.startsWith("fastset-") || network === "fast";
@@ -104,22 +87,31 @@ function isFastSetNetwork(network: string): boolean {
 /**
  * Create x402 payment middleware for Express
  * 
+ * Payment flow differs by network type:
+ * - FastSet: Verify → Serve content (payment already on-chain)
+ * - EVM: Verify → Settle → Serve content (payment must be submitted on-chain)
+ * 
  * @param payTo - Address to receive payments
  * @param routes - Route configuration map
  * @param facilitator - Facilitator configuration
- * @param options - Middleware options
+ * 
+ * @example
+ * ```typescript
+ * app.use(paymentMiddleware(
+ *   "0x1234...",
+ *   {
+ *     "GET /api/premium/*": { price: "$0.10", network: "arbitrum-sepolia" },
+ *     "POST /api/ai/generate": { price: "$0.01", network: "fastset-devnet" },
+ *   },
+ *   { url: "http://localhost:4020" }
+ * ));
+ * ```
  */
 export function paymentMiddleware(
   payTo: string,
   routes: RoutesConfig,
-  facilitator: FacilitatorConfig,
-  options: PaymentMiddlewareOptions = {}
+  facilitator: FacilitatorConfig
 ) {
-  const {
-    evmStrategy = "settle-first",
-    fastsetStrategy = "verify-only",
-  } = options;
-  
   return async function x402Middleware(
     req: Request,
     res: Response,
@@ -154,31 +146,69 @@ export function paymentMiddleware(
       req.path
     );
     
+    const isFastSet = isFastSetNetwork(routeConfig.network);
+    
     try {
-      const isFastSet = isFastSetNetwork(routeConfig.network);
-      
-      // Verify and settle payment
-      const paymentResponse = await verifyAndSettle(
+      // Step 1: Verify payment with facilitator
+      const verifyResult = await verifyPayment(
         paymentHeader,
         paymentRequirement,
         facilitator
       );
       
-      // Set response header
-      res.setHeader(
-        "X-PAYMENT-RESPONSE",
-        encodePaymentResponse(paymentResponse)
-      );
-      
-      if (!paymentResponse.success) {
+      if (!verifyResult.valid) {
         res.status(402);
         return res.json({
-          error: paymentResponse.errorMessage || "Payment failed",
+          error: verifyResult.invalidReason || "Payment verification failed",
           accepts: [paymentRequirement],
+          payer: verifyResult.payer,
         });
       }
       
-      // Payment successful - proceed to handler
+      // Step 2: For FastSet, payment is already on-chain - serve content immediately
+      if (isFastSet) {
+        // Set response header with verification info
+        res.setHeader(
+          "X-PAYMENT-RESPONSE",
+          encodePaymentResponse({
+            success: true,
+            network: verifyResult.network,
+            payer: verifyResult.payer,
+          })
+        );
+        
+        // Serve content
+        return next();
+      }
+      
+      // Step 3: For EVM, must settle before serving content
+      const settleResult = await settlePayment(
+        paymentHeader,
+        paymentRequirement,
+        facilitator
+      );
+      
+      if (!settleResult.success) {
+        res.status(402);
+        return res.json({
+          error: settleResult.errorMessage || "Payment settlement failed",
+          accepts: [paymentRequirement],
+          payer: verifyResult.payer,
+        });
+      }
+      
+      // Set response header with settlement info
+      res.setHeader(
+        "X-PAYMENT-RESPONSE",
+        encodePaymentResponse({
+          success: true,
+          txHash: settleResult.txHash,
+          network: settleResult.network || verifyResult.network,
+          payer: settleResult.payer || verifyResult.payer,
+        })
+      );
+      
+      // Payment successful - serve content
       return next();
       
     } catch (error) {

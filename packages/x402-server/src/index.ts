@@ -59,5 +59,7 @@ export {
 export {
   paymentMiddleware,
   paywall,
-  type PaymentMiddlewareOptions,
+  type Request,
+  type Response,
+  type NextFunction,
 } from "./middleware.js";
