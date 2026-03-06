@@ -1,36 +1,101 @@
 /**
  * EVM payment handler for x402 using EIP-3009 transferWithAuthorization
+ * 
+ * Includes auto-bridge from FastSet when EVM USDC balance is insufficient.
  */
 
+import { createPublicClient, http, erc20Abi, type Chain } from 'viem';
+import { arbitrumSepolia, baseSepolia, arbitrum, base } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { 
   EvmWallet, 
+  FastSetWallet,
   PaymentRequired, 
   PaymentRequirement, 
   X402PayResult,
   Eip3009Authorization 
 } from './types.js';
+import { bridgeSetusdcToUsdc, getFastSetBalance, getBridgeConfig } from './bridge.js';
 
 /**
  * Network configuration
  */
 interface NetworkConfig {
-  chain: string;
+  chain: Chain;
   network: 'testnet' | 'mainnet';
   chainId: number;
 }
 
 const NETWORK_MAP: Record<string, NetworkConfig> = {
-  'arbitrum-sepolia': { chain: 'arbitrum', network: 'testnet', chainId: 421614 },
-  'arbitrum': { chain: 'arbitrum', network: 'mainnet', chainId: 42161 },
-  'base-sepolia': { chain: 'base', network: 'testnet', chainId: 84532 },
-  'base': { chain: 'base', network: 'mainnet', chainId: 8453 },
+  'arbitrum-sepolia': { chain: arbitrumSepolia, network: 'testnet', chainId: 421614 },
+  'arbitrum': { chain: arbitrum, network: 'mainnet', chainId: 42161 },
+  'base-sepolia': { chain: baseSepolia, network: 'testnet', chainId: 84532 },
+  'base': { chain: base, network: 'mainnet', chainId: 8453 },
 };
 
 export const EVM_NETWORKS = Object.keys(NETWORK_MAP);
 
 /**
+ * Get EVM USDC balance
+ */
+async function getEvmUsdcBalance(
+  address: `0x${string}`,
+  usdcAddress: `0x${string}`,
+  chain: Chain
+): Promise<bigint> {
+  const client = createPublicClient({
+    chain,
+    transport: http(),
+  });
+
+  try {
+    const balance = await client.readContract({
+      address: usdcAddress,
+      abi: erc20Abi,
+      functionName: 'balanceOf',
+      args: [address],
+    });
+    return balance;
+  } catch {
+    return 0n;
+  }
+}
+
+/**
+ * Poll for USDC balance to reach target
+ */
+async function pollForBalance(
+  address: `0x${string}`,
+  usdcAddress: `0x${string}`,
+  chain: Chain,
+  targetAmount: bigint,
+  maxWaitMs: number = 120000,
+  pollIntervalMs: number = 3000,
+  log: (msg: string) => void = () => {}
+): Promise<{ arrived: boolean; balance: bigint }> {
+  const startTime = Date.now();
+  let pollCount = 0;
+
+  while (Date.now() - startTime < maxWaitMs) {
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+    pollCount++;
+    
+    const balance = await getEvmUsdcBalance(address, usdcAddress, chain);
+    log(`  [Poll ${pollCount}] Balance: ${Number(balance) / 1e6} USDC (need ${Number(targetAmount) / 1e6})`);
+    
+    if (balance >= targetAmount) {
+      return { arrived: true, balance };
+    }
+  }
+
+  return { arrived: false, balance: 0n };
+}
+
+/**
  * Handle x402 payment on EVM networks using EIP-3009
+ * 
+ * With auto-bridge: if EVM USDC balance is insufficient and a FastSet wallet
+ * is provided, automatically bridges SETUSDC → USDC via OmniSet.
  */
 export async function handleEvmPayment(
   url: string,
@@ -41,7 +106,8 @@ export async function handleEvmPayment(
   evmReq: PaymentRequirement,
   wallet: EvmWallet,
   verbose: boolean = false,
-  logs: string[] = []
+  logs: string[] = [],
+  fastsetWallet?: FastSetWallet
 ): Promise<X402PayResult> {
   const log = (msg: string) => { 
     if (verbose) { 
@@ -55,6 +121,7 @@ export async function handleEvmPayment(
   log(`  Amount: ${evmReq.maxAmountRequired} (raw) = ${Number(evmReq.maxAmountRequired) / 1e6} USDC`);
   log(`  Recipient: ${evmReq.payTo}`);
   log(`  Asset (USDC): ${evmReq.asset}`);
+  log(`  FastSet wallet available: ${fastsetWallet ? 'yes' : 'no'}`);
 
   // Get network config
   const networkConfig = NETWORK_MAP[evmReq.network];
@@ -73,7 +140,97 @@ export async function handleEvmPayment(
     throw new Error('No USDC asset address in payment requirements');
   }
 
-  // Build EIP-3009 authorization
+  const requiredAmount = BigInt(evmReq.maxAmountRequired);
+  let bridged = false;
+  let bridgeTxHash: string | undefined;
+
+  // ─── Auto-Bridge Logic ──────────────────────────────────────────────────────
+  log(`[EVM] Checking USDC balance...`);
+  let currentBalance = await getEvmUsdcBalance(account.address, usdcAddress, networkConfig.chain);
+  log(`  Current balance: ${Number(currentBalance) / 1e6} USDC`);
+  log(`  Required: ${Number(requiredAmount) / 1e6} USDC`);
+
+  if (currentBalance < requiredAmount) {
+    log(`  ⚠ Insufficient balance!`);
+
+    if (!fastsetWallet) {
+      throw new Error(
+        `Insufficient USDC balance: have ${Number(currentBalance) / 1e6}, need ${Number(requiredAmount) / 1e6}. ` +
+        `Provide a FastSet wallet with SETUSDC to enable auto-bridge.`
+      );
+    }
+
+    // Check if this network supports bridging
+    const bridgeConfig = getBridgeConfig(evmReq.network);
+    if (!bridgeConfig) {
+      throw new Error(
+        `Insufficient USDC balance and auto-bridge not supported for ${evmReq.network}`
+      );
+    }
+
+    // Check FastSet SETUSDC balance
+    log(`[EVM] Checking FastSet SETUSDC balance...`);
+    const fastBalance = await getFastSetBalance(fastsetWallet);
+    log(`  FastSet SETUSDC balance: ${Number(fastBalance) / 1e6}`);
+
+    const shortfall = requiredAmount - currentBalance;
+    if (fastBalance < shortfall) {
+      throw new Error(
+        `Insufficient balance for payment. ` +
+        `EVM USDC: ${Number(currentBalance) / 1e6}, FastSet SETUSDC: ${Number(fastBalance) / 1e6}, ` +
+        `Need: ${Number(requiredAmount) / 1e6}`
+      );
+    }
+
+    // Bridge the shortfall amount
+    log(`[EVM] Auto-bridging ${Number(shortfall) / 1e6} SETUSDC → USDC via OmniSet...`);
+    const bridgeStartTime = Date.now();
+    
+    const bridgeResult = await bridgeSetusdcToUsdc({
+      fastsetWallet,
+      evmReceiverAddress: account.address,
+      amount: shortfall,
+      network: evmReq.network,
+      verbose,
+      logs,
+    });
+
+    if (!bridgeResult.success) {
+      throw new Error(`Auto-bridge failed: ${bridgeResult.error}`);
+    }
+
+    bridged = true;
+    bridgeTxHash = bridgeResult.txHash;
+    log(`  ✓ Bridge submitted: ${bridgeTxHash}`);
+
+    // Poll for USDC arrival
+    log(`[EVM] Waiting for USDC to arrive...`);
+    const pollResult = await pollForBalance(
+      account.address,
+      usdcAddress,
+      networkConfig.chain,
+      requiredAmount,
+      120000, // 2 minutes
+      3000,   // 3 seconds
+      log
+    );
+
+    if (!pollResult.arrived) {
+      throw new Error(
+        `Bridge submitted (${bridgeTxHash}) but USDC has not arrived after 2 minutes. ` +
+        `The bridge may still be processing. Check your balance later and retry.`
+      );
+    }
+
+    const bridgeDuration = Date.now() - bridgeStartTime;
+    currentBalance = pollResult.balance;
+    log(`  ✓ USDC arrived in ${bridgeDuration}ms`);
+    log(`  New balance: ${Number(currentBalance) / 1e6} USDC`);
+  } else {
+    log(`  ✓ Sufficient balance`);
+  }
+
+  // ─── EIP-3009 Authorization ─────────────────────────────────────────────────
   log(`[EVM] Building EIP-3009 transferWithAuthorization...`);
   const authorization: Eip3009Authorization = {
     from: account.address,
@@ -165,10 +322,12 @@ export async function handleEvmPayment(
   }
 
   const amountHuman = (Number(evmReq.maxAmountRequired) / 1e6).toString();
+  const bridgeNote = bridged ? ` (auto-bridged ${bridgeTxHash?.slice(0, 10)}...)` : '';
 
   log(`━━━ EVM Payment Handler END ━━━`);
   log(`  Success: ${paidRes.ok}`);
   log(`  Amount: ${amountHuman} USDC`);
+  log(`  Bridged: ${bridged}`);
 
   return {
     success: paidRes.ok,
@@ -180,9 +339,11 @@ export async function handleEvmPayment(
       amount: amountHuman,
       recipient: evmReq.payTo,
       txHash: settleTxHash,
+      bridged,
+      bridgeTxHash,
     },
     note: paidRes.ok
-      ? `EVM payment of ${amountHuman} USDC successful. Content delivered.`
+      ? `EVM payment of ${amountHuman} USDC successful${bridgeNote}. Content delivered.`
       : `Payment signed but server returned ${paidRes.status}.`,
     logs: verbose ? logs : undefined,
   };

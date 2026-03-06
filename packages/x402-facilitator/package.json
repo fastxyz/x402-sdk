@@ -1,0 +1,37 @@
+{
+  "name": "x402-facilitator",
+  "version": "0.1.0",
+  "description": "x402 payment protocol - facilitator SDK for verifying and settling payments on-chain",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "x402",
+    "payments",
+    "facilitator",
+    "settlement"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "viem": "^2.21.0",
+    "@mysten/bcs": "^1.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  },
+  "peerDependencies": {
+    "express": "^4.18.0"
+  },
+  "peerDependenciesMeta": {
+    "express": {
+      "optional": true
+    }
+  }
+}
