@@ -1,8 +1,9 @@
 /**
  * x402-facilitator types
+ * Aligned with reference implementation
  */
 
-import type { Account, Chain, Transport, WalletClient } from "viem";
+import type { Chain } from "viem";
 
 /**
  * Payment requirement from the server
@@ -64,10 +65,10 @@ export interface EvmPayload {
 }
 
 /**
- * Verify response
+ * Verify response (matches reference: isValid, not valid)
  */
 export interface VerifyResponse {
-  valid: boolean;
+  isValid: boolean;
   invalidReason?: string;
   payer?: string;
   network?: string;
@@ -78,9 +79,9 @@ export interface VerifyResponse {
  */
 export interface SettleResponse {
   success: boolean;
-  txHash?: string;
   transaction?: string;
-  errorMessage?: string;
+  txHash?: string;
+  errorReason?: string;
   network?: string;
   payer?: string;
 }
@@ -114,6 +115,10 @@ export interface EvmChainConfig {
   chain: Chain;
   rpcUrl?: string;
   usdcAddress: `0x${string}`;
+  /** USDC contract name (for EIP-712 domain) */
+  usdcName?: string;
+  /** USDC contract version (for EIP-712 domain) */
+  usdcVersion?: string;
 }
 
 /**
@@ -132,4 +137,21 @@ export function getNetworkType(network: string): NetworkType {
     return "svm";
   }
   return "evm";
+}
+
+/**
+ * Get chain ID from network name
+ */
+export function getNetworkId(network: string): number {
+  const networkIds: Record<string, number> = {
+    "ethereum": 1,
+    "ethereum-sepolia": 11155111,
+    "arbitrum": 42161,
+    "arbitrum-sepolia": 421614,
+    "base": 8453,
+    "base-sepolia": 84532,
+    "optimism": 10,
+    "polygon": 137,
+  };
+  return networkIds[network] || 0;
 }

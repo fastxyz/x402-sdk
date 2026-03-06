@@ -12,30 +12,20 @@ npm install x402-server
 
 ## Quick Start
 
-### Single Network (EVM or FastSet)
-
 ```typescript
 import express from 'express';
 import { paymentMiddleware } from 'x402-server';
 
 const app = express();
 
-// EVM-only server
+// Protect routes with payment requirements
 app.use(paymentMiddleware(
-  "0x1234567890abcdef...",  // Your EVM address
+  "0x1234567890abcdef...",  // Your payment address
   {
     "GET /api/premium/*": { price: "$0.10", network: "arbitrum-sepolia" },
+    "POST /api/generate": { price: "$0.50", network: "base-sepolia" },
   },
   { url: "http://localhost:4020" }  // Facilitator URL
-));
-
-// OR FastSet-only server
-app.use(paymentMiddleware(
-  "fast1abc123...",  // Your FastSet address
-  {
-    "GET /api/premium/*": { price: "$0.10", network: "fastset-devnet" },
-  },
-  { url: "http://localhost:4020" }
 ));
 
 app.get('/api/premium/data', (req, res) => {
@@ -45,51 +35,22 @@ app.get('/api/premium/data', (req, res) => {
 app.listen(3000);
 ```
 
-### Multiple Networks (EVM + FastSet)
+## Multi-Network Support (EVM + FastSet)
 
-For servers that accept payments on both EVM and FastSet networks:
+Accept payments on both EVM and FastSet networks:
 
 ```typescript
-import express from 'express';
-import { paymentMiddleware } from 'x402-server';
-
-const app = express();
-
 app.use(paymentMiddleware(
-  // Multiple payment addresses by network type
   {
     evm: "0x1234567890abcdef...",     // Receives EVM payments
     fastset: "fast1abc123xyz...",      // Receives FastSet payments
   },
   {
-    // EVM routes - paid to your EVM address
-    "GET /api/evm/data": { 
-      price: "$0.10", 
-      network: "arbitrum-sepolia" 
-    },
-    "POST /api/evm/generate": { 
-      price: "$0.50", 
-      network: "base-sepolia" 
-    },
-    
-    // FastSet routes - paid to your FastSet address
-    "GET /api/fast/data": { 
-      price: "$0.01", 
-      network: "fastset-devnet" 
-    },
+    "GET /api/evm/data": { price: "$0.10", network: "arbitrum-sepolia" },
+    "GET /api/fast/data": { price: "$0.01", network: "fastset-devnet" },
   },
   { url: "http://localhost:4020" }
 ));
-
-app.get('/api/evm/data', (req, res) => {
-  res.json({ data: 'EVM premium content!' });
-});
-
-app.get('/api/fast/data', (req, res) => {
-  res.json({ data: 'FastSet premium content!' });
-});
-
-app.listen(3000);
 ```
 
 ## How It Works
@@ -106,7 +67,7 @@ Server calls Facilitator /verify → Certificate valid?
                     ↓
               ✅ Serve Content
 ```
-FastSet payments are submitted by the client before the request. The server only needs to verify the transaction certificate is valid — no settlement needed.
+FastSet payments are submitted by the client before the request. The server only verifies the transaction certificate — no settlement step needed.
 
 ### EVM Payments (Authorization Only)
 ```
@@ -124,54 +85,43 @@ EVM payments use EIP-3009 `transferWithAuthorization`. The client signs an autho
 
 ## API
 
-### `paymentMiddleware(payTo, routes, facilitator)`
-
-Creates Express middleware for payment-protected routes.
+### paymentMiddleware
 
 ```typescript
-function paymentMiddleware(
-  payTo: PayToConfig,               // Address(es) to receive payments
-  routes: RoutesConfig,             // Route → payment config map
-  facilitator: FacilitatorConfig    // Facilitator service config
-): ExpressMiddleware;
+import { paymentMiddleware } from 'x402-server';
+
+paymentMiddleware(payTo, routes, facilitator)
 ```
 
-### Payment Address Configuration
+**Parameters:**
 
-```typescript
-// Option 1: Single address (for single network type)
-const payTo = "0x1234...";           // EVM address
-const payTo = "fast1abc...";         // FastSet address
+| Name | Type | Description |
+|------|------|-------------|
+| `payTo` | `string \| { evm?: string, fastset?: string }` | Payment address(es) |
+| `routes` | `Record<string, RouteConfig>` | Route patterns → payment config |
+| `facilitator` | `FacilitatorConfig` | Facilitator service config |
 
-// Option 2: Multiple addresses (for multi-network servers)
-const payTo = {
-  evm: "0x1234...",                  // Used for EVM network routes
-  fastset: "fast1abc...",            // Used for FastSet network routes
-};
-```
-
-### Route Configuration
+### RouteConfig
 
 ```typescript
 interface RouteConfig {
-  price: string;      // "$0.10", "0.1 USDC", or "100000" (raw)
+  price: string;      // "$0.10", "0.1 USDC", or "100000" (raw units)
   network: string;    // "arbitrum-sepolia", "fastset-devnet", etc.
   config?: {
     description?: string;
     mimeType?: string;
-    asset?: string;   // Custom token address
+    asset?: string;   // Custom token address (defaults to USDC)
   };
 }
-
-// Route patterns support wildcards and HTTP methods
-const routes = {
-  "/api/data":           { ... },  // Any method
-  "GET /api/weather/*":  { ... },  // GET only, wildcard path
-  "POST /api/ai/:model": { ... },  // POST only, path params
-};
 ```
 
-### Facilitator Configuration
+**Route patterns:**
+- `"/api/data"` — matches any HTTP method
+- `"GET /api/data"` — matches GET only
+- `"/api/*"` — wildcard matching
+- `"/api/:id"` — path parameters
+
+### FacilitatorConfig
 
 ```typescript
 interface FacilitatorConfig {
@@ -183,75 +133,61 @@ interface FacilitatorConfig {
 }
 ```
 
-### `paywall(payTo, config, facilitator)`
-
-Simple helper for single-route protection:
-
-```typescript
-import { paywall } from 'x402-server';
-
-// Protect all routes with same config
-app.use('/api/premium', paywall(
-  "0x1234...",
-  { price: "$0.05", network: "base-sepolia" },
-  { url: "http://localhost:4020" }
-));
-```
-
 ## Supported Networks
 
-### FastSet (Instant Settlement)
+### FastSet
 | Network | Description |
 |---------|-------------|
 | `fastset-devnet` | FastSet testnet |
 | `fastset-mainnet` | FastSet mainnet |
 
-### EVM (EIP-3009)
-| Network | Chain ID | Description |
-|---------|----------|-------------|
-| `arbitrum-sepolia` | 421614 | Arbitrum testnet |
-| `arbitrum` | 42161 | Arbitrum mainnet |
-| `base-sepolia` | 84532 | Base testnet |
-| `base` | 8453 | Base mainnet |
+### EVM
+| Network | Chain ID |
+|---------|----------|
+| `arbitrum-sepolia` | 421614 |
+| `arbitrum` | 42161 |
+| `base-sepolia` | 84532 |
+| `base` | 8453 |
+| `ethereum` | 1 |
 
 ## Response Headers
 
-On successful payment, the server sets:
+On successful payment:
 
 ```
-X-PAYMENT-RESPONSE: <base64-encoded response>
+X-PAYMENT-RESPONSE: <base64-encoded JSON>
 ```
 
-Decoded response:
+Decoded:
 ```json
 {
   "success": true,
-  "txHash": "0x...",      // Settlement tx hash (EVM only)
+  "txHash": "0x...",
   "network": "arbitrum-sepolia",
   "payer": "0x..."
 }
 ```
 
+Note: `txHash` is only present for EVM payments (settlement transaction).
+
 ## Error Responses
 
-### No Payment Header (402)
+### 402 Payment Required (No Payment Header)
 ```json
 {
   "error": "X-PAYMENT header is required",
-  "accepts": [
-    {
-      "scheme": "exact",
-      "network": "arbitrum-sepolia",
-      "maxAmountRequired": "100000",
-      "payTo": "0x...",
-      "asset": "0x...",
-      "extra": { "name": "USD Coin", "version": "2" }
-    }
-  ]
+  "accepts": [{
+    "scheme": "exact",
+    "network": "arbitrum-sepolia",
+    "maxAmountRequired": "100000",
+    "payTo": "0x...",
+    "asset": "0x...",
+    "extra": { "name": "USD Coin", "version": "2" }
+  }]
 }
 ```
 
-### Invalid Payment (402)
+### 402 Verification Failed
 ```json
 {
   "error": "Invalid signature",
@@ -260,7 +196,7 @@ Decoded response:
 }
 ```
 
-### Settlement Failed (402)
+### 402 Settlement Failed
 ```json
 {
   "error": "Insufficient balance for transfer",
@@ -269,9 +205,9 @@ Decoded response:
 }
 ```
 
-## With Facilitator
+## Facilitator
 
-This package requires a running facilitator service to verify and settle payments. Use `x402-facilitator` to run your own, or connect to a hosted service.
+This package requires a facilitator service to verify and settle payments.
 
 ```typescript
 // Local facilitator
@@ -286,6 +222,8 @@ This package requires a running facilitator service to verify and settle payment
   }),
 }
 ```
+
+Use `x402-facilitator` to run your own facilitator service.
 
 ## License
 

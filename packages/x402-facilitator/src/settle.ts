@@ -1,5 +1,6 @@
 /**
  * Payment settlement logic
+ * Aligned with reference implementation
  */
 
 import {
@@ -8,6 +9,7 @@ import {
   http,
   type Hex,
   parseAbi,
+  parseSignature,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import type {
@@ -20,6 +22,7 @@ import type {
 } from "./types.js";
 import { getNetworkType } from "./types.js";
 import { getEvmChainConfig } from "./chains.js";
+import { verify } from "./verify.js";
 
 /**
  * USDC ABI for transferWithAuthorization
@@ -47,7 +50,7 @@ export async function settle(
     default:
       return {
         success: false,
-        errorMessage: `Unsupported network type: ${networkType}`,
+        errorReason: `unsupported_network_type`,
         network: paymentPayload.network,
       };
   }
@@ -64,7 +67,7 @@ async function settleEvmPayment(
   if (!config.evmPrivateKey) {
     return {
       success: false,
-      errorMessage: "EVM private key not configured",
+      errorReason: "facilitator_not_configured",
       network: paymentPayload.network,
     };
   }
@@ -73,7 +76,7 @@ async function settleEvmPayment(
   if (!chainConfig) {
     return {
       success: false,
-      errorMessage: `Unknown EVM network: ${paymentPayload.network}`,
+      errorReason: "invalid_network",
       network: paymentPayload.network,
     };
   }
@@ -82,25 +85,25 @@ async function settleEvmPayment(
   if (!payload?.signature || !payload?.authorization) {
     return {
       success: false,
-      errorMessage: "Missing signature or authorization in payload",
+      errorReason: "invalid_payload",
       network: paymentPayload.network,
     };
   }
 
   const { authorization, signature } = payload;
 
-  try {
-    // Parse signature into v, r, s
-    const sig = signature as Hex;
-    const r = `0x${sig.slice(2, 66)}` as Hex;
-    const s = `0x${sig.slice(66, 130)}` as Hex;
-    let v = parseInt(sig.slice(130, 132), 16);
-    
-    // Normalize v (EIP-155)
-    if (v < 27) {
-      v += 27;
-    }
+  // Re-verify before settling (reference implementation does this)
+  const verifyResult = await verify(paymentPayload, paymentRequirement);
+  if (!verifyResult.isValid) {
+    return {
+      success: false,
+      errorReason: verifyResult.invalidReason || "invalid_payment",
+      network: paymentPayload.network,
+      payer: authorization.from,
+    };
+  }
 
+  try {
     // Create wallet client
     const account = privateKeyToAccount(config.evmPrivateKey);
     const walletClient = createWalletClient({
@@ -126,11 +129,17 @@ async function settleEvmPayment(
     if (alreadyUsed) {
       return {
         success: false,
-        errorMessage: "Authorization nonce already used",
+        errorReason: "authorization_already_used",
         network: paymentPayload.network,
         payer: authorization.from,
       };
     }
+
+    // Parse signature into r, s, v using viem's parseSignature
+    const parsedSig = parseSignature(signature as Hex);
+    const v = parsedSig.v !== undefined 
+      ? Number(parsedSig.v) 
+      : (parsedSig.yParity === 0 ? 27 : 28);
 
     // Call transferWithAuthorization
     const txHash = await walletClient.writeContract({
@@ -145,8 +154,8 @@ async function settleEvmPayment(
         BigInt(authorization.validBefore),
         authorization.nonce as `0x${string}`,
         v,
-        r,
-        s,
+        parsedSig.r,
+        parsedSig.s,
       ],
     });
 
@@ -156,12 +165,12 @@ async function settleEvmPayment(
       confirmations: 1,
     });
 
-    if (receipt.status === "reverted") {
+    if (receipt.status !== "success") {
       return {
         success: false,
-        errorMessage: "Transaction reverted",
-        txHash,
+        errorReason: "invalid_transaction_state",
         transaction: txHash,
+        txHash,
         network: paymentPayload.network,
         payer: authorization.from,
       };
@@ -169,43 +178,50 @@ async function settleEvmPayment(
 
     return {
       success: true,
-      txHash,
       transaction: txHash,
+      txHash,
       network: paymentPayload.network,
       payer: authorization.from,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     return {
       success: false,
-      errorMessage: `Settlement failed: ${error}`,
+      errorReason: `settlement_failed: ${message}`,
       network: paymentPayload.network,
-      payer: payload.authorization.from,
+      payer: authorization.from,
     };
   }
 }
 
 /**
  * Settle FastSet payment (no-op - already on-chain)
+ * FastSet transactions are settled when the wallet creates the transaction certificate
  */
 async function settleFastSetPayment(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement
 ): Promise<SettleResponse> {
-  // FastSet transactions are already settled when we receive the certificate
-  // The certificate proves consensus was reached and the transaction is on-chain
-  
   const payload = paymentPayload.payload as FastSetPayload;
   if (!payload?.transactionCertificate) {
     return {
       success: false,
-      errorMessage: "Missing transactionCertificate in payload",
+      errorReason: "invalid_payload",
       network: paymentPayload.network,
     };
   }
 
+  // FastSet transactions are already settled on-chain
+  // The wallet extension handles signing and broadcasting
+  // Return success with a transaction identifier based on the certificate
+  const transactionId = payload.transactionCertificate.envelope
+    ? payload.transactionCertificate.envelope.substring(0, 66)
+    : "";
+
   return {
     success: true,
+    transaction: transactionId,
     network: paymentPayload.network,
-    // Could extract txHash from envelope if needed
+    // TODO: Extract payer from transaction envelope
   };
 }

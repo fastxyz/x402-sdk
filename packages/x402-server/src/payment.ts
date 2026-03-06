@@ -86,7 +86,7 @@ export async function verifyPayment(
   if (!response.ok) {
     const text = await response.text();
     return {
-      valid: false,
+      isValid: false,
       invalidReason: `Facilitator error: ${response.status} ${text}`,
     };
   }
@@ -120,7 +120,7 @@ export async function settlePayment(
     const text = await response.text();
     return {
       success: false,
-      errorMessage: `Facilitator error: ${response.status} ${text}`,
+      errorReason: `Facilitator error: ${response.status} ${text}`,
     };
   }
   
@@ -152,7 +152,7 @@ export async function verifyAndSettle(
   // First verify
   const verifyResult = await verifyPayment(paymentHeader, paymentRequirement, facilitator);
   
-  if (!verifyResult.valid) {
+  if (!verifyResult.isValid) {
     return {
       success: false,
       errorMessage: verifyResult.invalidReason || "Payment verification failed",
@@ -169,6 +169,6 @@ export async function verifyAndSettle(
     txHash: settleResult.txHash,
     network: settleResult.network || verifyResult.network,
     payer: settleResult.payer || verifyResult.payer,
-    errorMessage: settleResult.errorMessage,
+    errorMessage: settleResult.errorReason,
   };
 }

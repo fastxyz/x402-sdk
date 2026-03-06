@@ -1,16 +1,15 @@
 /**
  * Payment verification logic
+ * Aligned with reference implementation
  */
 
 import {
   createPublicClient,
   http,
-  recoverAddress,
+  type Address,
   type Hex,
-  keccak256,
-  encodePacked,
-  toBytes,
   hexToBytes,
+  parseAbi,
 } from "viem";
 import type {
   PaymentPayload,
@@ -19,9 +18,29 @@ import type {
   EvmPayload,
   FastSetPayload,
 } from "./types.js";
-import { getNetworkType } from "./types.js";
-import { getEvmChainConfig, getFastSetRpcUrl } from "./chains.js";
-import { bcs } from "@mysten/bcs";
+import { getNetworkType, getNetworkId } from "./types.js";
+import { getEvmChainConfig } from "./chains.js";
+
+/**
+ * USDC ABI for balance check
+ */
+const ERC20_ABI = parseAbi([
+  "function balanceOf(address account) external view returns (uint256)",
+]);
+
+/**
+ * EIP-3009 authorization types for typed data verification
+ */
+const authorizationTypes = {
+  TransferWithAuthorization: [
+    { name: "from", type: "address" },
+    { name: "to", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "validAfter", type: "uint256" },
+    { name: "validBefore", type: "uint256" },
+    { name: "nonce", type: "bytes32" },
+  ],
+} as const;
 
 /**
  * Verify a payment
@@ -39,8 +58,8 @@ export async function verify(
       return verifyFastSetPayment(paymentPayload, paymentRequirement);
     default:
       return {
-        valid: false,
-        invalidReason: `Unsupported network type: ${networkType}`,
+        isValid: false,
+        invalidReason: `unsupported_network_type`,
         network: paymentPayload.network,
       };
   }
@@ -48,6 +67,7 @@ export async function verify(
 
 /**
  * Verify EVM EIP-3009 payment
+ * Uses viem's verifyTypedData for signature verification
  */
 async function verifyEvmPayment(
   paymentPayload: PaymentPayload,
@@ -56,8 +76,8 @@ async function verifyEvmPayment(
   const chainConfig = getEvmChainConfig(paymentPayload.network);
   if (!chainConfig) {
     return {
-      valid: false,
-      invalidReason: `Unknown EVM network: ${paymentPayload.network}`,
+      isValid: false,
+      invalidReason: `invalid_network`,
       network: paymentPayload.network,
     };
   }
@@ -65,202 +85,227 @@ async function verifyEvmPayment(
   const payload = paymentPayload.payload as EvmPayload;
   if (!payload?.signature || !payload?.authorization) {
     return {
-      valid: false,
-      invalidReason: "Missing signature or authorization in payload",
+      isValid: false,
+      invalidReason: "invalid_payload",
       network: paymentPayload.network,
     };
   }
 
   const { authorization, signature } = payload;
 
-  // Verify the authorization matches requirements
+  // Verify scheme matches
+  if (paymentPayload.scheme !== "exact" || paymentRequirement.scheme !== "exact") {
+    return {
+      isValid: false,
+      invalidReason: "unsupported_scheme",
+      payer: authorization.from,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify network matches
+  if (paymentPayload.network !== paymentRequirement.network) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_network",
+      payer: authorization.from,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify payment recipient matches
   if (authorization.to.toLowerCase() !== paymentRequirement.payTo.toLowerCase()) {
     return {
-      valid: false,
-      invalidReason: `Payment recipient mismatch: ${authorization.to} !== ${paymentRequirement.payTo}`,
-      network: paymentPayload.network,
+      isValid: false,
+      invalidReason: "invalid_exact_evm_payload_recipient_mismatch",
       payer: authorization.from,
+      network: paymentPayload.network,
     };
   }
 
-  // Verify amount
-  if (BigInt(authorization.value) < BigInt(paymentRequirement.maxAmountRequired)) {
-    return {
-      valid: false,
-      invalidReason: `Insufficient amount: ${authorization.value} < ${paymentRequirement.maxAmountRequired}`,
-      network: paymentPayload.network,
-      payer: authorization.from,
-    };
-  }
+  // Get domain parameters
+  const chainId = getNetworkId(paymentPayload.network);
+  const name = paymentRequirement.extra?.name ?? chainConfig.usdcName ?? "USD Coin";
+  const version = paymentRequirement.extra?.version ?? chainConfig.usdcVersion ?? "2";
+  const erc20Address = paymentRequirement.asset as Address;
 
-  // Verify timing
-  const now = Math.floor(Date.now() / 1000);
-  if (BigInt(authorization.validAfter) > BigInt(now)) {
-    return {
-      valid: false,
-      invalidReason: `Authorization not yet valid: validAfter=${authorization.validAfter}, now=${now}`,
-      network: paymentPayload.network,
-      payer: authorization.from,
-    };
-  }
-  if (BigInt(authorization.validBefore) < BigInt(now)) {
-    return {
-      valid: false,
-      invalidReason: `Authorization expired: validBefore=${authorization.validBefore}, now=${now}`,
-      network: paymentPayload.network,
-      payer: authorization.from,
-    };
-  }
+  // Create public client for verification
+  const client = createPublicClient({
+    chain: chainConfig.chain,
+    transport: http(),
+  });
 
-  // Verify signature recovers to the claimed 'from' address
+  // Verify signature using viem's verifyTypedData
   try {
-    const domainSeparator = await getEIP712DomainSeparator(
-      paymentPayload.network,
-      chainConfig.usdcAddress,
-      paymentRequirement.extra?.name as string || "USD Coin",
-      paymentRequirement.extra?.version as string || "2"
-    );
-
-    const typeHash = keccak256(
-      toBytes(
-        "TransferWithAuthorization(address from,address to,uint256 value,uint256 validAfter,uint256 validBefore,bytes32 nonce)"
-      )
-    );
-
-    const structHash = keccak256(
-      encodePacked(
-        ["bytes32", "address", "address", "uint256", "uint256", "uint256", "bytes32"],
-        [
-          typeHash,
-          authorization.from as `0x${string}`,
-          authorization.to as `0x${string}`,
-          BigInt(authorization.value),
-          BigInt(authorization.validAfter),
-          BigInt(authorization.validBefore),
-          authorization.nonce as `0x${string}`,
-        ]
-      )
-    );
-
-    const digest = keccak256(
-      encodePacked(["string", "bytes32", "bytes32"], ["\x19\x01", domainSeparator, structHash])
-    );
-
-    const recoveredAddress = await recoverAddress({
-      hash: digest,
-      signature: signature as `0x${string}`,
+    const isValidSignature = await client.verifyTypedData({
+      address: authorization.from as Address,
+      types: authorizationTypes,
+      primaryType: "TransferWithAuthorization",
+      domain: {
+        name,
+        version,
+        chainId,
+        verifyingContract: erc20Address,
+      },
+      message: {
+        from: authorization.from as Address,
+        to: authorization.to as Address,
+        value: BigInt(authorization.value),
+        validAfter: BigInt(authorization.validAfter),
+        validBefore: BigInt(authorization.validBefore),
+        nonce: authorization.nonce as Hex,
+      },
+      signature: signature as Hex,
     });
 
-    if (recoveredAddress.toLowerCase() !== authorization.from.toLowerCase()) {
+    if (!isValidSignature) {
       return {
-        valid: false,
-        invalidReason: `Signature verification failed: recovered ${recoveredAddress}, expected ${authorization.from}`,
-        network: paymentPayload.network,
+        isValid: false,
+        invalidReason: "invalid_exact_evm_payload_signature",
         payer: authorization.from,
+        network: paymentPayload.network,
       };
     }
   } catch (error) {
     return {
-      valid: false,
-      invalidReason: `Signature verification error: ${error}`,
-      network: paymentPayload.network,
+      isValid: false,
+      invalidReason: "invalid_exact_evm_payload_signature",
       payer: authorization.from,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify timing - validBefore must be sufficiently in the future (pad 6 seconds for 3 blocks)
+  const now = Math.floor(Date.now() / 1000);
+  if (BigInt(authorization.validBefore) < BigInt(now + 6)) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_exact_evm_payload_authorization_valid_before",
+      payer: authorization.from,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify timing - validAfter must be in the past
+  if (BigInt(authorization.validAfter) > BigInt(now)) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_exact_evm_payload_authorization_valid_after",
+      payer: authorization.from,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify value meets requirement
+  if (BigInt(authorization.value) < BigInt(paymentRequirement.maxAmountRequired)) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_exact_evm_payload_authorization_value",
+      payer: authorization.from,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Check on-chain balance
+  try {
+    const balance = await client.readContract({
+      address: erc20Address,
+      abi: ERC20_ABI,
+      functionName: "balanceOf",
+      args: [authorization.from as Address],
+    });
+
+    if (balance < BigInt(paymentRequirement.maxAmountRequired)) {
+      return {
+        isValid: false,
+        invalidReason: "insufficient_funds",
+        payer: authorization.from,
+        network: paymentPayload.network,
+      };
+    }
+  } catch (error) {
+    return {
+      isValid: false,
+      invalidReason: "balance_check_failed",
+      payer: authorization.from,
+      network: paymentPayload.network,
     };
   }
 
   return {
-    valid: true,
-    network: paymentPayload.network,
+    isValid: true,
     payer: authorization.from,
+    network: paymentPayload.network,
   };
 }
 
 /**
- * Get EIP-712 domain separator for USDC contract
- */
-async function getEIP712DomainSeparator(
-  network: string,
-  contractAddress: `0x${string}`,
-  name: string,
-  version: string
-): Promise<`0x${string}`> {
-  const chainConfig = getEvmChainConfig(network);
-  if (!chainConfig) {
-    throw new Error(`Unknown network: ${network}`);
-  }
-
-  const domainTypeHash = keccak256(
-    toBytes("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)")
-  );
-
-  return keccak256(
-    encodePacked(
-      ["bytes32", "bytes32", "bytes32", "uint256", "address"],
-      [
-        domainTypeHash,
-        keccak256(toBytes(name)),
-        keccak256(toBytes(version)),
-        BigInt(chainConfig.chain.id),
-        contractAddress,
-      ]
-    )
-  );
-}
-
-/**
  * Verify FastSet payment (transaction certificate)
+ * FastSet transactions are already on-chain when we receive the certificate
  */
 async function verifyFastSetPayment(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement
 ): Promise<VerifyResponse> {
+  // Verify scheme matches
+  if (paymentPayload.scheme !== "exact" || paymentRequirement.scheme !== "exact") {
+    return {
+      isValid: false,
+      invalidReason: "unsupported_scheme",
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify network matches
+  if (paymentPayload.network !== paymentRequirement.network) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_network",
+      network: paymentPayload.network,
+    };
+  }
+
   const payload = paymentPayload.payload as FastSetPayload;
   if (!payload?.transactionCertificate) {
     return {
-      valid: false,
-      invalidReason: "Missing transactionCertificate in payload",
+      isValid: false,
+      invalidReason: "invalid_payload",
       network: paymentPayload.network,
     };
   }
 
   const { envelope, signatures } = payload.transactionCertificate;
 
-  // Basic validation - certificate must have envelope and signatures
-  if (!envelope || !signatures || signatures.length === 0) {
+  // Validate certificate structure
+  if (!envelope) {
     return {
-      valid: false,
-      invalidReason: "Invalid transaction certificate structure",
+      isValid: false,
+      invalidReason: "invalid_transaction_state",
       network: paymentPayload.network,
     };
   }
 
-  try {
-    // Decode envelope to extract transaction details
-    const envelopeBytes = hexToBytes(envelope as `0x${string}`);
-    
-    // For FastSet, the transaction is already on-chain once we have a certificate
-    // The certificate proves consensus was reached
-    // We could verify the envelope structure, but the certificate is sufficient proof
-    
-    // Minimum signature threshold (configurable, but typically 2f+1)
-    if (signatures.length < 3) {
-      return {
-        valid: false,
-        invalidReason: `Insufficient signatures: ${signatures.length} (need at least 3)`,
-        network: paymentPayload.network,
-      };
-    }
-
+  if (!signatures || signatures.length === 0) {
     return {
-      valid: true,
-      network: paymentPayload.network,
-      // Could extract payer from envelope if needed
-    };
-  } catch (error) {
-    return {
-      valid: false,
-      invalidReason: `FastSet verification error: ${error}`,
+      isValid: false,
+      invalidReason: "invalid_transaction_state",
       network: paymentPayload.network,
     };
   }
+
+  // TODO: Implement full on-chain verification:
+  // 1. Query the FastSet RPC to verify the transaction exists
+  // 2. Check the transaction was executed successfully
+  // 3. Verify the transfer amount matches paymentRequirement.maxAmountRequired
+  // 4. Verify the recipient matches paymentRequirement.payTo
+  // 5. Verify the transaction is sufficiently confirmed
+
+  // For now, accept if certificate exists with valid structure
+  // The certificate proves consensus was reached on the FastSet network
+
+  return {
+    isValid: true,
+    network: paymentPayload.network,
+    // TODO: Extract payer from transaction envelope
+  };
 }

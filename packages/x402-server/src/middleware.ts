@@ -224,7 +224,7 @@ export function paymentMiddleware(
         facilitator
       );
       
-      if (!verifyResult.valid) {
+      if (!verifyResult.isValid) {
         res.status(402);
         return res.json({
           error: verifyResult.invalidReason || "Payment verification failed",
@@ -259,7 +259,7 @@ export function paymentMiddleware(
       if (!settleResult.success) {
         res.status(402);
         return res.json({
-          error: settleResult.errorMessage || "Payment settlement failed",
+          error: settleResult.errorReason || "Payment settlement failed",
           accepts: [paymentRequirement],
           payer: verifyResult.payer,
         });

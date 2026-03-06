@@ -70,23 +70,23 @@ export interface FacilitatorConfig {
 }
 
 /**
- * Facilitator verify response
+ * Facilitator verify response (matches facilitator schema)
  */
 export interface VerifyResponse {
-  valid: boolean;
+  isValid: boolean;
   invalidReason?: string;
   payer?: string;
   network?: string;
 }
 
 /**
- * Facilitator settle response
+ * Facilitator settle response (matches facilitator schema)
  */
 export interface SettleResponse {
   success: boolean;
   txHash?: string;
   transaction?: string;
-  errorMessage?: string;
+  errorReason?: string;
   network?: string;
   payer?: string;
 }

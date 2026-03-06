@@ -59,7 +59,6 @@ export {
 // Middleware
 export {
   paymentMiddleware,
-  paywall,
   type Request,
   type Response,
   type NextFunction,
