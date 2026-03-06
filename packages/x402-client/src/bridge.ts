@@ -106,9 +106,9 @@ interface TransactionResult {
  * Get SETUSDC balance on FastSet
  */
 export async function getFastSetBalance(
-  wallet: FastSetWallet,
-  rpcUrl: string = FASTSET_RPC_URL
+  wallet: FastSetWallet
 ): Promise<bigint> {
+  const rpcUrl = wallet.rpcUrl || FASTSET_RPC_URL;
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
   
   const payload = {

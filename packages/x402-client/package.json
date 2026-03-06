@@ -17,7 +17,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "test": "node --test dist/**/*.test.js"
+    "test": "npm run build && node --test dist/__tests__/*.test.js",
+    "test:watch": "tsc --watch & node --test --watch dist/__tests__/*.test.js"
   },
   "keywords": [
     "x402",
