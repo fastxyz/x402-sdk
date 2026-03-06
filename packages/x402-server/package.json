@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "npm run build && node --test dist/__tests__/*.test.js"
   },
   "keywords": [
     "x402",
@@ -22,6 +23,7 @@
   "license": "MIT",
   "dependencies": {},
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "typescript": "^5.3.3"
   },
   "peerDependencies": {
