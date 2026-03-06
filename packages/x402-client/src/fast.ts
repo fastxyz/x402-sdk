@@ -11,7 +11,7 @@ import type {
 
 export const FAST_NETWORKS = ['fast-testnet', 'fast-mainnet', 'fast'];
 
-const DEFAULT_RPC_URL = 'https://api.fast.xyz/proxy';
+const DEFAULT_RPC_URL = 'https://staging.proxy.fastset.xyz/';
 
 /**
  * Create a Fast transaction executor

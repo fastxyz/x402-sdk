@@ -17,7 +17,7 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CROSS_SIGN_URL = 'https://staging.omniset.fastset.xyz/cross-sign';
-const FAST_RPC_URL = 'https://api.fast.xyz/proxy';
+const FAST_RPC_URL = 'https://staging.proxy.fastset.xyz/';
 
 /** SETUSDC token ID on Fast */
 const SETUSDC_TOKEN_ID = hexToBytes('1e744900021182b293538bb6685b77df095e351364d550021614ce90c8ab9e0a');
