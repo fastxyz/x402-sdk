@@ -8,7 +8,6 @@ import {
   http,
   type Address,
   type Hex,
-  hexToBytes,
   parseAbi,
 } from "viem";
 import type {
@@ -20,6 +19,7 @@ import type {
 } from "./types.js";
 import { getNetworkType, getNetworkId } from "./types.js";
 import { getEvmChainConfig } from "./chains.js";
+import { decodeEnvelope, getTransferDetails, bytesToHex } from "./fastset-bcs.js";
 
 /**
  * USDC ABI for balance check
@@ -240,8 +240,45 @@ async function verifyEvmPayment(
 }
 
 /**
- * Verify FastSet payment (transaction certificate)
- * FastSet transactions are already on-chain when we receive the certificate
+ * Normalize address for comparison
+ * Handles both hex (0x...) and bech32m (set1...) formats
+ */
+function normalizeAddress(addr: string): string {
+  return addr.toLowerCase().replace(/^0x/, "");
+}
+
+/**
+ * Compare two addresses for equality
+ * Supports hex pubkeys and bech32m addresses
+ */
+function addressesMatch(a: string, b: string): boolean {
+  // If both start with "set1", compare directly
+  if (a.startsWith("set1") && b.startsWith("set1")) {
+    return a.toLowerCase() === b.toLowerCase();
+  }
+  
+  // If both are hex, compare normalized
+  if ((a.startsWith("0x") || /^[0-9a-fA-F]+$/.test(a)) &&
+      (b.startsWith("0x") || /^[0-9a-fA-F]+$/.test(b))) {
+    return normalizeAddress(a) === normalizeAddress(b);
+  }
+  
+  // Mixed format - try to extract the hex portion from bech32m
+  // set1 addresses encode the 32-byte pubkey, so we compare the hex representation
+  // For simplicity, if formats don't match, return false
+  // In production, would decode bech32m to get the pubkey bytes
+  return false;
+}
+
+/**
+ * Verify FastSet payment by decoding the transaction certificate
+ * 
+ * Verifies:
+ * 1. Certificate structure (envelope + signatures)
+ * 2. Decode envelope to extract transaction details
+ * 3. Verify recipient matches payTo
+ * 4. Verify amount >= maxAmountRequired
+ * 5. Verify token matches asset
  */
 async function verifyFastSetPayment(
   paymentPayload: PaymentPayload,
@@ -280,7 +317,7 @@ async function verifyFastSetPayment(
   if (!envelope) {
     return {
       isValid: false,
-      invalidReason: "invalid_transaction_state",
+      invalidReason: "missing_envelope",
       network: paymentPayload.network,
     };
   }
@@ -288,24 +325,101 @@ async function verifyFastSetPayment(
   if (!signatures || signatures.length === 0) {
     return {
       isValid: false,
-      invalidReason: "invalid_transaction_state",
+      invalidReason: "missing_signatures",
       network: paymentPayload.network,
     };
   }
 
-  // TODO: Implement full on-chain verification:
-  // 1. Query the FastSet RPC to verify the transaction exists
-  // 2. Check the transaction was executed successfully
-  // 3. Verify the transfer amount matches paymentRequirement.maxAmountRequired
-  // 4. Verify the recipient matches paymentRequirement.payTo
-  // 5. Verify the transaction is sufficiently confirmed
+  // Minimum signature threshold (2f+1 for BFT, typically 3+ for testnets)
+  // FastSet devnet has a small committee, so we check for at least 1
+  // In production, this should be configurable based on network
+  const minSignatures = paymentPayload.network === "fastset-devnet" ? 1 : 3;
+  if (signatures.length < minSignatures) {
+    return {
+      isValid: false,
+      invalidReason: `insufficient_signatures: need ${minSignatures}, got ${signatures.length}`,
+      network: paymentPayload.network,
+    };
+  }
 
-  // For now, accept if certificate exists with valid structure
-  // The certificate proves consensus was reached on the FastSet network
+  // Decode the envelope to extract transaction details
+  let decodedTx;
+  try {
+    decodedTx = decodeEnvelope(envelope);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return {
+      isValid: false,
+      invalidReason: `envelope_decode_failed: ${msg}`,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Extract transfer details
+  const transfer = getTransferDetails(decodedTx);
+  if (!transfer) {
+    return {
+      isValid: false,
+      invalidReason: "not_a_token_transfer",
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify recipient matches payTo
+  if (!addressesMatch(transfer.recipient, paymentRequirement.payTo)) {
+    return {
+      isValid: false,
+      invalidReason: `recipient_mismatch: expected ${paymentRequirement.payTo}, got ${transfer.recipient}`,
+      payer: transfer.sender,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify amount >= maxAmountRequired
+  // FastSet uses 18 decimals for SETUSDC, payment requirement uses 6 decimals
+  // Need to normalize: requirement amount * 10^12 = FastSet amount
+  const requiredAmount = BigInt(paymentRequirement.maxAmountRequired);
+  const fastsetDecimals = 18;
+  const requirementDecimals = 6; // USDC standard
+  const decimalDiff = fastsetDecimals - requirementDecimals;
+  const normalizedRequired = requiredAmount * BigInt(10 ** decimalDiff);
+
+  if (transfer.amount < normalizedRequired) {
+    return {
+      isValid: false,
+      invalidReason: `insufficient_amount: required ${normalizedRequired.toString()}, got ${transfer.amount.toString()}`,
+      payer: transfer.sender,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify token matches asset (if asset is specified)
+  if (paymentRequirement.asset) {
+    const normalizedAsset = normalizeAddress(paymentRequirement.asset);
+    const normalizedTokenId = normalizeAddress(transfer.tokenId);
+    
+    if (normalizedAsset !== normalizedTokenId) {
+      return {
+        isValid: false,
+        invalidReason: `token_mismatch: expected ${paymentRequirement.asset}, got ${transfer.tokenId}`,
+        payer: transfer.sender,
+        network: paymentPayload.network,
+      };
+    }
+  }
+
+  // TODO: Verify committee signatures cryptographically
+  // This would require:
+  // 1. Knowing the committee public keys for the network
+  // 2. Verifying each signature against the envelope hash
+  // For now, we trust the certificate structure + signature count
+
+  // TODO: Query FastSet RPC to verify transaction exists on-chain
+  // This would add an extra layer of verification but adds latency
 
   return {
     isValid: true,
+    payer: transfer.sender,
     network: paymentPayload.network,
-    // TODO: Extract payer from transaction envelope
   };
 }

@@ -65,9 +65,12 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
 
 ### FastSet Payments
 
-1. **Verify**: Validate transaction certificate structure
+1. **Verify**: Decode and validate transaction certificate
    - Check envelope and signatures exist
-   - (TODO: Full on-chain verification)
+   - Decode BCS envelope to extract transaction details
+   - Verify recipient matches `paymentRequirement.payTo`
+   - Verify amount ≥ `maxAmountRequired` (with 18→6 decimal normalization)
+   - Verify token matches `paymentRequirement.asset`
 
 2. **Settle**: No-op — FastSet transactions are already on-chain
    - Certificate proves consensus was reached
@@ -179,6 +182,7 @@ interface FacilitatorConfig {
 
 ## Error Reasons
 
+### EVM Errors
 | Reason | Description |
 |--------|-------------|
 | `unsupported_scheme` | Scheme is not "exact" |
@@ -192,6 +196,18 @@ interface FacilitatorConfig {
 | `insufficient_funds` | Payer doesn't have enough USDC |
 | `authorization_already_used` | Nonce already used |
 | `facilitator_not_configured` | Missing evmPrivateKey |
+
+### FastSet Errors
+| Reason | Description |
+|--------|-------------|
+| `missing_envelope` | Certificate has no envelope |
+| `missing_signatures` | Certificate has no signatures |
+| `insufficient_signatures` | Not enough committee signatures |
+| `envelope_decode_failed` | Failed to decode BCS envelope |
+| `not_a_token_transfer` | Transaction is not a TokenTransfer |
+| `recipient_mismatch` | Recipient doesn't match payTo |
+| `insufficient_amount` | Transfer amount too low |
+| `token_mismatch` | Token doesn't match asset |
 
 ## License
 

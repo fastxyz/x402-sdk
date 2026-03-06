@@ -54,5 +54,16 @@ export {
 export { verify } from "./verify.js";
 export { settle } from "./settle.js";
 
+// FastSet BCS utilities
+export {
+  TransactionBcs,
+  decodeEnvelope,
+  getTransferDetails,
+  bytesToHex,
+  hexToBytes,
+  pubkeyToAddress,
+  type DecodedFastSetTransaction,
+} from "./fastset-bcs.js";
+
 // Server
 export { createFacilitatorServer, createFacilitatorRoutes } from "./server.js";
