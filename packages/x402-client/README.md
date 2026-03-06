@@ -93,17 +93,30 @@ interface FastSetWallet {
 ## How It Works
 
 1. **Initial Request**: Client makes request to protected URL
-2. **402 Response**: Server returns `402 Payment Required` with payment requirements
-3. **Payment**: Client signs payment (TokenTransfer on FastSet, EIP-3009 on EVM)
-4. **Retry**: Client retries request with `X-PAYMENT` header containing payment proof
-5. **Content**: Server verifies payment and returns content
+2. **402 Response**: Server returns `402 Payment Required` with accepted payment methods
+3. **Payment**: Client creates and signs payment based on server requirements:
+
+   **Case A: FastSet Payment**
+   - Client sends a `TokenTransfer` transaction directly to the server's FastSet account
+   - Transaction is submitted on-chain and a certificate is returned
+   - Client includes the transaction certificate in the `X-PAYMENT` header
+
+   **Case B: EVM Payment (Arbitrum, Base, etc.)**
+   - Client checks if their EVM wallet has sufficient USDC balance
+   - **If sufficient**: Client signs an EIP-3009 `transferWithAuthorization` and sends it as the `X-PAYMENT` header
+   - **If insufficient**: Client automatically bridges SETUSDC from their FastSet account to their EVM account via OmniSet, then signs the EIP-3009 authorization
+
+4. **Retry**: Client retries the original request with the `X-PAYMENT` header
+5. **Content**: Server verifies payment (via facilitator) and returns the protected content
 
 ## Examples
 
-### Multiple Wallets
+### Multiple Wallets (with Auto-Bridge)
+
+When you provide both FastSet and EVM wallets, the SDK enables **auto-bridge**: if an EVM payment is required but your EVM wallet lacks sufficient USDC, the SDK will automatically bridge SETUSDC from your FastSet account via OmniSet.
 
 ```typescript
-// Provide both wallets - SDK picks the right one
+// Provide both wallets for auto-bridge support
 const result = await x402Pay({
   url: 'https://api.example.com/data',
   wallet: [
@@ -111,6 +124,11 @@ const result = await x402Pay({
     { type: 'evm', privateKey: '0x...', address: '0x...' },
   ],
 });
+
+// Check if bridging occurred
+if (result.payment?.bridged) {
+  console.log('Auto-bridged via:', result.payment.bridgeTxHash);
+}
 ```
 
 ### Verbose Logging
