@@ -7,7 +7,7 @@ Verify and settle x402 payments on-chain. Supports EVM (EIP-3009) and Fast netwo
 ## Install
 
 ```bash
-npm install x402-facilitator
+npm install @fast/x402-facilitator
 ```
 
 ## Quick Start
@@ -16,7 +16,7 @@ npm install x402-facilitator
 
 ```typescript
 import express from 'express';
-import { createFacilitatorServer } from 'x402-facilitator';
+import { createFacilitatorServer } from '@fast/x402-facilitator';
 
 const app = express();
 app.use(express.json());
@@ -34,7 +34,7 @@ app.listen(4020, () => {
 ### As a Library
 
 ```typescript
-import { verify, settle } from 'x402-facilitator';
+import { verify, settle } from '@fast/x402-facilitator';
 
 // Verify a payment
 const verifyResult = await verify(paymentPayload, paymentRequirement);
@@ -140,7 +140,7 @@ When using `createFacilitatorServer()`:
 ### Functions
 
 ```typescript
-import { verify, settle, createFacilitatorServer } from 'x402-facilitator';
+import { verify, settle, createFacilitatorServer } from '@fast/x402-facilitator';
 
 // Verify payment
 verify(paymentPayload, paymentRequirement): Promise<VerifyResponse>

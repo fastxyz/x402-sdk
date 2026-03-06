@@ -1,5 +1,5 @@
 {
-  "name": "x402-server",
+  "name": "@fast/x402-server",
   "version": "0.1.0",
   "description": "x402 payment protocol - server SDK for creating 402 responses and verifying payments",
   "main": "dist/index.js",
