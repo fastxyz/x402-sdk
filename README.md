@@ -227,7 +227,7 @@ app.use(paymentMiddleware(
   },
   {
     'GET /api/evm/*': { price: '$0.10', network: 'arbitrum-sepolia' },
-    'GET /api/fast/*': { price: '$0.01', network: 'fast-devnet' },
+    'GET /api/fast/*': { price: '$0.01', network: 'fast-testnet' },
   },
   { url: 'http://localhost:4020' }
 ));
@@ -237,7 +237,7 @@ app.use(paymentMiddleware(
 
 | Network | Type | Chain ID | Token | Settlement |
 |---------|------|----------|-------|------------|
-| `fast-devnet` | Fast | - | SETUSDC | ~300ms |
+| `fast-testnet` | Fast | - | SETUSDC | ~300ms |
 | `fast-mainnet` | Fast | - | SETUSDC | ~300ms |
 | `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
 | `arbitrum` | EVM | 42161 | USDC | ~15s |

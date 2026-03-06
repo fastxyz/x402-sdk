@@ -34,7 +34,7 @@ if (result.success) {
 ## Supported Networks
 
 ### Fast
-- `fast-devnet` - Fast testnet
+- `fast-testnet` - Fast testnet
 - `fast-mainnet` - Fast mainnet
 
 ### EVM (EIP-3009)

@@ -183,7 +183,7 @@ describe('x402-server middleware', () => {
       it('should use Fast address for Fast network', async () => {
         const middleware = paymentMiddleware(
           { evm: '0xEvmAddress', fast: 'fast1FastAddress' },
-          { '/api/fast': { price: '$0.10', network: 'fast-devnet' } },
+          { '/api/fast': { price: '$0.10', network: 'fast-testnet' } },
           { url: 'http://localhost:4020' }
         );
 
@@ -199,7 +199,7 @@ describe('x402-server middleware', () => {
       it('should error if address not configured for network', async () => {
         const middleware = paymentMiddleware(
           { evm: '0xEvmAddress' },  // No Fast address
-          { '/api/fast': { price: '$0.10', network: 'fast-devnet' } },
+          { '/api/fast': { price: '$0.10', network: 'fast-testnet' } },
           { url: 'http://localhost:4020' }
         );
 

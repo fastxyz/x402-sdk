@@ -177,7 +177,7 @@ interface FacilitatorConfig {
 ### Fast
 | Network | Description |
 |---------|-------------|
-| `fast-devnet` | Fast testnet |
+| `fast-testnet` | Fast testnet |
 | `fast-mainnet` | Fast mainnet |
 
 ## Error Reasons

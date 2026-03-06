@@ -159,7 +159,7 @@ function resolvePayTo(payTo: PayToConfig, network: string): string {
  *   },
  *   {
  *     "GET /api/evm-data": { price: "$0.10", network: "arbitrum-sepolia" },
- *     "GET /api/fast-data": { price: "$0.01", network: "fast-devnet" },
+ *     "GET /api/fast-data": { price: "$0.01", network: "fast-testnet" },
  *   },
  *   { url: "http://localhost:4020" }
  * ));

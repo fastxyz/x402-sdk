@@ -40,12 +40,12 @@ describe('x402-server payment', () => {
     it('should create Fast payment requirement', () => {
       const req = createPaymentRequirement(
         'fast1abc123xyz',
-        { price: '$0.01', network: 'fast-devnet' },
+        { price: '$0.01', network: 'fast-testnet' },
         '/api/fast-data'
       );
 
       assert.strictEqual(req.scheme, 'exact');
-      assert.strictEqual(req.network, 'fast-devnet');
+      assert.strictEqual(req.network, 'fast-testnet');
       assert.strictEqual(req.maxAmountRequired, '10000');
       assert.strictEqual(req.payTo, 'fast1abc123xyz');
       assert.strictEqual(req.extra, undefined);

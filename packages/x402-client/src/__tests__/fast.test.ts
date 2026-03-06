@@ -13,7 +13,7 @@ describe('Fast Payment Handler', () => {
   describe('FAST_NETWORKS', () => {
     it('should include expected networks', () => {
       assert.ok(Array.isArray(FAST_NETWORKS));
-      assert.ok(FAST_NETWORKS.includes('fast-devnet'));
+      assert.ok(FAST_NETWORKS.includes('fast-testnet'));
       assert.ok(FAST_NETWORKS.includes('fast-mainnet'));
       assert.ok(FAST_NETWORKS.includes('fast'));
     });

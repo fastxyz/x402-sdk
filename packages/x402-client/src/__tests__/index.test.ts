@@ -26,7 +26,7 @@ describe('x402-client', () => {
   describe('constants', () => {
     it('should export FAST_NETWORKS', () => {
       assert.ok(Array.isArray(FAST_NETWORKS));
-      assert.ok(FAST_NETWORKS.includes('fast-devnet'));
+      assert.ok(FAST_NETWORKS.includes('fast-testnet'));
       assert.ok(FAST_NETWORKS.includes('fast-mainnet'));
     });
 

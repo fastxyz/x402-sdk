@@ -5,7 +5,7 @@
  * Handles 402 Payment Required responses by signing and paying for content.
  * 
  * Supports:
- * - Fast networks (fast-devnet, fast-mainnet)
+ * - Fast networks (fast-testnet, fast-mainnet)
  * - EVM networks with EIP-3009 (arbitrum-sepolia, base-sepolia, etc.)
  * - Auto-bridge from Fast → EVM when EVM balance is insufficient
  * 

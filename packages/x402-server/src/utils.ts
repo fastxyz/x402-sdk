@@ -9,7 +9,7 @@ import type { NetworkConfig } from "./types.js";
  */
 export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
   // Fast networks
-  "fast-devnet": {
+  "fast-testnet": {
     asset: "0x1e744900021182b293538bb6685b77df095e351364d550021614ce90c8ab9e0a",
     decimals: 6,
   },

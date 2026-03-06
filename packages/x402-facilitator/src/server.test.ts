@@ -82,7 +82,7 @@ describe("GET /supported", () => {
     expect(networks).toContain("base-sepolia");
     
     // Check for Fast networks
-    expect(networks).toContain("fast-devnet");
+    expect(networks).toContain("fast-testnet");
     expect(networks).toContain("fast-mainnet");
   });
 });
@@ -132,7 +132,7 @@ describe("POST /verify", () => {
     const payloadObj = {
       x402Version: 1,
       scheme: "exact",
-      network: "fast-devnet",
+      network: "fast-testnet",
       payload: {
         transactionCertificate: {
           envelope,
@@ -150,7 +150,7 @@ describe("POST /verify", () => {
       paymentPayload: payloadBase64,
       paymentRequirements: {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -198,7 +198,7 @@ describe("POST /verify", () => {
       paymentPayload: {
         x402Version: 1,
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: {
           transactionCertificate: {
             envelope,
@@ -210,7 +210,7 @@ describe("POST /verify", () => {
       },
       paymentRequirements: {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -293,7 +293,7 @@ describe("POST /settle", () => {
       paymentPayload: {
         x402Version: 1,
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: {
           transactionCertificate: {
             envelope,
@@ -305,7 +305,7 @@ describe("POST /settle", () => {
       },
       paymentRequirements: {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",

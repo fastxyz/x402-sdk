@@ -47,7 +47,7 @@ app.use(paymentMiddleware(
   },
   {
     "GET /api/evm/data": { price: "$0.10", network: "arbitrum-sepolia" },
-    "GET /api/fast/data": { price: "$0.01", network: "fast-devnet" },
+    "GET /api/fast/data": { price: "$0.01", network: "fast-testnet" },
   },
   { url: "http://localhost:4020" }
 ));
@@ -106,7 +106,7 @@ paymentMiddleware(payTo, routes, facilitator)
 ```typescript
 interface RouteConfig {
   price: string;      // "$0.10", "0.1 USDC", or "100000" (raw units)
-  network: string;    // "arbitrum-sepolia", "fast-devnet", etc.
+  network: string;    // "arbitrum-sepolia", "fast-testnet", etc.
   config?: {
     description?: string;
     mimeType?: string;
@@ -138,7 +138,7 @@ interface FacilitatorConfig {
 ### Fast
 | Network | Description |
 |---------|-------------|
-| `fast-devnet` | Fast testnet |
+| `fast-testnet` | Fast testnet |
 | `fast-mainnet` | Fast mainnet |
 
 ### EVM

@@ -58,7 +58,7 @@ export const EVM_CHAINS: Record<string, EvmChainConfig> = {
  * Fast RPC endpoints
  */
 export const FAST_RPC_URLS: Record<string, string> = {
-  "fast-devnet": "https://api.fast.xyz/proxy",
+  "fast-testnet": "https://api.fast.xyz/proxy",
   "fast-mainnet": "https://api.fast.xyz/proxy",
 };
 
@@ -73,7 +73,7 @@ export function getEvmChainConfig(network: string): EvmChainConfig | null {
  * Get Fast RPC URL
  */
 export function getFastRpcUrl(network: string): string {
-  return FAST_RPC_URLS[network] || FAST_RPC_URLS["fast-devnet"];
+  return FAST_RPC_URLS[network] || FAST_RPC_URLS["fast-testnet"];
 }
 
 /**

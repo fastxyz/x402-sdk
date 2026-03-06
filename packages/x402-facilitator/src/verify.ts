@@ -331,9 +331,9 @@ async function verifyFastPayment(
   }
 
   // Minimum signature threshold (2f+1 for BFT, typically 3+ for testnets)
-  // Fast devnet has a small committee, so we check for at least 1
+  // Fast testnet has a small committee, so we check for at least 1
   // In production, this should be configurable based on network
-  const minSignatures = paymentPayload.network === "fast-devnet" ? 1 : 3;
+  const minSignatures = paymentPayload.network === "fast-testnet" ? 1 : 3;
   if (signatures.length < minSignatures) {
     return {
       isValid: false,

@@ -9,7 +9,7 @@ import type {
   X402PayResult 
 } from './types.js';
 
-export const FAST_NETWORKS = ['fast-devnet', 'fast-mainnet', 'fast'];
+export const FAST_NETWORKS = ['fast-testnet', 'fast-mainnet', 'fast'];
 
 const DEFAULT_RPC_URL = 'https://api.fast.xyz/proxy';
 

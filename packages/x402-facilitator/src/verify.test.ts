@@ -58,13 +58,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000", // 1 USDC (6 decimals)
         resource: "/api/data",
         description: "Test",
@@ -90,13 +90,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -121,13 +121,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000", // 1 USDC required
         resource: "/api/data",
         description: "Test",
@@ -153,13 +153,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -178,7 +178,7 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: {
           transactionCertificate: {
             envelope: "",
@@ -189,7 +189,7 @@ describe("verify", () => {
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -215,13 +215,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -246,13 +246,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "wrong-scheme",
-        network: "fast-devnet",
+        network: "fast-testnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -283,7 +283,7 @@ describe("verify", () => {
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fast-devnet",
+        network: "fast-testnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
