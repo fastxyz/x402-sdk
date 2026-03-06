@@ -16,8 +16,8 @@ x402 is a payment protocol built on HTTP status code `402 Payment Required`. It 
 | Package | Description | npm |
 |---------|-------------|-----|
 | [x402-client](./packages/x402-client) | Client SDK - sign and pay for 402 content | `npm i x402-client` |
-| [x402-server](./packages/x402-server) | Server SDK - create 402 responses, verify payments | Coming soon |
-| [x402-facilitator](./packages/x402-facilitator) | Facilitator - settle payments on-chain | Coming soon |
+| [x402-server](./packages/x402-server) | Server SDK - create 402 responses, verify payments | `npm i x402-server` |
+| [x402-facilitator](./packages/x402-facilitator) | Facilitator - verify signatures, settle on-chain | `npm i x402-facilitator` |
 
 ## Quick Start
 
@@ -41,15 +41,41 @@ console.log(result.body); // Your paid content
 ### Server (charge for content)
 
 ```typescript
-// Coming soon: x402-server
-import { x402Middleware } from 'x402-server';
+import express from 'express';
+import { paymentMiddleware } from 'x402-server';
 
-app.use('/api/premium', x402Middleware({
-  price: '0.10',       // $0.10 USDC
-  network: 'arbitrum-sepolia',
-  recipient: '0x...',
-  facilitator: 'https://facilitator.example.com',
-}));
+const app = express();
+
+// Protect routes with payment requirements
+app.use(paymentMiddleware(
+  '0x1234...',  // Your payment address
+  {
+    'GET /api/premium/*': { price: '$0.10', network: 'arbitrum-sepolia' },
+  },
+  { url: 'http://localhost:4020' }  // Facilitator URL
+));
+
+app.get('/api/premium/data', (req, res) => {
+  res.json({ data: 'Premium content!' });
+});
+
+app.listen(3000);
+```
+
+### Multi-Network Server (EVM + FastSet)
+
+```typescript
+app.use(paymentMiddleware(
+  {
+    evm: '0x1234...',       // EVM payment address
+    fastset: 'fast1abc...',  // FastSet payment address
+  },
+  {
+    'GET /api/evm/*': { price: '$0.10', network: 'arbitrum-sepolia' },
+    'GET /api/fast/*': { price: '$0.01', network: 'fastset-devnet' },
+  },
+  { url: 'http://localhost:4020' }
+));
 ```
 
 ## Protocol Flow
@@ -79,16 +105,19 @@ app.use('/api/premium', x402Middleware({
      │                              │  { valid: true }               │
      │                              │<─────────────────────────────────
      │                              │                                │
-     │  200 OK                      │                                │
-     │  { data: ... }               │                                │
+     │  200 OK (FastSet)            │                                │
      │<─────────────────────────────│                                │
      │                              │                                │
-     │                              │  POST /settle (async)          │
+     │                              │  POST /settle (EVM only)       │
      │                              │─────────────────────────────────>
      │                              │                                │
-     │                              │  { txHash: 0x... }             │
-     │                              │<─────────────────────────────────
+     │  200 OK (EVM)                │  { txHash: 0x... }             │
+     │<─────────────────────────────│<─────────────────────────────────
 ```
+
+**Key difference:**
+- **FastSet**: Payment already on-chain → Verify → Serve content
+- **EVM**: Payment is authorization only → Verify → Settle → Serve content
 
 ## Supported Networks
 
