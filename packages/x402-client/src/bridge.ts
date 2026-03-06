@@ -16,7 +16,7 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CROSS_SIGN_URL = 'https://staging.omniset.fastset.xyz/cross-sign';
+const CROSS_SIGN_URL = 'https://staging.allset.fastset.xyz/cross-sign';
 const FAST_RPC_URL = 'https://staging.proxy.fastset.xyz/';
 
 /** fastUSDC token ID on Fast */
@@ -34,14 +34,14 @@ const BRIDGE_CONFIGS: Record<string, BridgeChainConfig> = {
   'arbitrum-sepolia': {
     chainId: 421614,
     usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    fastBridgeAddress: 'fast1pz07pdlspsydyt2g79yeshunhfyjsr5j4ahuyfv8hpdn00ks8u6q8axf9t',
-    relayerUrl: 'https://staging.omniset.fastset.xyz/arbitrum-sepolia-relayer/relay',
+    fastBridgeAddress: 'fast1x0g58phuf0pf32e9uvp3mv6hak4z37ytpqyfzjzhfsehua9kmegqwzv0td',
+    relayerUrl: 'https://staging.allset.fastset.xyz/arbitrum-sepolia/relayer/relay',
   },
   'base-sepolia': {
     chainId: 84532,
     usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
     fastBridgeAddress: 'fast1pz07pdlspsydyt2g79yeshunhfyjsr5j4ahuyfv8hpdn00ks8u6q8axf9t', // TODO: verify base bridge address
-    relayerUrl: 'https://staging.omniset.fastset.xyz/base-sepolia-relayer/relay',
+    relayerUrl: 'https://staging.allset.fastset.xyz/base-sepolia/relayer/relay',
   },
 };
 
