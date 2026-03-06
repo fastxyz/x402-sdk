@@ -1,22 +1,22 @@
 /**
- * FastSet payment handler for x402
+ * Fast payment handler for x402
  */
 
 import type { 
-  FastSetWallet, 
+  FastWallet, 
   PaymentRequired, 
   PaymentRequirement, 
   X402PayResult 
 } from './types.js';
 
-export const FASTSET_NETWORKS = ['fastset-devnet', 'fastset-mainnet', 'fast'];
+export const FAST_NETWORKS = ['fast-devnet', 'fast-mainnet', 'fast'];
 
 const DEFAULT_RPC_URL = 'https://api.fast.xyz/proxy';
 
 /**
- * Create a FastSet transaction executor
+ * Create a Fast transaction executor
  */
-async function createTxExecutor(wallet: FastSetWallet, rpcUrl: string) {
+async function createTxExecutor(wallet: FastWallet, rpcUrl: string) {
   const { bcs } = await import('@mysten/bcs');
   const ed = await import('@noble/ed25519');
   const { sha512 } = await import('@noble/hashes/sha512');
@@ -27,7 +27,7 @@ async function createTxExecutor(wallet: FastSetWallet, rpcUrl: string) {
   const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
 
-  // BCS schema for FastSet transactions
+  // BCS schema for Fast transactions
   const Address = bcs.fixedArray(32, bcs.u8());
   const TokenId = bcs.fixedArray(32, bcs.u8());
   const TokenTransfer = bcs.struct('TokenTransfer', {
@@ -87,11 +87,11 @@ async function createTxExecutor(wallet: FastSetWallet, rpcUrl: string) {
     };
 
     if (result.error) {
-      throw new Error(`FastSet RPC error: ${result.error.message}`);
+      throw new Error(`Fast RPC error: ${result.error.message}`);
     }
 
     if (!result.result) {
-      throw new Error('No result from FastSet RPC');
+      throw new Error('No result from Fast RPC');
     }
 
     return {
@@ -104,16 +104,16 @@ async function createTxExecutor(wallet: FastSetWallet, rpcUrl: string) {
 }
 
 /**
- * Handle x402 payment on FastSet network
+ * Handle x402 payment on Fast network
  */
-export async function handleFastSetPayment(
+export async function handleFastPayment(
   url: string,
   method: string,
   customHeaders: Record<string, string>,
   requestBody: string | undefined,
   paymentRequired: PaymentRequired,
-  fastsetReq: PaymentRequirement,
-  wallet: FastSetWallet,
+  fastReq: PaymentRequirement,
+  wallet: FastWallet,
   verbose: boolean = false,
   logs: string[] = []
 ): Promise<X402PayResult> {
@@ -124,25 +124,25 @@ export async function handleFastSetPayment(
     } 
   };
 
-  log(`━━━ FastSet Payment Handler START ━━━`);
-  log(`  Network: ${fastsetReq.network}`);
-  log(`  Amount: ${fastsetReq.maxAmountRequired} (raw)`);
-  log(`  Recipient: ${fastsetReq.payTo}`);
+  log(`━━━ Fast Payment Handler START ━━━`);
+  log(`  Network: ${fastReq.network}`);
+  log(`  Amount: ${fastReq.maxAmountRequired} (raw)`);
+  log(`  Recipient: ${fastReq.payTo}`);
 
   const rpcUrl = wallet.rpcUrl || DEFAULT_RPC_URL;
   log(`  RPC: ${rpcUrl}`);
   log(`  Payer: ${wallet.address}`);
 
   // Create transaction executor
-  log(`[FastSet] Creating transaction executor...`);
+  log(`[Fast] Creating transaction executor...`);
   const txExecutor = await createTxExecutor(wallet, rpcUrl);
 
   // Determine token ID
-  log(`[FastSet] Determining token ID...`);
+  log(`[Fast] Determining token ID...`);
   let tokenId: Uint8Array;
-  if (fastsetReq.asset) {
-    tokenId = new Uint8Array(Buffer.from(fastsetReq.asset, 'base64'));
-    log(`  Token from asset: ${fastsetReq.asset}`);
+  if (fastReq.asset) {
+    tokenId = new Uint8Array(Buffer.from(fastReq.asset, 'base64'));
+    log(`  Token from asset: ${fastReq.asset}`);
   } else {
     tokenId = new Uint8Array(32);
     tokenId.set([0xfa, 0x57, 0x5e, 0x70], 0); // Default FAST token
@@ -150,22 +150,22 @@ export async function handleFastSetPayment(
   }
 
   // Send TokenTransfer
-  log(`[FastSet] Sending TokenTransfer transaction...`);
+  log(`[Fast] Sending TokenTransfer transaction...`);
   const txStartTime = Date.now();
   const { txHash, certificate } = await txExecutor.sendTokenTransfer(
-    fastsetReq.payTo,
-    fastsetReq.maxAmountRequired,
+    fastReq.payTo,
+    fastReq.maxAmountRequired,
     tokenId
   );
   log(`  Transaction complete in ${Date.now() - txStartTime}ms`);
   log(`  txHash: ${txHash}`);
 
   // Build x402 payment payload
-  log(`[FastSet] Building x402 payment payload...`);
+  log(`[Fast] Building x402 payment payload...`);
   const paymentPayload = {
     x402Version: paymentRequired.x402Version ?? 1,
     scheme: 'exact',
-    network: fastsetReq.network,
+    network: fastReq.network,
     payload: {
       type: 'signAndSendTransaction',
       transactionCertificate: certificate,
@@ -176,7 +176,7 @@ export async function handleFastSetPayment(
   log(`  Payload base64 length: ${payloadBase64.length}`);
 
   // Retry request with X-PAYMENT header
-  log(`[FastSet] Sending paid request with X-PAYMENT header...`);
+  log(`[Fast] Sending paid request with X-PAYMENT header...`);
   const paidRes = await fetch(url, {
     method,
     headers: { ...customHeaders, 'X-PAYMENT': payloadBase64 },
@@ -190,9 +190,9 @@ export async function handleFastSetPayment(
   let resBody: unknown;
   try { resBody = await paidRes.json(); } catch { resBody = await paidRes.text(); }
 
-  const amountHuman = (Number(fastsetReq.maxAmountRequired) / 1e6).toString();
+  const amountHuman = (Number(fastReq.maxAmountRequired) / 1e6).toString();
 
-  log(`━━━ FastSet Payment Handler END ━━━`);
+  log(`━━━ Fast Payment Handler END ━━━`);
   log(`  Success: ${paidRes.ok}`);
   log(`  Amount: ${amountHuman}`);
 
@@ -202,13 +202,13 @@ export async function handleFastSetPayment(
     headers: resHeaders,
     body: resBody,
     payment: {
-      network: fastsetReq.network,
+      network: fastReq.network,
       amount: amountHuman,
-      recipient: fastsetReq.payTo,
+      recipient: fastReq.payTo,
       txHash,
     },
     note: paidRes.ok
-      ? `FastSet payment of ${amountHuman} successful. Content delivered.`
+      ? `Fast payment of ${amountHuman} successful. Content delivered.`
       : `Payment submitted (tx: ${txHash}) but server returned ${paidRes.status}.`,
     logs: verbose ? logs : undefined,
   };

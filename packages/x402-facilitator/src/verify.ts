@@ -15,11 +15,11 @@ import type {
   PaymentRequirement,
   VerifyResponse,
   EvmPayload,
-  FastSetPayload,
+  FastPayload,
 } from "./types.js";
 import { getNetworkType, getNetworkId } from "./types.js";
 import { getEvmChainConfig } from "./chains.js";
-import { decodeEnvelope, getTransferDetails, bytesToHex } from "./fastset-bcs.js";
+import { decodeEnvelope, getTransferDetails, bytesToHex } from "./fast-bcs.js";
 
 /**
  * USDC ABI for balance check
@@ -54,8 +54,8 @@ export async function verify(
   switch (networkType) {
     case "evm":
       return verifyEvmPayment(paymentPayload, paymentRequirement);
-    case "fastset":
-      return verifyFastSetPayment(paymentPayload, paymentRequirement);
+    case "fast":
+      return verifyFastPayment(paymentPayload, paymentRequirement);
     default:
       return {
         isValid: false,
@@ -271,7 +271,7 @@ function addressesMatch(a: string, b: string): boolean {
 }
 
 /**
- * Verify FastSet payment by decoding the transaction certificate
+ * Verify Fast payment by decoding the transaction certificate
  * 
  * Verifies:
  * 1. Certificate structure (envelope + signatures)
@@ -280,7 +280,7 @@ function addressesMatch(a: string, b: string): boolean {
  * 4. Verify amount >= maxAmountRequired
  * 5. Verify token matches asset
  */
-async function verifyFastSetPayment(
+async function verifyFastPayment(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement
 ): Promise<VerifyResponse> {
@@ -302,7 +302,7 @@ async function verifyFastSetPayment(
     };
   }
 
-  const payload = paymentPayload.payload as FastSetPayload;
+  const payload = paymentPayload.payload as FastPayload;
   if (!payload?.transactionCertificate) {
     return {
       isValid: false,
@@ -331,9 +331,9 @@ async function verifyFastSetPayment(
   }
 
   // Minimum signature threshold (2f+1 for BFT, typically 3+ for testnets)
-  // FastSet devnet has a small committee, so we check for at least 1
+  // Fast devnet has a small committee, so we check for at least 1
   // In production, this should be configurable based on network
-  const minSignatures = paymentPayload.network === "fastset-devnet" ? 1 : 3;
+  const minSignatures = paymentPayload.network === "fast-devnet" ? 1 : 3;
   if (signatures.length < minSignatures) {
     return {
       isValid: false,
@@ -376,12 +376,12 @@ async function verifyFastSetPayment(
   }
 
   // Verify amount >= maxAmountRequired
-  // FastSet uses 18 decimals for SETUSDC, payment requirement uses 6 decimals
-  // Need to normalize: requirement amount * 10^12 = FastSet amount
+  // Fast uses 18 decimals for SETUSDC, payment requirement uses 6 decimals
+  // Need to normalize: requirement amount * 10^12 = Fast amount
   const requiredAmount = BigInt(paymentRequirement.maxAmountRequired);
-  const fastsetDecimals = 18;
+  const fastDecimals = 18;
   const requirementDecimals = 6; // USDC standard
-  const decimalDiff = fastsetDecimals - requirementDecimals;
+  const decimalDiff = fastDecimals - requirementDecimals;
   const normalizedRequired = requiredAmount * BigInt(10 ** decimalDiff);
 
   if (transfer.amount < normalizedRequired) {
@@ -414,7 +414,7 @@ async function verifyFastSetPayment(
   // 2. Verifying each signature against the envelope hash
   // For now, we trust the certificate structure + signature count
 
-  // TODO: Query FastSet RPC to verify transaction exists on-chain
+  // TODO: Query Fast RPC to verify transaction exists on-chain
   // This would add an extra layer of verification but adds latency
 
   return {

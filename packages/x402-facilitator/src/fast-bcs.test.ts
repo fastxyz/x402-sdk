@@ -1,5 +1,5 @@
 /**
- * Tests for FastSet BCS decoding
+ * Tests for Fast BCS decoding
  */
 
 import { describe, it, expect } from "vitest";
@@ -9,9 +9,9 @@ import {
   getTransferDetails,
   bytesToHex,
   hexToBytes,
-} from "./fastset-bcs.js";
+} from "./fast-bcs.js";
 
-describe("FastSet BCS utilities", () => {
+describe("Fast BCS utilities", () => {
   describe("bytesToHex", () => {
     it("converts bytes to hex string with 0x prefix", () => {
       const bytes = new Uint8Array([0x01, 0x02, 0x03, 0xff]);

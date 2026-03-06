@@ -14,9 +14,9 @@ import {
 
 describe('x402-server utils', () => {
   describe('NETWORK_CONFIGS', () => {
-    it('should include FastSet networks', () => {
-      assert.ok(NETWORK_CONFIGS['fastset-devnet']);
-      assert.ok(NETWORK_CONFIGS['fastset-mainnet']);
+    it('should include Fast networks', () => {
+      assert.ok(NETWORK_CONFIGS['fast-devnet']);
+      assert.ok(NETWORK_CONFIGS['fast-mainnet']);
     });
 
     it('should include EVM networks', () => {
@@ -28,7 +28,7 @@ describe('x402-server utils', () => {
 
     it('should have correct decimals for USDC', () => {
       assert.strictEqual(NETWORK_CONFIGS['arbitrum-sepolia'].decimals, 6);
-      assert.strictEqual(NETWORK_CONFIGS['fastset-devnet'].decimals, 6);
+      assert.strictEqual(NETWORK_CONFIGS['fast-devnet'].decimals, 6);
     });
 
     it('should include EIP-712 extra for EVM networks', () => {
@@ -38,8 +38,8 @@ describe('x402-server utils', () => {
       assert.strictEqual(config.extra.version, '2');
     });
 
-    it('should not include extra for FastSet networks', () => {
-      const config = NETWORK_CONFIGS['fastset-devnet'];
+    it('should not include extra for Fast networks', () => {
+      const config = NETWORK_CONFIGS['fast-devnet'];
       assert.strictEqual(config.extra, undefined);
     });
   });

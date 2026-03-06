@@ -27,14 +27,14 @@ export interface PaymentRequired {
 }
 
 /**
- * FastSet wallet configuration
+ * Fast wallet configuration
  */
-export interface FastSetWallet {
-  type: 'fastset';
+export interface FastWallet {
+  type: 'fast';
   privateKey: string;  // Hex-encoded Ed25519 private key
   publicKey: string;   // Hex-encoded Ed25519 public key
   address: string;     // bech32m address (fast1...)
-  rpcUrl?: string;     // FastSet RPC endpoint
+  rpcUrl?: string;     // Fast RPC endpoint
 }
 
 /**
@@ -49,7 +49,7 @@ export interface EvmWallet {
 /**
  * Combined wallet type
  */
-export type Wallet = FastSetWallet | EvmWallet;
+export type Wallet = FastWallet | EvmWallet;
 
 /**
  * x402Pay parameters
@@ -114,9 +114,9 @@ export interface Eip3009Authorization {
 }
 
 /**
- * x402 payment payload for FastSet
+ * x402 payment payload for Fast
  */
-export interface FastSetPaymentPayload {
+export interface FastPaymentPayload {
   x402Version: number;
   scheme: string;
   network: string;

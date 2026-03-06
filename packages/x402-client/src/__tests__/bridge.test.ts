@@ -1,5 +1,5 @@
 /**
- * Tests for OmniSet bridge functionality
+ * Tests for AllSet bridge functionality
  * 
  * Note: Full bridge flow tests require valid Ed25519 keys and are
  * integration tests. These unit tests focus on configuration and utilities.
@@ -13,7 +13,7 @@ import {
 
 const originalFetch = globalThis.fetch;
 
-describe('OmniSet Bridge', () => {
+describe('AllSet Bridge', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
@@ -24,7 +24,7 @@ describe('OmniSet Bridge', () => {
       assert.ok(config);
       assert.strictEqual(config.chainId, 421614);
       assert.ok(config.usdcAddress.startsWith('0x'));
-      assert.ok(config.fastsetBridgeAddress.startsWith('fast'));
+      assert.ok(config.fastBridgeAddress.startsWith('fast'));
       assert.ok(config.relayerUrl.includes('arbitrum'));
     });
 
@@ -50,12 +50,12 @@ describe('OmniSet Bridge', () => {
       assert.ok(config);
       assert.ok(typeof config.chainId === 'number');
       assert.ok(typeof config.usdcAddress === 'string');
-      assert.ok(typeof config.fastsetBridgeAddress === 'string');
+      assert.ok(typeof config.fastBridgeAddress === 'string');
       assert.ok(typeof config.relayerUrl === 'string');
     });
   });
 
-  // Note: Full bridge flow tests (bridgeSetusdcToUsdc, getFastSetBalance) require:
+  // Note: Full bridge flow tests (bridgeSetusdcToUsdc, getFastBalance) require:
   // - Valid Ed25519 key pairs
   // - Valid bech32m addresses
   // - Proper BCS serialization

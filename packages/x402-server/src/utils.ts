@@ -8,12 +8,12 @@ import type { NetworkConfig } from "./types.js";
  * Default network configurations
  */
 export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
-  // FastSet networks
-  "fastset-devnet": {
+  // Fast networks
+  "fast-devnet": {
     asset: "0x1e744900021182b293538bb6685b77df095e351364d550021614ce90c8ab9e0a",
     decimals: 6,
   },
-  "fastset-mainnet": {
+  "fast-mainnet": {
     asset: "0x1e744900021182b293538bb6685b77df095e351364d550021614ce90c8ab9e0a",
     decimals: 6,
   },

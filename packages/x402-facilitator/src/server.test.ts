@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
-import { TransactionBcs, bytesToHex } from "./fastset-bcs.js";
+import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
 
 // Mock Express request/response
 function createMockRequest(method: string, path: string, body?: unknown) {
@@ -65,7 +65,7 @@ describe("GET /supported", () => {
     expect(first.network).toBeDefined();
   });
 
-  it("includes both EVM and FastSet networks", async () => {
+  it("includes both EVM and Fast networks", async () => {
     const routes = createFacilitatorRoutes();
     const supportedRoute = routes.find(r => r.path === "/supported");
     
@@ -81,9 +81,9 @@ describe("GET /supported", () => {
     expect(networks).toContain("arbitrum-sepolia");
     expect(networks).toContain("base-sepolia");
     
-    // Check for FastSet networks
-    expect(networks).toContain("fastset-devnet");
-    expect(networks).toContain("fastset-mainnet");
+    // Check for Fast networks
+    expect(networks).toContain("fast-devnet");
+    expect(networks).toContain("fast-mainnet");
   });
 });
 
@@ -107,7 +107,7 @@ describe("POST /verify", () => {
     const routes = createFacilitatorRoutes();
     const verifyRoute = routes.find(r => r.path === "/verify");
     
-    // Create a valid FastSet certificate
+    // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xbb);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1e, 0x74, 0x49, 0x00], 0);
@@ -132,7 +132,7 @@ describe("POST /verify", () => {
     const payloadObj = {
       x402Version: 1,
       scheme: "exact",
-      network: "fastset-devnet",
+      network: "fast-devnet",
       payload: {
         transactionCertificate: {
           envelope,
@@ -150,7 +150,7 @@ describe("POST /verify", () => {
       paymentPayload: payloadBase64,
       paymentRequirements: {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -172,7 +172,7 @@ describe("POST /verify", () => {
     const routes = createFacilitatorRoutes();
     const verifyRoute = routes.find(r => r.path === "/verify");
     
-    // Create a valid FastSet certificate
+    // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xcc);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1e, 0x74, 0x49, 0x00], 0);
@@ -198,7 +198,7 @@ describe("POST /verify", () => {
       paymentPayload: {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: {
           transactionCertificate: {
             envelope,
@@ -210,7 +210,7 @@ describe("POST /verify", () => {
       },
       paymentRequirements: {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -263,11 +263,11 @@ describe("POST /settle", () => {
     expect(body.errorReason).toBe("missing_parameters");
   });
 
-  it("succeeds for FastSet (no-op settlement)", async () => {
+  it("succeeds for Fast (no-op settlement)", async () => {
     const routes = createFacilitatorRoutes();
     const settleRoute = routes.find(r => r.path === "/settle");
     
-    // Create a valid FastSet certificate
+    // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xee);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1e, 0x74, 0x49, 0x00], 0);
@@ -293,7 +293,7 @@ describe("POST /settle", () => {
       paymentPayload: {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: {
           transactionCertificate: {
             envelope,
@@ -305,7 +305,7 @@ describe("POST /settle", () => {
       },
       paymentRequirements: {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",

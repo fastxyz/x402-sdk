@@ -78,11 +78,11 @@ function findRouteConfig(
 }
 
 /**
- * Check if network is FastSet
- * FastSet payments are already on-chain, so no settlement needed
+ * Check if network is Fast
+ * Fast payments are already on-chain, so no settlement needed
  */
-function isFastSetNetwork(network: string): boolean {
-  return network.startsWith("fastset-") || network === "fast";
+function isFastNetwork(network: string): boolean {
+  return network.startsWith("fast-") || network === "fast";
 }
 
 /**
@@ -106,14 +106,14 @@ function resolvePayTo(payTo: PayToConfig, network: string): string {
   }
   
   // Multi-address config
-  if (isFastSetNetwork(network)) {
-    if (!payTo.fastset) {
+  if (isFastNetwork(network)) {
+    if (!payTo.fast) {
       throw new Error(
-        `FastSet payment address not configured. ` +
-        `Add 'fastset' to payTo config for network: ${network}`
+        `Fast payment address not configured. ` +
+        `Add 'fast' to payTo config for network: ${network}`
       );
     }
-    return payTo.fastset;
+    return payTo.fast;
   }
   
   if (isEvmNetwork(network)) {
@@ -133,12 +133,12 @@ function resolvePayTo(payTo: PayToConfig, network: string): string {
  * Create x402 payment middleware for Express
  * 
  * Payment flow differs by network type:
- * - FastSet: Verify → Serve content (payment already on-chain)
+ * - Fast: Verify → Serve content (payment already on-chain)
  * - EVM: Verify → Settle → Serve content (payment must be submitted on-chain)
  * 
  * @param payTo - Address(es) to receive payments. Can be:
  *   - Single address string (must match network type)
- *   - Object with `evm` and/or `fastset` addresses
+ *   - Object with `evm` and/or `fast` addresses
  * @param routes - Route configuration map
  * @param facilitator - Facilitator configuration
  * 
@@ -151,15 +151,15 @@ function resolvePayTo(payTo: PayToConfig, network: string): string {
  *   { url: "http://localhost:4020" }
  * ));
  * 
- * // Multiple addresses (EVM + FastSet)
+ * // Multiple addresses (EVM + Fast)
  * app.use(paymentMiddleware(
  *   {
  *     evm: "0x1234...",
- *     fastset: "fast1abc...",
+ *     fast: "fast1abc...",
  *   },
  *   {
  *     "GET /api/evm-data": { price: "$0.10", network: "arbitrum-sepolia" },
- *     "GET /api/fast-data": { price: "$0.01", network: "fastset-devnet" },
+ *     "GET /api/fast-data": { price: "$0.01", network: "fast-devnet" },
  *   },
  *   { url: "http://localhost:4020" }
  * ));
@@ -214,7 +214,7 @@ export function paymentMiddleware(
       req.path
     );
     
-    const isFastSet = isFastSetNetwork(routeConfig.network);
+    const isFast = isFastNetwork(routeConfig.network);
     
     try {
       // Step 1: Verify payment with facilitator
@@ -233,8 +233,8 @@ export function paymentMiddleware(
         });
       }
       
-      // Step 2: For FastSet, payment is already on-chain - serve content immediately
-      if (isFastSet) {
+      // Step 2: For Fast, payment is already on-chain - serve content immediately
+      if (isFast) {
         // Set response header with verification info
         res.setHeader(
           "X-PAYMENT-RESPONSE",

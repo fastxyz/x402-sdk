@@ -12,7 +12,7 @@ import type {
 } from "./types.js";
 import { verify } from "./verify.js";
 import { settle } from "./settle.js";
-import { EVM_CHAINS, SUPPORTED_EVM_NETWORKS, SUPPORTED_FASTSET_NETWORKS } from "./chains.js";
+import { EVM_CHAINS, SUPPORTED_EVM_NETWORKS, SUPPORTED_FAST_NETWORKS } from "./chains.js";
 
 /**
  * Create facilitator Express routes
@@ -142,8 +142,8 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
         });
       }
 
-      // Add FastSet networks
-      for (const network of SUPPORTED_FASTSET_NETWORKS) {
+      // Add Fast networks
+      for (const network of SUPPORTED_FAST_NETWORKS) {
         paymentKinds.push({
           x402Version: 1,
           scheme: "exact",

@@ -2,7 +2,7 @@
 
 Facilitator SDK for the [x402 HTTP payment protocol](https://github.com/Pi-Squared-Inc/x402-sdk).
 
-Verify and settle x402 payments on-chain. Supports EVM (EIP-3009) and FastSet networks.
+Verify and settle x402 payments on-chain. Supports EVM (EIP-3009) and Fast networks.
 
 ## Install
 
@@ -63,7 +63,7 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
    - Check authorization nonce not already used
    - Submit transaction and wait for confirmation
 
-### FastSet Payments
+### Fast Payments
 
 1. **Verify**: Decode and validate transaction certificate
    - Check envelope and signatures exist
@@ -72,7 +72,7 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
    - Verify amount ≥ `maxAmountRequired` (with 18→6 decimal normalization)
    - Verify token matches `paymentRequirement.asset`
 
-2. **Settle**: No-op — FastSet transactions are already on-chain
+2. **Settle**: No-op — Fast transactions are already on-chain
    - Certificate proves consensus was reached
    - Returns success with transaction ID
 
@@ -158,8 +158,8 @@ createFacilitatorServer(config): ExpressMiddleware
 interface FacilitatorConfig {
   /** EVM private key for settling EIP-3009 authorizations */
   evmPrivateKey?: `0x${string}`;
-  /** FastSet RPC endpoint (optional) */
-  fastsetRpcUrl?: string;
+  /** Fast RPC endpoint (optional) */
+  fastRpcUrl?: string;
 }
 ```
 
@@ -174,11 +174,11 @@ interface FacilitatorConfig {
 | `base` | 8453 | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | `ethereum` | 1 | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` |
 
-### FastSet
+### Fast
 | Network | Description |
 |---------|-------------|
-| `fastset-devnet` | FastSet testnet |
-| `fastset-mainnet` | FastSet mainnet |
+| `fast-devnet` | Fast testnet |
+| `fast-mainnet` | Fast mainnet |
 
 ## Error Reasons
 
@@ -197,7 +197,7 @@ interface FacilitatorConfig {
 | `authorization_already_used` | Nonce already used |
 | `facilitator_not_configured` | Missing evmPrivateKey |
 
-### FastSet Errors
+### Fast Errors
 | Reason | Description |
 |--------|-------------|
 | `missing_envelope` | Certificate has no envelope |

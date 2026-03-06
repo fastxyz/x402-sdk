@@ -37,9 +37,9 @@ export interface PaymentPayload {
 }
 
 /**
- * FastSet transaction certificate payload
+ * Fast transaction certificate payload
  */
-export interface FastSetPayload {
+export interface FastPayload {
   transactionCertificate: {
     envelope: string;
     signatures: Array<{
@@ -102,8 +102,8 @@ export interface SupportedPaymentKind {
 export interface FacilitatorConfig {
   /** EVM private key for settling EIP-3009 authorizations */
   evmPrivateKey?: `0x${string}`;
-  /** FastSet RPC endpoint */
-  fastsetRpcUrl?: string;
+  /** Fast RPC endpoint */
+  fastRpcUrl?: string;
   /** Custom chain configs */
   chains?: Record<string, Chain>;
 }
@@ -124,14 +124,14 @@ export interface EvmChainConfig {
 /**
  * Network type
  */
-export type NetworkType = "evm" | "fastset" | "svm";
+export type NetworkType = "evm" | "fast" | "svm";
 
 /**
  * Determine network type
  */
 export function getNetworkType(network: string): NetworkType {
-  if (network.startsWith("fastset-") || network === "fast") {
-    return "fastset";
+  if (network.startsWith("fast-") || network === "fast") {
+    return "fast";
   }
   if (network.startsWith("solana")) {
     return "svm";

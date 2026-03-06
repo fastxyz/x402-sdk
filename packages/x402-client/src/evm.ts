@@ -1,7 +1,7 @@
 /**
  * EVM payment handler for x402 using EIP-3009 transferWithAuthorization
  * 
- * Includes auto-bridge from FastSet when EVM USDC balance is insufficient.
+ * Includes auto-bridge from Fast when EVM USDC balance is insufficient.
  */
 
 import { createPublicClient, http, erc20Abi, type Chain } from 'viem';
@@ -9,13 +9,13 @@ import { arbitrumSepolia, baseSepolia, arbitrum, base } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { 
   EvmWallet, 
-  FastSetWallet,
+  FastWallet,
   PaymentRequired, 
   PaymentRequirement, 
   X402PayResult,
   Eip3009Authorization 
 } from './types.js';
-import { bridgeSetusdcToUsdc, getFastSetBalance, getBridgeConfig } from './bridge.js';
+import { bridgeSetusdcToUsdc, getFastBalance, getBridgeConfig } from './bridge.js';
 
 /**
  * Network configuration
@@ -94,8 +94,8 @@ async function pollForBalance(
 /**
  * Handle x402 payment on EVM networks using EIP-3009
  * 
- * With auto-bridge: if EVM USDC balance is insufficient and a FastSet wallet
- * is provided, automatically bridges SETUSDC → USDC via OmniSet.
+ * With auto-bridge: if EVM USDC balance is insufficient and a Fast wallet
+ * is provided, automatically bridges SETUSDC → USDC via AllSet.
  */
 export async function handleEvmPayment(
   url: string,
@@ -107,7 +107,7 @@ export async function handleEvmPayment(
   wallet: EvmWallet,
   verbose: boolean = false,
   logs: string[] = [],
-  fastsetWallet?: FastSetWallet
+  fastWallet?: FastWallet
 ): Promise<X402PayResult> {
   const log = (msg: string) => { 
     if (verbose) { 
@@ -121,7 +121,7 @@ export async function handleEvmPayment(
   log(`  Amount: ${evmReq.maxAmountRequired} (raw) = ${Number(evmReq.maxAmountRequired) / 1e6} USDC`);
   log(`  Recipient: ${evmReq.payTo}`);
   log(`  Asset (USDC): ${evmReq.asset}`);
-  log(`  FastSet wallet available: ${fastsetWallet ? 'yes' : 'no'}`);
+  log(`  Fast wallet available: ${fastWallet ? 'yes' : 'no'}`);
 
   // Get network config
   const networkConfig = NETWORK_MAP[evmReq.network];
@@ -153,10 +153,10 @@ export async function handleEvmPayment(
   if (currentBalance < requiredAmount) {
     log(`  ⚠ Insufficient balance!`);
 
-    if (!fastsetWallet) {
+    if (!fastWallet) {
       throw new Error(
         `Insufficient USDC balance: have ${Number(currentBalance) / 1e6}, need ${Number(requiredAmount) / 1e6}. ` +
-        `Provide a FastSet wallet with SETUSDC to enable auto-bridge.`
+        `Provide a Fast wallet with SETUSDC to enable auto-bridge.`
       );
     }
 
@@ -168,26 +168,26 @@ export async function handleEvmPayment(
       );
     }
 
-    // Check FastSet SETUSDC balance
-    log(`[EVM] Checking FastSet SETUSDC balance...`);
-    const fastBalance = await getFastSetBalance(fastsetWallet);
-    log(`  FastSet SETUSDC balance: ${Number(fastBalance) / 1e6}`);
+    // Check Fast SETUSDC balance
+    log(`[EVM] Checking Fast SETUSDC balance...`);
+    const fastBalance = await getFastBalance(fastWallet);
+    log(`  Fast SETUSDC balance: ${Number(fastBalance) / 1e6}`);
 
     const shortfall = requiredAmount - currentBalance;
     if (fastBalance < shortfall) {
       throw new Error(
         `Insufficient balance for payment. ` +
-        `EVM USDC: ${Number(currentBalance) / 1e6}, FastSet SETUSDC: ${Number(fastBalance) / 1e6}, ` +
+        `EVM USDC: ${Number(currentBalance) / 1e6}, Fast SETUSDC: ${Number(fastBalance) / 1e6}, ` +
         `Need: ${Number(requiredAmount) / 1e6}`
       );
     }
 
     // Bridge the shortfall amount
-    log(`[EVM] Auto-bridging ${Number(shortfall) / 1e6} SETUSDC → USDC via OmniSet...`);
+    log(`[EVM] Auto-bridging ${Number(shortfall) / 1e6} SETUSDC → USDC via AllSet...`);
     const bridgeStartTime = Date.now();
     
     const bridgeResult = await bridgeSetusdcToUsdc({
-      fastsetWallet,
+      fastWallet,
       evmReceiverAddress: account.address,
       amount: shortfall,
       network: evmReq.network,

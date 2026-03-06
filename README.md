@@ -8,8 +8,8 @@ x402 is a payment protocol built on HTTP status code `402 Payment Required`. It 
 
 - **Pay-per-request APIs**: Charge for individual API calls
 - **No accounts needed**: Just sign and pay
-- **Instant settlement**: Sub-second on FastSet, ~15s on EVM
-- **Multi-chain**: FastSet, Arbitrum, Base, and more
+- **Instant settlement**: Sub-second on Fast, ~15s on EVM
+- **Multi-chain**: Fast, Arbitrum, Base, and more
 
 ## Packages
 
@@ -95,7 +95,7 @@ console.log(result.body); // Your paid content
      │<─────────────────────────────│                                │
      │                              │                                │
      │  Sign payment                │                                │
-     │  (EIP-3009 or FastSet tx)    │                                │
+     │  (EIP-3009 or Fast tx)    │                                │
      │                              │                                │
      │  GET /api/data               │                                │
      │  X-PAYMENT: <signed>         │                                │
@@ -107,7 +107,7 @@ console.log(result.body); // Your paid content
      │                              │  { isValid: true }             │
      │                              │<─────────────────────────────────
      │                              │                                │
-     │  200 OK (FastSet)            │                                │
+     │  200 OK (Fast)            │                                │
      │<─────────────────────────────│                                │
      │                              │                                │
      │                              │  POST /settle (EVM only)       │
@@ -156,7 +156,7 @@ Client                          Server                         Facilitator
   │<──────────────────────────────│                                │
 ```
 
-### FastSet (Instant Settlement)
+### Fast (Instant Settlement)
 
 Client submits transaction directly, sends **certificate** as proof.
 
@@ -164,7 +164,7 @@ Client submits transaction directly, sends **certificate** as proof.
 Client                          Server                         Facilitator
   │                               │                                │
   │ Submit TokenTransfer to       │                                │
-  │ FastSet network               │                                │
+  │ Fast network               │                                │
   │ (transaction already on-chain)│                                │
   │                               │                                │
   │ X-PAYMENT: {                  │                                │
@@ -204,30 +204,30 @@ The facilitator exposes three endpoints:
 4. Check `validAfter ≤ now < validBefore`
 5. Query on-chain USDC balance
 
-**FastSet payments:**
+**Fast payments:**
 1. Check certificate structure (envelope + signatures)
 2. Validate scheme and network match
-3. *(TODO: Query FastSet RPC for on-chain verification)*
+3. *(TODO: Query Fast RPC for on-chain verification)*
 
 ### Settlement Logic
 
 **EVM:** Re-verify → Check nonce unused → Call `transferWithAuthorization()` → Wait for confirmation
 
-**FastSet:** No-op (transaction already on-chain when certificate was created)
+**Fast:** No-op (transaction already on-chain when certificate was created)
 
 ## Multi-Network Server
 
-Accept payments on both EVM and FastSet:
+Accept payments on both EVM and Fast:
 
 ```typescript
 app.use(paymentMiddleware(
   {
     evm: '0x1234...',        // EVM payment address
-    fastset: 'fast1abc...',  // FastSet payment address
+    fast: 'fast1abc...',  // Fast payment address
   },
   {
     'GET /api/evm/*': { price: '$0.10', network: 'arbitrum-sepolia' },
-    'GET /api/fast/*': { price: '$0.01', network: 'fastset-devnet' },
+    'GET /api/fast/*': { price: '$0.01', network: 'fast-devnet' },
   },
   { url: 'http://localhost:4020' }
 ));
@@ -237,8 +237,8 @@ app.use(paymentMiddleware(
 
 | Network | Type | Chain ID | Token | Settlement |
 |---------|------|----------|-------|------------|
-| `fastset-devnet` | FastSet | - | SETUSDC | ~300ms |
-| `fastset-mainnet` | FastSet | - | SETUSDC | ~300ms |
+| `fast-devnet` | Fast | - | SETUSDC | ~300ms |
+| `fast-mainnet` | Fast | - | SETUSDC | ~300ms |
 | `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
 | `arbitrum` | EVM | 42161 | USDC | ~15s |
 | `base-sepolia` | EVM | 84532 | USDC | ~15s |

@@ -1,7 +1,7 @@
 /**
- * OmniSet bridge integration for x402-client
+ * AllSet bridge integration for x402-client
  * 
- * Bridges SETUSDC from FastSet to USDC on EVM chains when needed.
+ * Bridges SETUSDC from Fast to USDC on EVM chains when needed.
  */
 
 import { bcs } from '@mysten/bcs';
@@ -9,7 +9,7 @@ import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha512';
 import { bech32m } from 'bech32';
 import { encodeAbiParameters, keccak256 } from 'viem';
-import type { FastSetWallet } from './types.js';
+import type { FastWallet } from './types.js';
 
 // Configure ed25519
 ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
@@ -17,16 +17,16 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CROSS_SIGN_URL = 'https://staging.omniset.fastset.xyz/cross-sign';
-const FASTSET_RPC_URL = 'https://api.fast.xyz/proxy';
+const FAST_RPC_URL = 'https://api.fast.xyz/proxy';
 
-/** SETUSDC token ID on FastSet */
+/** SETUSDC token ID on Fast */
 const SETUSDC_TOKEN_ID = hexToBytes('1e744900021182b293538bb6685b77df095e351364d550021614ce90c8ab9e0a');
 
 /** Bridge configuration per EVM chain */
 interface BridgeChainConfig {
   chainId: number;
   usdcAddress: string;
-  fastsetBridgeAddress: string;
+  fastBridgeAddress: string;
   relayerUrl: string;
 }
 
@@ -34,13 +34,13 @@ const BRIDGE_CONFIGS: Record<string, BridgeChainConfig> = {
   'arbitrum-sepolia': {
     chainId: 421614,
     usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    fastsetBridgeAddress: 'fast1pz07pdlspsydyt2g79yeshunhfyjsr5j4ahuyfv8hpdn00ks8u6q8axf9t',
+    fastBridgeAddress: 'fast1pz07pdlspsydyt2g79yeshunhfyjsr5j4ahuyfv8hpdn00ks8u6q8axf9t',
     relayerUrl: 'https://staging.omniset.fastset.xyz/arbitrum-sepolia-relayer/relay',
   },
   'base-sepolia': {
     chainId: 84532,
     usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-    fastsetBridgeAddress: 'fast1pz07pdlspsydyt2g79yeshunhfyjsr5j4ahuyfv8hpdn00ks8u6q8axf9t', // TODO: verify base bridge address
+    fastBridgeAddress: 'fast1pz07pdlspsydyt2g79yeshunhfyjsr5j4ahuyfv8hpdn00ks8u6q8axf9t', // TODO: verify base bridge address
     relayerUrl: 'https://staging.omniset.fastset.xyz/base-sepolia-relayer/relay',
   },
 };
@@ -92,7 +92,7 @@ const ClaimType = bcs.enum('ClaimType', {
   ExternalClaim: ExternalClaim,
 });
 
-// ─── FastSet Operations ───────────────────────────────────────────────────────
+// ─── Fast Operations ───────────────────────────────────────────────────────
 
 interface TransactionResult {
   txHash: string;
@@ -103,12 +103,12 @@ interface TransactionResult {
 }
 
 /**
- * Get SETUSDC balance on FastSet
+ * Get SETUSDC balance on Fast
  */
-export async function getFastSetBalance(
-  wallet: FastSetWallet
+export async function getFastBalance(
+  wallet: FastWallet
 ): Promise<bigint> {
-  const rpcUrl = wallet.rpcUrl || FASTSET_RPC_URL;
+  const rpcUrl = wallet.rpcUrl || FAST_RPC_URL;
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
   
   const payload = {
@@ -130,7 +130,7 @@ export async function getFastSetBalance(
   };
 
   if (result.error) {
-    throw new Error(`FastSet RPC error: ${result.error.message}`);
+    throw new Error(`Fast RPC error: ${result.error.message}`);
   }
 
   if (!result.result?.balances) {
@@ -154,14 +154,14 @@ export async function getFastSetBalance(
 }
 
 /**
- * Send TokenTransfer on FastSet
+ * Send TokenTransfer on Fast
  */
 async function sendTokenTransfer(
-  wallet: FastSetWallet,
+  wallet: FastWallet,
   recipientAddress: string,
   amount: bigint,
   tokenId: Uint8Array,
-  rpcUrl: string = FASTSET_RPC_URL
+  rpcUrl: string = FAST_RPC_URL
 ): Promise<TransactionResult> {
   const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
@@ -207,11 +207,11 @@ async function sendTokenTransfer(
   };
 
   if (result.error) {
-    throw new Error(`FastSet RPC error: ${result.error.message}`);
+    throw new Error(`Fast RPC error: ${result.error.message}`);
   }
 
   if (!result.result) {
-    throw new Error('No result from FastSet RPC');
+    throw new Error('No result from Fast RPC');
   }
 
   return {
@@ -221,13 +221,13 @@ async function sendTokenTransfer(
 }
 
 /**
- * Submit ExternalClaim on FastSet
+ * Submit ExternalClaim on Fast
  */
 async function submitExternalClaim(
-  wallet: FastSetWallet,
+  wallet: FastWallet,
   externalAddress: string,
   intentPayload: Uint8Array,
-  rpcUrl: string = FASTSET_RPC_URL
+  rpcUrl: string = FAST_RPC_URL
 ): Promise<TransactionResult> {
   const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
@@ -273,11 +273,11 @@ async function submitExternalClaim(
   };
 
   if (result.error) {
-    throw new Error(`FastSet ExternalClaim error: ${result.error.message}`);
+    throw new Error(`Fast ExternalClaim error: ${result.error.message}`);
   }
 
   if (!result.result) {
-    throw new Error('No result from FastSet ExternalClaim');
+    throw new Error('No result from Fast ExternalClaim');
   }
 
   return {
@@ -287,7 +287,7 @@ async function submitExternalClaim(
 }
 
 /**
- * Cross-sign a certificate via OmniSet
+ * Cross-sign a certificate via AllSet
  */
 async function crossSignCertificate(
   certificate: TransactionResult['certificate']
@@ -326,8 +326,8 @@ async function crossSignCertificate(
 // ─── Main Bridge Function ─────────────────────────────────────────────────────
 
 export interface BridgeParams {
-  /** FastSet wallet with SETUSDC */
-  fastsetWallet: FastSetWallet;
+  /** Fast wallet with SETUSDC */
+  fastWallet: FastWallet;
   /** EVM address to receive USDC */
   evmReceiverAddress: string;
   /** Amount to bridge (raw, 6 decimals) */
@@ -347,10 +347,10 @@ export interface BridgeResult {
 }
 
 /**
- * Bridge SETUSDC from FastSet to USDC on EVM via OmniSet
+ * Bridge SETUSDC from Fast to USDC on EVM via AllSet
  */
 export async function bridgeSetusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
-  const { fastsetWallet, evmReceiverAddress, amount, network, verbose = false, logs = [] } = params;
+  const { fastWallet, evmReceiverAddress, amount, network, verbose = false, logs = [] } = params;
   
   const log = (msg: string) => {
     if (verbose) {
@@ -364,19 +364,19 @@ export async function bridgeSetusdcToUsdc(params: BridgeParams): Promise<BridgeR
     return { success: false, error: `Unsupported network for bridging: ${network}` };
   }
 
-  log(`━━━ OmniSet Bridge START ━━━`);
+  log(`━━━ AllSet Bridge START ━━━`);
   log(`  Amount: ${Number(amount) / 1e6} SETUSDC`);
-  log(`  From: ${fastsetWallet.address}`);
+  log(`  From: ${fastWallet.address}`);
   log(`  To: ${evmReceiverAddress} on ${network}`);
 
   try {
-    const rpcUrl = fastsetWallet.rpcUrl || FASTSET_RPC_URL;
+    const rpcUrl = fastWallet.rpcUrl || FAST_RPC_URL;
 
-    // Step 1: Transfer SETUSDC to FastSet bridge account
-    log(`[Step 1] Transferring SETUSDC to FastSet bridge...`);
+    // Step 1: Transfer SETUSDC to Fast bridge account
+    log(`[Step 1] Transferring SETUSDC to Fast bridge...`);
     const transferResult = await sendTokenTransfer(
-      fastsetWallet,
-      bridgeConfig.fastsetBridgeAddress,
+      fastWallet,
+      bridgeConfig.fastBridgeAddress,
       amount,
       SETUSDC_TOKEN_ID,
       rpcUrl
@@ -436,10 +436,10 @@ export async function bridgeSetusdcToUsdc(params: BridgeParams): Promise<BridgeR
     const intentBytes = hexToBytes(intentClaimEncoded);
     log(`  ✓ IntentClaim built (${intentBytes.length} bytes)`);
 
-    // Step 4: Submit ExternalClaim on FastSet
+    // Step 4: Submit ExternalClaim on Fast
     log(`[Step 4] Submitting ExternalClaim...`);
     const intentResult = await submitExternalClaim(
-      fastsetWallet,
+      fastWallet,
       evmReceiverAddress,
       intentBytes,
       rpcUrl
@@ -457,7 +457,7 @@ export async function bridgeSetusdcToUsdc(params: BridgeParams): Promise<BridgeR
       encoded_transfer_claim: Array.from(new Uint8Array(transferCrossSign.transaction)),
       transfer_proof: transferCrossSign.signature,
       transfer_claim_id: transferResult.txHash,
-      fastset_address: fastsetWallet.address,
+      fastset_address: fastWallet.address,
       external_address: evmReceiverAddress,
       encoded_intent_claim: Array.from(new Uint8Array(intentCrossSign.transaction)),
       intent_proof: intentCrossSign.signature,
@@ -478,7 +478,7 @@ export async function bridgeSetusdcToUsdc(params: BridgeParams): Promise<BridgeR
 
     const relayResult = await relayRes.json();
     log(`  ✓ Relayer accepted`);
-    log(`━━━ OmniSet Bridge END ━━━`);
+    log(`━━━ AllSet Bridge END ━━━`);
 
     return {
       success: true,

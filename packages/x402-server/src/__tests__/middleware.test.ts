@@ -166,7 +166,7 @@ describe('x402-server middleware', () => {
     describe('multi-address support', () => {
       it('should use EVM address for EVM network', async () => {
         const middleware = paymentMiddleware(
-          { evm: '0xEvmAddress', fastset: 'fast1FastSetAddress' },
+          { evm: '0xEvmAddress', fast: 'fast1FastAddress' },
           { '/api/evm': { price: '$0.10', network: 'arbitrum-sepolia' } },
           { url: 'http://localhost:4020' }
         );
@@ -180,10 +180,10 @@ describe('x402-server middleware', () => {
         assert.strictEqual(body.accepts[0].payTo, '0xEvmAddress');
       });
 
-      it('should use FastSet address for FastSet network', async () => {
+      it('should use Fast address for Fast network', async () => {
         const middleware = paymentMiddleware(
-          { evm: '0xEvmAddress', fastset: 'fast1FastSetAddress' },
-          { '/api/fast': { price: '$0.10', network: 'fastset-devnet' } },
+          { evm: '0xEvmAddress', fast: 'fast1FastAddress' },
+          { '/api/fast': { price: '$0.10', network: 'fast-devnet' } },
           { url: 'http://localhost:4020' }
         );
 
@@ -193,13 +193,13 @@ describe('x402-server middleware', () => {
         await middleware(req, res, () => {});
 
         const body = res.body as { accepts: Array<{ payTo: string }> };
-        assert.strictEqual(body.accepts[0].payTo, 'fast1FastSetAddress');
+        assert.strictEqual(body.accepts[0].payTo, 'fast1FastAddress');
       });
 
       it('should error if address not configured for network', async () => {
         const middleware = paymentMiddleware(
-          { evm: '0xEvmAddress' },  // No FastSet address
-          { '/api/fast': { price: '$0.10', network: 'fastset-devnet' } },
+          { evm: '0xEvmAddress' },  // No Fast address
+          { '/api/fast': { price: '$0.10', network: 'fast-devnet' } },
           { url: 'http://localhost:4020' }
         );
 
@@ -210,7 +210,7 @@ describe('x402-server middleware', () => {
 
         assert.strictEqual(res.statusCode, 500);
         const body = res.body as { error: string };
-        assert.ok(body.error.includes('FastSet payment address not configured'));
+        assert.ok(body.error.includes('Fast payment address not configured'));
       });
     });
   });

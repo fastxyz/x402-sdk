@@ -2,7 +2,7 @@
 
 Client SDK for the [x402 HTTP payment protocol](https://github.com/Pi-Squared-Inc/x402-sdk).
 
-Pay for 402-protected content with FastSet or EVM wallets.
+Pay for 402-protected content with Fast or EVM wallets.
 
 ## Install
 
@@ -33,9 +33,9 @@ if (result.success) {
 
 ## Supported Networks
 
-### FastSet
-- `fastset-devnet` - FastSet testnet
-- `fastset-mainnet` - FastSet mainnet
+### Fast
+- `fast-devnet` - Fast testnet
+- `fast-mainnet` - Fast mainnet
 
 ### EVM (EIP-3009)
 - `arbitrum-sepolia` - Arbitrum testnet
@@ -80,9 +80,9 @@ interface EvmWallet {
   address: `0x${string}`;
 }
 
-// FastSet wallet
-interface FastSetWallet {
-  type: 'fastset';
+// Fast wallet
+interface FastWallet {
+  type: 'fast';
   privateKey: string;   // Hex-encoded Ed25519 key
   publicKey: string;    // Hex-encoded public key
   address: string;      // bech32m address (fast1...)
@@ -96,15 +96,15 @@ interface FastSetWallet {
 2. **402 Response**: Server returns `402 Payment Required` with accepted payment methods
 3. **Payment**: Client creates and signs payment based on server requirements:
 
-   **Case A: FastSet Payment**
-   - Client sends a `TokenTransfer` transaction directly to the server's FastSet account
+   **Case A: Fast Payment**
+   - Client sends a `TokenTransfer` transaction directly to the server's Fast account
    - Transaction is submitted on-chain and a certificate is returned
    - Client includes the transaction certificate in the `X-PAYMENT` header
 
    **Case B: EVM Payment (Arbitrum, Base, etc.)**
    - Client checks if their EVM wallet has sufficient USDC balance
    - **If sufficient**: Client signs an EIP-3009 `transferWithAuthorization` and sends it as the `X-PAYMENT` header
-   - **If insufficient**: Client automatically bridges SETUSDC from their FastSet account to their EVM account via OmniSet, then signs the EIP-3009 authorization
+   - **If insufficient**: Client automatically bridges SETUSDC from their Fast account to their EVM account via AllSet, then signs the EIP-3009 authorization
 
 4. **Retry**: Client retries the original request with the `X-PAYMENT` header
 5. **Content**: Server verifies payment (via facilitator) and returns the protected content
@@ -113,14 +113,14 @@ interface FastSetWallet {
 
 ### Multiple Wallets (with Auto-Bridge)
 
-When you provide both FastSet and EVM wallets, the SDK enables **auto-bridge**: if an EVM payment is required but your EVM wallet lacks sufficient USDC, the SDK will automatically bridge SETUSDC from your FastSet account via OmniSet.
+When you provide both Fast and EVM wallets, the SDK enables **auto-bridge**: if an EVM payment is required but your EVM wallet lacks sufficient USDC, the SDK will automatically bridge SETUSDC from your Fast account via AllSet.
 
 ```typescript
 // Provide both wallets for auto-bridge support
 const result = await x402Pay({
   url: 'https://api.example.com/data',
   wallet: [
-    { type: 'fastset', privateKey: '...', publicKey: '...', address: 'fast1...' },
+    { type: 'fast', privateKey: '...', publicKey: '...', address: 'fast1...' },
     { type: 'evm', privateKey: '0x...', address: '0x...' },
   ],
 });

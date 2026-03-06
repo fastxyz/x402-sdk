@@ -5,9 +5,9 @@
  * Handles 402 Payment Required responses by signing and paying for content.
  * 
  * Supports:
- * - FastSet networks (fastset-devnet, fastset-mainnet)
+ * - Fast networks (fast-devnet, fast-mainnet)
  * - EVM networks with EIP-3009 (arbitrum-sepolia, base-sepolia, etc.)
- * - Auto-bridge from FastSet → EVM when EVM balance is insufficient
+ * - Auto-bridge from Fast → EVM when EVM balance is insufficient
  * 
  * @example
  * ```typescript
@@ -28,7 +28,7 @@
  *   url: 'https://api.example.com/premium-data',
  *   wallet: [
  *     { type: 'evm', privateKey: '0x...', address: '0x...' },
- *     { type: 'fastset', privateKey: '...', publicKey: '...', address: 'fast1...' },
+ *     { type: 'fast', privateKey: '...', publicKey: '...', address: 'fast1...' },
  *   ],
  * });
  * 
@@ -46,27 +46,27 @@ import type {
   X402PayResult, 
   PaymentRequired, 
   Wallet,
-  FastSetWallet,
+  FastWallet,
   EvmWallet,
 } from './types.js';
 
-import { handleFastSetPayment, FASTSET_NETWORKS } from './fastset.js';
+import { handleFastPayment, FAST_NETWORKS } from './fast.js';
 import { handleEvmPayment, EVM_NETWORKS } from './evm.js';
 
-export { FASTSET_NETWORKS, EVM_NETWORKS };
+export { FAST_NETWORKS, EVM_NETWORKS };
 
 // Re-export bridge utilities for manual use
 export { 
   bridgeSetusdcToUsdc, 
-  getFastSetBalance,
+  getFastBalance,
   getBridgeConfig,
 } from './bridge.js';
 
 /**
- * Check if wallet is FastSet type
+ * Check if wallet is Fast type
  */
-function isFastSetWallet(wallet: Wallet): wallet is FastSetWallet {
-  return wallet.type === 'fastset';
+function isFastWallet(wallet: Wallet): wallet is FastWallet {
+  return wallet.type === 'fast';
 }
 
 /**
@@ -81,8 +81,8 @@ function isEvmWallet(wallet: Wallet): wallet is EvmWallet {
  * 
  * Automatically handles 402 Payment Required responses by:
  * 1. Making initial request to get payment requirements
- * 2. Creating and signing payment (TokenTransfer on FastSet, EIP-3009 on EVM)
- * 3. If EVM balance is insufficient and FastSet wallet is provided, auto-bridges via OmniSet
+ * 2. Creating and signing payment (TokenTransfer on Fast, EIP-3009 on EVM)
+ * 3. If EVM balance is insufficient and Fast wallet is provided, auto-bridges via AllSet
  * 4. Retrying the request with X-PAYMENT header
  * 
  * @param params - Payment parameters
@@ -100,11 +100,11 @@ function isEvmWallet(wallet: Wallet): wallet is EvmWallet {
  *   },
  * });
  * 
- * // FastSet wallet
+ * // Fast wallet
  * const result = await x402Pay({
  *   url: 'https://api.example.com/data',
  *   wallet: {
- *     type: 'fastset',
+ *     type: 'fast',
  *     privateKey: '...',
  *     publicKey: '...',
  *     address: 'fast1...',
@@ -114,7 +114,7 @@ function isEvmWallet(wallet: Wallet): wallet is EvmWallet {
  * // Both wallets (enables auto-bridge for EVM payments)
  * const result = await x402Pay({
  *   url: 'https://api.example.com/data',
- *   wallet: [evmWallet, fastsetWallet],
+ *   wallet: [evmWallet, fastWallet],
  * });
  * ```
  */
@@ -138,14 +138,14 @@ export async function x402Pay(params: X402PayParams): Promise<X402PayResult> {
 
   // Normalize wallets to array
   const wallets = Array.isArray(wallet) ? wallet : [wallet];
-  const fastsetWallet = wallets.find(isFastSetWallet);
+  const fastWallet = wallets.find(isFastWallet);
   const evmWallet = wallets.find(isEvmWallet);
 
   log(`━━━ x402Pay START ━━━`);
   log(`URL: ${url}`);
   log(`Method: ${method}`);
-  log(`Wallets: FastSet=${fastsetWallet ? 'yes' : 'no'}, EVM=${evmWallet ? 'yes' : 'no'}`);
-  if (fastsetWallet && evmWallet) {
+  log(`Wallets: Fast=${fastWallet ? 'yes' : 'no'}, EVM=${evmWallet ? 'yes' : 'no'}`);
+  if (fastWallet && evmWallet) {
     log(`  → Auto-bridge enabled (both wallets provided)`);
   }
 
@@ -194,36 +194,36 @@ export async function x402Pay(params: X402PayParams): Promise<X402PayResult> {
   const availableNetworks = paymentRequired.accepts.map(r => r.network);
   log(`  Available networks: ${availableNetworks.join(', ')}`);
 
-  const fastsetReq = paymentRequired.accepts.find(r => FASTSET_NETWORKS.includes(r.network));
+  const fastReq = paymentRequired.accepts.find(r => FAST_NETWORKS.includes(r.network));
   const evmReq = paymentRequired.accepts.find(r => EVM_NETWORKS.includes(r.network));
 
-  log(`  FastSet match: ${fastsetReq?.network ?? 'none'}`);
+  log(`  Fast match: ${fastReq?.network ?? 'none'}`);
   log(`  EVM match: ${evmReq?.network ?? 'none'}`);
 
-  // Prioritize FastSet (faster, cheaper), then EVM
-  if (fastsetReq && fastsetWallet) {
-    log(`  → Using FastSet payment path`);
-    return handleFastSetPayment(
+  // Prioritize Fast (faster, cheaper), then EVM
+  if (fastReq && fastWallet) {
+    log(`  → Using Fast payment path`);
+    return handleFastPayment(
       url, method, customHeaders, requestBody,
-      paymentRequired, fastsetReq, fastsetWallet,
+      paymentRequired, fastReq, fastWallet,
       verbose, logs
     );
   }
 
   if (evmReq && evmWallet) {
     log(`  → Using EVM payment path`);
-    // Pass FastSet wallet for auto-bridge if available
+    // Pass Fast wallet for auto-bridge if available
     return handleEvmPayment(
       url, method, customHeaders, requestBody,
       paymentRequired, evmReq, evmWallet,
       verbose, logs,
-      fastsetWallet  // Enable auto-bridge if provided
+      fastWallet  // Enable auto-bridge if provided
     );
   }
 
   // No matching wallet
   const supportedNetworks = [];
-  if (fastsetReq) supportedNetworks.push(`FastSet (${fastsetReq.network}) - needs FastSetWallet`);
+  if (fastReq) supportedNetworks.push(`Fast (${fastReq.network}) - needs FastWallet`);
   if (evmReq) supportedNetworks.push(`EVM (${evmReq.network}) - needs EvmWallet`);
 
   throw new Error(

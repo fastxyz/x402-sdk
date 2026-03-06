@@ -4,13 +4,13 @@
 
 import { describe, it, expect } from "vitest";
 import { verify } from "./verify.js";
-import { TransactionBcs, bytesToHex } from "./fastset-bcs.js";
+import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
 import type { PaymentPayload, PaymentRequirement } from "./types.js";
 
 describe("verify", () => {
-  describe("FastSet payments", () => {
-    // Helper to create a valid FastSet certificate
-    function createFastSetCertificate(
+  describe("Fast payments", () => {
+    // Helper to create a valid Fast certificate
+    function createFastCertificate(
       recipient: Uint8Array,
       amount: string,
       tokenId: Uint8Array
@@ -48,8 +48,8 @@ describe("verify", () => {
     const recipient = new Uint8Array(32).fill(0xbb);
     const recipientHex = bytesToHex(recipient);
 
-    it("validates a correct FastSet payment", async () => {
-      const certificate = createFastSetCertificate(
+    it("validates a correct Fast payment", async () => {
+      const certificate = createFastCertificate(
         recipient,
         "1000000000000000000", // 1 token (18 decimals)
         tokenId
@@ -58,13 +58,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000", // 1 USDC (6 decimals)
         resource: "/api/data",
         description: "Test",
@@ -81,7 +81,7 @@ describe("verify", () => {
 
     it("rejects payment with wrong recipient", async () => {
       const wrongRecipient = new Uint8Array(32).fill(0xff);
-      const certificate = createFastSetCertificate(
+      const certificate = createFastCertificate(
         wrongRecipient,
         "1000000000000000000",
         tokenId
@@ -90,13 +90,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -112,7 +112,7 @@ describe("verify", () => {
     });
 
     it("rejects payment with insufficient amount", async () => {
-      const certificate = createFastSetCertificate(
+      const certificate = createFastCertificate(
         recipient,
         "100000000000000", // 0.0001 token (too little)
         tokenId
@@ -121,13 +121,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000", // 1 USDC required
         resource: "/api/data",
         description: "Test",
@@ -144,7 +144,7 @@ describe("verify", () => {
 
     it("rejects payment with wrong token", async () => {
       const wrongToken = new Uint8Array(32).fill(0x99);
-      const certificate = createFastSetCertificate(
+      const certificate = createFastCertificate(
         recipient,
         "1000000000000000000",
         wrongToken
@@ -153,13 +153,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -178,7 +178,7 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: {
           transactionCertificate: {
             envelope: "",
@@ -189,7 +189,7 @@ describe("verify", () => {
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -205,7 +205,7 @@ describe("verify", () => {
     });
 
     it("rejects missing signatures", async () => {
-      const certificate = createFastSetCertificate(
+      const certificate = createFastCertificate(
         recipient,
         "1000000000000000000",
         tokenId
@@ -215,13 +215,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -237,7 +237,7 @@ describe("verify", () => {
     });
 
     it("rejects wrong scheme", async () => {
-      const certificate = createFastSetCertificate(
+      const certificate = createFastCertificate(
         recipient,
         "1000000000000000000",
         tokenId
@@ -246,13 +246,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "wrong-scheme",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",
@@ -268,7 +268,7 @@ describe("verify", () => {
     });
 
     it("rejects network mismatch", async () => {
-      const certificate = createFastSetCertificate(
+      const certificate = createFastCertificate(
         recipient,
         "1000000000000000000",
         tokenId
@@ -277,13 +277,13 @@ describe("verify", () => {
       const payload: PaymentPayload = {
         x402Version: 1,
         scheme: "exact",
-        network: "fastset-mainnet", // Different network
+        network: "fast-mainnet", // Different network
         payload: { transactionCertificate: certificate },
       };
 
       const requirement: PaymentRequirement = {
         scheme: "exact",
-        network: "fastset-devnet",
+        network: "fast-devnet",
         maxAmountRequired: "1000000",
         resource: "/api/data",
         description: "Test",

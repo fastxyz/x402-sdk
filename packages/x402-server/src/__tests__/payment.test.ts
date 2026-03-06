@@ -37,15 +37,15 @@ describe('x402-server payment', () => {
       assert.strictEqual(req.extra.name, 'USD Coin');
     });
 
-    it('should create FastSet payment requirement', () => {
+    it('should create Fast payment requirement', () => {
       const req = createPaymentRequirement(
         'fast1abc123xyz',
-        { price: '$0.01', network: 'fastset-devnet' },
+        { price: '$0.01', network: 'fast-devnet' },
         '/api/fast-data'
       );
 
       assert.strictEqual(req.scheme, 'exact');
-      assert.strictEqual(req.network, 'fastset-devnet');
+      assert.strictEqual(req.network, 'fast-devnet');
       assert.strictEqual(req.maxAmountRequired, '10000');
       assert.strictEqual(req.payTo, 'fast1abc123xyz');
       assert.strictEqual(req.extra, undefined);

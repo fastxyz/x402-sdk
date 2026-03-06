@@ -9,10 +9,10 @@ import {
   parse402Response, 
   buildPaymentHeader, 
   parsePaymentHeader,
-  FASTSET_NETWORKS,
+  FAST_NETWORKS,
   EVM_NETWORKS,
 } from '../index.js';
-import { mockEvmWallet, mockFastSetWallet, mock402Response, createMockFetch } from './helpers.js';
+import { mockEvmWallet, mockFastWallet, mock402Response, createMockFetch } from './helpers.js';
 
 // Store original fetch
 const originalFetch = globalThis.fetch;
@@ -24,10 +24,10 @@ describe('x402-client', () => {
   });
 
   describe('constants', () => {
-    it('should export FASTSET_NETWORKS', () => {
-      assert.ok(Array.isArray(FASTSET_NETWORKS));
-      assert.ok(FASTSET_NETWORKS.includes('fastset-devnet'));
-      assert.ok(FASTSET_NETWORKS.includes('fastset-mainnet'));
+    it('should export FAST_NETWORKS', () => {
+      assert.ok(Array.isArray(FAST_NETWORKS));
+      assert.ok(FAST_NETWORKS.includes('fast-devnet'));
+      assert.ok(FAST_NETWORKS.includes('fast-mainnet'));
     });
 
     it('should export EVM_NETWORKS', () => {
@@ -128,7 +128,7 @@ describe('x402-client', () => {
       await assert.rejects(
         () => x402Pay({
           url: 'https://api.example.com/paid',
-          wallet: mockFastSetWallet, // Only FastSet wallet, but server wants EVM
+          wallet: mockFastWallet, // Only Fast wallet, but server wants EVM
         }),
         /No matching wallet/
       );
@@ -136,14 +136,14 @@ describe('x402-client', () => {
 
     it('should accept array of wallets', async () => {
       // This test just verifies the function accepts wallet arrays
-      // Full payment flow tested in evm.test.ts and fastset.test.ts
+      // Full payment flow tested in evm.test.ts and fast.test.ts
       globalThis.fetch = createMockFetch([
         { status: 200, body: { data: 'content' } },
       ]);
 
       const result = await x402Pay({
         url: 'https://api.example.com/data',
-        wallet: [mockEvmWallet, mockFastSetWallet],
+        wallet: [mockEvmWallet, mockFastWallet],
       });
 
       assert.strictEqual(result.success, true);

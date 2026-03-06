@@ -1,12 +1,12 @@
 /**
- * FastSet BCS (Binary Canonical Serialization) types
+ * Fast BCS (Binary Canonical Serialization) types
  * For decoding transaction envelopes
  */
 
 import { bcs } from "@mysten/bcs";
 
 // ---------------------------------------------------------------------------
-// BCS Type Definitions — must match FastSet on-chain types exactly
+// BCS Type Definitions — must match Fast on-chain types exactly
 // ---------------------------------------------------------------------------
 
 const AmountBcs = bcs.u256().transform({
@@ -107,7 +107,7 @@ export const TransactionBcs = bcs.struct("Transaction", {
 // Decoded transaction type
 // ---------------------------------------------------------------------------
 
-export interface DecodedFastSetTransaction {
+export interface DecodedFastTransaction {
   sender: Uint8Array;
   recipient: Uint8Array;
   nonce: bigint;
@@ -153,17 +153,17 @@ export function pubkeyToAddress(pubkey: Uint8Array): string {
 }
 
 /**
- * Decode a FastSet transaction envelope
+ * Decode a Fast transaction envelope
  * 
  * @param envelopeHex - Hex-encoded BCS serialized transaction
  * @returns Decoded transaction details
  */
-export function decodeEnvelope(envelopeHex: string): DecodedFastSetTransaction {
+export function decodeEnvelope(envelopeHex: string): DecodedFastTransaction {
   const bytes = hexToBytes(envelopeHex);
   const decoded = TransactionBcs.parse(bytes);
   
   // Extract claim details
-  let claim: DecodedFastSetTransaction["claim"] = {};
+  let claim: DecodedFastTransaction["claim"] = {};
   
   if (decoded.claim && typeof decoded.claim === "object") {
     // BCS enum returns { VariantName: data }
@@ -206,7 +206,7 @@ export function decodeEnvelope(envelopeHex: string): DecodedFastSetTransaction {
  * @param tx - Decoded transaction
  * @returns Transfer details or null if not a TokenTransfer
  */
-export function getTransferDetails(tx: DecodedFastSetTransaction): {
+export function getTransferDetails(tx: DecodedFastTransaction): {
   sender: string;
   recipient: string;
   amount: bigint;

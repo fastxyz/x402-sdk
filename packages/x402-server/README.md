@@ -35,19 +35,19 @@ app.get('/api/premium/data', (req, res) => {
 app.listen(3000);
 ```
 
-## Multi-Network Support (EVM + FastSet)
+## Multi-Network Support (EVM + Fast)
 
-Accept payments on both EVM and FastSet networks:
+Accept payments on both EVM and Fast networks:
 
 ```typescript
 app.use(paymentMiddleware(
   {
     evm: "0x1234567890abcdef...",     // Receives EVM payments
-    fastset: "fast1abc123xyz...",      // Receives FastSet payments
+    fast: "fast1abc123xyz...",      // Receives Fast payments
   },
   {
     "GET /api/evm/data": { price: "$0.10", network: "arbitrum-sepolia" },
-    "GET /api/fast/data": { price: "$0.01", network: "fastset-devnet" },
+    "GET /api/fast/data": { price: "$0.01", network: "fast-devnet" },
   },
   { url: "http://localhost:4020" }
 ));
@@ -57,7 +57,7 @@ app.use(paymentMiddleware(
 
 The middleware intercepts requests and handles payment verification:
 
-### FastSet Payments (Already On-Chain)
+### Fast Payments (Already On-Chain)
 ```
 Client signs & submits TokenTransfer → Gets certificate
                     ↓
@@ -67,7 +67,7 @@ Server calls Facilitator /verify → Certificate valid?
                     ↓
               ✅ Serve Content
 ```
-FastSet payments are submitted by the client before the request. The server only verifies the transaction certificate — no settlement step needed.
+Fast payments are submitted by the client before the request. The server only verifies the transaction certificate — no settlement step needed.
 
 ### EVM Payments (Authorization Only)
 ```
@@ -97,7 +97,7 @@ paymentMiddleware(payTo, routes, facilitator)
 
 | Name | Type | Description |
 |------|------|-------------|
-| `payTo` | `string \| { evm?: string, fastset?: string }` | Payment address(es) |
+| `payTo` | `string \| { evm?: string, fast?: string }` | Payment address(es) |
 | `routes` | `Record<string, RouteConfig>` | Route patterns → payment config |
 | `facilitator` | `FacilitatorConfig` | Facilitator service config |
 
@@ -106,7 +106,7 @@ paymentMiddleware(payTo, routes, facilitator)
 ```typescript
 interface RouteConfig {
   price: string;      // "$0.10", "0.1 USDC", or "100000" (raw units)
-  network: string;    // "arbitrum-sepolia", "fastset-devnet", etc.
+  network: string;    // "arbitrum-sepolia", "fast-devnet", etc.
   config?: {
     description?: string;
     mimeType?: string;
@@ -135,11 +135,11 @@ interface FacilitatorConfig {
 
 ## Supported Networks
 
-### FastSet
+### Fast
 | Network | Description |
 |---------|-------------|
-| `fastset-devnet` | FastSet testnet |
-| `fastset-mainnet` | FastSet mainnet |
+| `fast-devnet` | Fast testnet |
+| `fast-mainnet` | Fast mainnet |
 
 ### EVM
 | Network | Chain ID |

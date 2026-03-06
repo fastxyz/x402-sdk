@@ -55,11 +55,11 @@ export const EVM_CHAINS: Record<string, EvmChainConfig> = {
 };
 
 /**
- * FastSet RPC endpoints
+ * Fast RPC endpoints
  */
-export const FASTSET_RPC_URLS: Record<string, string> = {
-  "fastset-devnet": "https://api.fast.xyz/proxy",
-  "fastset-mainnet": "https://api.fast.xyz/proxy",
+export const FAST_RPC_URLS: Record<string, string> = {
+  "fast-devnet": "https://api.fast.xyz/proxy",
+  "fast-mainnet": "https://api.fast.xyz/proxy",
 };
 
 /**
@@ -70,10 +70,10 @@ export function getEvmChainConfig(network: string): EvmChainConfig | null {
 }
 
 /**
- * Get FastSet RPC URL
+ * Get Fast RPC URL
  */
-export function getFastSetRpcUrl(network: string): string {
-  return FASTSET_RPC_URLS[network] || FASTSET_RPC_URLS["fastset-devnet"];
+export function getFastRpcUrl(network: string): string {
+  return FAST_RPC_URLS[network] || FAST_RPC_URLS["fast-devnet"];
 }
 
 /**
@@ -82,6 +82,6 @@ export function getFastSetRpcUrl(network: string): string {
 export const SUPPORTED_EVM_NETWORKS = Object.keys(EVM_CHAINS);
 
 /**
- * List of supported FastSet networks
+ * List of supported Fast networks
  */
-export const SUPPORTED_FASTSET_NETWORKS = Object.keys(FASTSET_RPC_URLS);
+export const SUPPORTED_FAST_NETWORKS = Object.keys(FAST_RPC_URLS);

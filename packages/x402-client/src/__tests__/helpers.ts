@@ -2,7 +2,7 @@
  * Test helpers and mocks
  */
 
-import type { FastSetWallet, EvmWallet, PaymentRequired } from '../types.js';
+import type { FastWallet, EvmWallet, PaymentRequired } from '../types.js';
 
 // ─── Mock Wallets ─────────────────────────────────────────────────────────────
 
@@ -12,8 +12,8 @@ export const mockEvmWallet: EvmWallet = {
   address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
 };
 
-export const mockFastSetWallet: FastSetWallet = {
-  type: 'fastset',
+export const mockFastWallet: FastWallet = {
+  type: 'fast',
   // Valid Ed25519 key pair for testing
   privateKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   publicKey: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
@@ -34,7 +34,7 @@ export function mock402Response(network: string, amount: string = '100000'): Pay
       maxAmountRequired: amount,
       payTo: isEvm 
         ? '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372'
-        // Valid bech32m FastSet address
+        // Valid bech32m Fast address
         : 'fast19cjwajufyuqv883ydlvrp8xrhxejuvfe40pxq5dsrv675zgh89sqg9txs8',
       asset: isEvm 
         ? '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'

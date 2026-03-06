@@ -10,8 +10,8 @@
 export type PayToConfig = string | {
   /** EVM address (0x...) for Arbitrum, Base, Ethereum, etc. */
   evm?: string;
-  /** FastSet address (fast1...) for FastSet networks */
-  fastset?: string;
+  /** Fast address (fast1...) for Fast networks */
+  fast?: string;
 };
 
 /**

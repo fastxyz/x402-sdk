@@ -17,7 +17,7 @@ import type {
   PaymentRequirement,
   SettleResponse,
   EvmPayload,
-  FastSetPayload,
+  FastPayload,
   FacilitatorConfig,
 } from "./types.js";
 import { getNetworkType } from "./types.js";
@@ -45,8 +45,8 @@ export async function settle(
   switch (networkType) {
     case "evm":
       return settleEvmPayment(paymentPayload, paymentRequirement, config);
-    case "fastset":
-      return settleFastSetPayment(paymentPayload, paymentRequirement);
+    case "fast":
+      return settleFastPayment(paymentPayload, paymentRequirement);
     default:
       return {
         success: false,
@@ -195,14 +195,14 @@ async function settleEvmPayment(
 }
 
 /**
- * Settle FastSet payment (no-op - already on-chain)
- * FastSet transactions are settled when the wallet creates the transaction certificate
+ * Settle Fast payment (no-op - already on-chain)
+ * Fast transactions are settled when the wallet creates the transaction certificate
  */
-async function settleFastSetPayment(
+async function settleFastPayment(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement
 ): Promise<SettleResponse> {
-  const payload = paymentPayload.payload as FastSetPayload;
+  const payload = paymentPayload.payload as FastPayload;
   if (!payload?.transactionCertificate) {
     return {
       success: false,
@@ -211,7 +211,7 @@ async function settleFastSetPayment(
     };
   }
 
-  // FastSet transactions are already settled on-chain
+  // Fast transactions are already settled on-chain
   // The wallet extension handles signing and broadcasting
   // Return success with a transaction identifier based on the certificate
   const transactionId = payload.transactionCertificate.envelope

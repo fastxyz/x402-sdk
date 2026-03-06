@@ -5,7 +5,7 @@
  * 
  * Use this package to:
  * - Verify EIP-3009 signatures (EVM)
- * - Verify FastSet transaction certificates
+ * - Verify Fast transaction certificates
  * - Settle EVM payments via transferWithAuthorization
  * 
  * @example
@@ -28,7 +28,7 @@
 export type {
   PaymentRequirement,
   PaymentPayload,
-  FastSetPayload,
+  FastPayload,
   EvmPayload,
   VerifyResponse,
   SettleResponse,
@@ -43,18 +43,18 @@ export { getNetworkType } from "./types.js";
 // Chains
 export {
   EVM_CHAINS,
-  FASTSET_RPC_URLS,
+  FAST_RPC_URLS,
   SUPPORTED_EVM_NETWORKS,
-  SUPPORTED_FASTSET_NETWORKS,
+  SUPPORTED_FAST_NETWORKS,
   getEvmChainConfig,
-  getFastSetRpcUrl,
+  getFastRpcUrl,
 } from "./chains.js";
 
 // Core functions
 export { verify } from "./verify.js";
 export { settle } from "./settle.js";
 
-// FastSet BCS utilities
+// Fast BCS utilities
 export {
   TransactionBcs,
   decodeEnvelope,
@@ -62,8 +62,8 @@ export {
   bytesToHex,
   hexToBytes,
   pubkeyToAddress,
-  type DecodedFastSetTransaction,
-} from "./fastset-bcs.js";
+  type DecodedFastTransaction,
+} from "./fast-bcs.js";
 
 // Server
 export { createFacilitatorServer, createFacilitatorRoutes } from "./server.js";
