@@ -16,29 +16,31 @@ x402 is a payment protocol built on HTTP status code `402 Payment Required`. It 
 | Package | Description | npm |
 |---------|-------------|-----|
 | [x402-client](./packages/x402-client) | Client SDK - sign and pay for 402 content | `npm i x402-client` |
-| [x402-server](./packages/x402-server) | Server SDK - create 402 responses, verify payments | `npm i x402-server` |
+| [x402-server](./packages/x402-server) | Server SDK - protect routes, verify payments | `npm i x402-server` |
 | [x402-facilitator](./packages/x402-facilitator) | Facilitator - verify signatures, settle on-chain | `npm i x402-facilitator` |
 
 ## Quick Start
 
-### Client (pay for content)
+### 1. Run a Facilitator
+
+The facilitator verifies payment signatures and settles EVM payments on-chain.
 
 ```typescript
-import { x402Pay } from 'x402-client';
+import express from 'express';
+import { createFacilitatorServer } from 'x402-facilitator';
 
-const result = await x402Pay({
-  url: 'https://api.example.com/premium-data',
-  wallet: {
-    type: 'evm',
-    privateKey: '0x...',
-    address: '0x...',
-  },
-});
+const app = express();
+app.use(express.json());
 
-console.log(result.body); // Your paid content
+app.use(createFacilitatorServer({
+  // Private key for settling EVM payments (pays gas)
+  evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
+}));
+
+app.listen(4020, () => console.log('Facilitator on :4020'));
 ```
 
-### Server (charge for content)
+### 2. Protect Your API (Server)
 
 ```typescript
 import express from 'express';
@@ -46,7 +48,6 @@ import { paymentMiddleware } from 'x402-server';
 
 const app = express();
 
-// Protect routes with payment requirements
 app.use(paymentMiddleware(
   '0x1234...',  // Your payment address
   {
@@ -62,20 +63,21 @@ app.get('/api/premium/data', (req, res) => {
 app.listen(3000);
 ```
 
-### Multi-Network Server (EVM + FastSet)
+### 3. Pay for Content (Client)
 
 ```typescript
-app.use(paymentMiddleware(
-  {
-    evm: '0x1234...',       // EVM payment address
-    fastset: 'fast1abc...',  // FastSet payment address
+import { x402Pay } from 'x402-client';
+
+const result = await x402Pay({
+  url: 'https://api.example.com/api/premium/data',
+  wallet: {
+    type: 'evm',
+    privateKey: '0x...',
+    address: '0x...',
   },
-  {
-    'GET /api/evm/*': { price: '$0.10', network: 'arbitrum-sepolia' },
-    'GET /api/fast/*': { price: '$0.01', network: 'fastset-devnet' },
-  },
-  { url: 'http://localhost:4020' }
-));
+});
+
+console.log(result.body); // Your paid content
 ```
 
 ## Protocol Flow
@@ -102,7 +104,7 @@ app.use(paymentMiddleware(
      │                              │  POST /verify                  │
      │                              │─────────────────────────────────>
      │                              │                                │
-     │                              │  { valid: true }               │
+     │                              │  { isValid: true }             │
      │                              │<─────────────────────────────────
      │                              │                                │
      │  200 OK (FastSet)            │                                │
@@ -115,20 +117,133 @@ app.use(paymentMiddleware(
      │<─────────────────────────────│<─────────────────────────────────
 ```
 
-**Key difference:**
-- **FastSet**: Payment already on-chain → Verify → Serve content
-- **EVM**: Payment is authorization only → Verify → Settle → Serve content
+## Payment Flows
+
+### EVM (Arbitrum, Base, Ethereum)
+
+Uses **EIP-3009 `transferWithAuthorization`** - client signs, facilitator settles.
+
+```
+Client                          Server                         Facilitator
+  │                               │                                │
+  │ Sign EIP-3009 authorization   │                                │
+  │ (EIP-712 typed data)          │                                │
+  │                               │                                │
+  │ X-PAYMENT: { signature,       │                                │
+  │   authorization: {from,to,    │                                │
+  │   value,validAfter,           │                                │
+  │   validBefore,nonce} }        │                                │
+  │──────────────────────────────>│                                │
+  │                               │  /verify                       │
+  │                               │  - Recover signer from sig     │
+  │                               │  - Check recipient matches     │
+  │                               │  - Check amount sufficient     │
+  │                               │  - Check timing valid          │
+  │                               │  - Check on-chain balance      │
+  │                               │────────────────────────────────>
+  │                               │  { isValid: true }             │
+  │                               │<────────────────────────────────
+  │                               │                                │
+  │                               │  /settle                       │
+  │                               │  - Re-verify payment           │
+  │                               │  - Check nonce not used        │
+  │                               │  - Call transferWithAuth()     │
+  │                               │  - Wait for confirmation       │
+  │                               │────────────────────────────────>
+  │                               │  { txHash: 0x... }             │
+  │                               │<────────────────────────────────
+  │  200 OK + content             │                                │
+  │<──────────────────────────────│                                │
+```
+
+### FastSet (Instant Settlement)
+
+Client submits transaction directly, sends **certificate** as proof.
+
+```
+Client                          Server                         Facilitator
+  │                               │                                │
+  │ Submit TokenTransfer to       │                                │
+  │ FastSet network               │                                │
+  │ (transaction already on-chain)│                                │
+  │                               │                                │
+  │ X-PAYMENT: {                  │                                │
+  │   transactionCertificate: {   │                                │
+  │     envelope: "0x...",        │                                │
+  │     signatures: [...]         │                                │
+  │   }                           │                                │
+  │ }                             │                                │
+  │──────────────────────────────>│                                │
+  │                               │  /verify                       │
+  │                               │  - Check certificate structure │
+  │                               │  - (TODO: on-chain verify)     │
+  │                               │────────────────────────────────>
+  │                               │  { isValid: true }             │
+  │                               │<────────────────────────────────
+  │                               │                                │
+  │  200 OK + content             │  (no /settle needed -          │
+  │<──────────────────────────────│   already on-chain)            │
+```
+
+## Facilitator API
+
+The facilitator exposes three endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/verify` | POST | Verify payment signature/certificate |
+| `/settle` | POST | Settle payment on-chain (EVM only) |
+| `/supported` | GET | List supported networks |
+
+### Verification Logic
+
+**EVM payments:**
+1. Recover signer from EIP-712 signature (`verifyTypedData`)
+2. Check recipient matches `paymentRequirement.payTo`
+3. Check amount ≥ `paymentRequirement.maxAmountRequired`
+4. Check `validAfter ≤ now < validBefore`
+5. Query on-chain USDC balance
+
+**FastSet payments:**
+1. Check certificate structure (envelope + signatures)
+2. Validate scheme and network match
+3. *(TODO: Query FastSet RPC for on-chain verification)*
+
+### Settlement Logic
+
+**EVM:** Re-verify → Check nonce unused → Call `transferWithAuthorization()` → Wait for confirmation
+
+**FastSet:** No-op (transaction already on-chain when certificate was created)
+
+## Multi-Network Server
+
+Accept payments on both EVM and FastSet:
+
+```typescript
+app.use(paymentMiddleware(
+  {
+    evm: '0x1234...',        // EVM payment address
+    fastset: 'fast1abc...',  // FastSet payment address
+  },
+  {
+    'GET /api/evm/*': { price: '$0.10', network: 'arbitrum-sepolia' },
+    'GET /api/fast/*': { price: '$0.01', network: 'fastset-devnet' },
+  },
+  { url: 'http://localhost:4020' }
+));
+```
 
 ## Supported Networks
 
-| Network | Chain ID | Token | Settlement |
-|---------|----------|-------|------------|
-| FastSet Devnet | - | SETUSDC | ~300ms |
-| FastSet Mainnet | - | SETUSDC | ~300ms |
-| Arbitrum Sepolia | 421614 | USDC | ~15s |
-| Arbitrum | 42161 | USDC | ~15s |
-| Base Sepolia | 84532 | USDC | ~15s |
-| Base | 8453 | USDC | ~15s |
+| Network | Type | Chain ID | Token | Settlement |
+|---------|------|----------|-------|------------|
+| `fastset-devnet` | FastSet | - | SETUSDC | ~300ms |
+| `fastset-mainnet` | FastSet | - | SETUSDC | ~300ms |
+| `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
+| `arbitrum` | EVM | 42161 | USDC | ~15s |
+| `base-sepolia` | EVM | 84532 | USDC | ~15s |
+| `base` | EVM | 8453 | USDC | ~15s |
+| `ethereum` | EVM | 1 | USDC | ~15s |
 
 ## Development
 
@@ -137,10 +252,10 @@ app.use(paymentMiddleware(
 npm install
 
 # Build all packages
-npm run build
+npm run build --workspaces
 
 # Run tests
-npm test
+npm test --workspaces
 ```
 
 ## License
