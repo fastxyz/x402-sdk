@@ -1,0 +1,33 @@
+{
+  "name": "x402-sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "x402 HTTP Payment Protocol SDK - Client, Server, and Facilitator",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "dev": "npm run dev --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "clean": "rm -rf packages/*/dist"
+  },
+  "keywords": [
+    "x402",
+    "http",
+    "payment",
+    "402",
+    "fastset",
+    "evm",
+    "sdk"
+  ],
+  "author": "Pi Squared",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pi-Squared-Inc/x402-sdk"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

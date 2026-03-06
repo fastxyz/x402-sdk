@@ -1,0 +1,52 @@
+{
+  "name": "x402-client",
+  "version": "0.1.0",
+  "description": "Client SDK for x402 HTTP payment protocol - sign and pay for 402-protected content",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "keywords": [
+    "x402",
+    "http",
+    "payment",
+    "402",
+    "fastset",
+    "evm",
+    "eip-3009",
+    "crypto"
+  ],
+  "author": "Pi Squared",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Pi-Squared-Inc/x402-sdk"
+  },
+  "dependencies": {
+    "@mysten/bcs": "^2.0.2",
+    "@noble/ed25519": "^2.1.0",
+    "@noble/hashes": "^1.5.0",
+    "bech32": "^2.0.0",
+    "viem": "^2.46.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
