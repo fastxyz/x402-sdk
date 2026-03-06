@@ -41,7 +41,7 @@ describe("Fast BCS utilities", () => {
       const sender = new Uint8Array(32).fill(0x01);
       const recipient = new Uint8Array(32).fill(0x02);
       const tokenId = new Uint8Array(32);
-      tokenId.set([0x1e, 0x74, 0x49, 0x00], 0); // SETUSDC prefix
+      tokenId.set([0x1b, 0x48, 0x76, 0x61], 0); // fastUSDC prefix
 
       const transaction = {
         sender,
@@ -77,7 +77,7 @@ describe("Fast BCS utilities", () => {
       const sender = new Uint8Array(32).fill(0xaa);
       const recipient = new Uint8Array(32).fill(0xbb);
       const tokenId = new Uint8Array(32);
-      tokenId.set([0x1e, 0x74, 0x49, 0x00], 0);
+      tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
 
       const transaction = {
         sender,
@@ -122,7 +122,7 @@ describe("Fast BCS utilities", () => {
       const sender = new Uint8Array(32).fill(0xcc);
       const recipient = new Uint8Array(32).fill(0xdd);
       const tokenId = new Uint8Array(32);
-      tokenId.set([0x1e, 0x74, 0x49, 0x00], 0);
+      tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
 
       const transaction = {
         sender,

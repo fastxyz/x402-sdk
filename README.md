@@ -237,8 +237,8 @@ app.use(paymentMiddleware(
 
 | Network | Type | Chain ID | Token | Settlement |
 |---------|------|----------|-------|------------|
-| `fast-testnet` | Fast | - | SETUSDC | ~300ms |
-| `fast-mainnet` | Fast | - | SETUSDC | ~300ms |
+| `fast-testnet` | Fast | - | fastUSDC | ~300ms |
+| `fast-mainnet` | Fast | - | fastUSDC | ~300ms |
 | `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
 | `arbitrum` | EVM | 42161 | USDC | ~15s |
 | `base-sepolia` | EVM | 84532 | USDC | ~15s |

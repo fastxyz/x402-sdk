@@ -104,7 +104,7 @@ interface FastWallet {
    **Case B: EVM Payment (Arbitrum, Base, etc.)**
    - Client checks if their EVM wallet has sufficient USDC balance
    - **If sufficient**: Client signs an EIP-3009 `transferWithAuthorization` and sends it as the `X-PAYMENT` header
-   - **If insufficient**: Client automatically bridges SETUSDC from their Fast account to their EVM account via AllSet, then signs the EIP-3009 authorization
+   - **If insufficient**: Client automatically bridges fastUSDC from their Fast account to their EVM account via AllSet, then signs the EIP-3009 authorization
 
 4. **Retry**: Client retries the original request with the `X-PAYMENT` header
 5. **Content**: Server verifies payment (via facilitator) and returns the protected content
@@ -113,7 +113,7 @@ interface FastWallet {
 
 ### Multiple Wallets (with Auto-Bridge)
 
-When you provide both Fast and EVM wallets, the SDK enables **auto-bridge**: if an EVM payment is required but your EVM wallet lacks sufficient USDC, the SDK will automatically bridge SETUSDC from your Fast account via AllSet.
+When you provide both Fast and EVM wallets, the SDK enables **auto-bridge**: if an EVM payment is required but your EVM wallet lacks sufficient USDC, the SDK will automatically bridge fastUSDC from your Fast account via AllSet.
 
 ```typescript
 // Provide both wallets for auto-bridge support

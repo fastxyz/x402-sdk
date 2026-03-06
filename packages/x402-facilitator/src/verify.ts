@@ -376,7 +376,7 @@ async function verifyFastPayment(
   }
 
   // Verify amount >= maxAmountRequired
-  // Fast uses 18 decimals for SETUSDC, payment requirement uses 6 decimals
+  // Fast uses 18 decimals for fastUSDC, payment requirement uses 6 decimals
   // Need to normalize: requirement amount * 10^12 = Fast amount
   const requiredAmount = BigInt(paymentRequirement.maxAmountRequired);
   const fastDecimals = 18;

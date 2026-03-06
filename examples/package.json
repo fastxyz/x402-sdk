@@ -1,0 +1,11 @@
+{
+  "name": "x402-examples",
+  "type": "module",
+  "scripts": {
+    "facilitator": "node test-facilitator.js",
+    "server": "node test-server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.0"
+  }
+}

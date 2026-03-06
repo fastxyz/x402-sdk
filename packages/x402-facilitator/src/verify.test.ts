@@ -43,7 +43,7 @@ describe("verify", () => {
     }
 
     const tokenId = new Uint8Array(32);
-    tokenId.set([0x1e, 0x74, 0x49, 0x00], 0);
+    tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
 
     const recipient = new Uint8Array(32).fill(0xbb);
     const recipientHex = bytesToHex(recipient);

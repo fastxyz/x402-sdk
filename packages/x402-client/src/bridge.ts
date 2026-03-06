@@ -1,7 +1,7 @@
 /**
  * AllSet bridge integration for x402-client
  * 
- * Bridges SETUSDC from Fast to USDC on EVM chains when needed.
+ * Bridges fastUSDC from Fast to USDC on EVM chains when needed.
  */
 
 import { bcs } from '@mysten/bcs';
@@ -19,8 +19,8 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 const CROSS_SIGN_URL = 'https://staging.omniset.fastset.xyz/cross-sign';
 const FAST_RPC_URL = 'https://staging.proxy.fastset.xyz/';
 
-/** SETUSDC token ID on Fast */
-const SETUSDC_TOKEN_ID = hexToBytes('1e744900021182b293538bb6685b77df095e351364d550021614ce90c8ab9e0a');
+/** fastUSDC token ID on Fast */
+const fastUSDC_TOKEN_ID = hexToBytes('1b48766165f2cc84292d8c06b0523e1eefd7586049be0f82249c002f88a409ef');
 
 /** Bridge configuration per EVM chain */
 interface BridgeChainConfig {
@@ -103,7 +103,7 @@ interface TransactionResult {
 }
 
 /**
- * Get SETUSDC balance on Fast
+ * Get fastUSDC balance on Fast
  */
 export async function getFastBalance(
   wallet: FastWallet
@@ -137,8 +137,8 @@ export async function getFastBalance(
     return 0n;
   }
 
-  // Find SETUSDC balance
-  const setusdcHex = bytesToHex(SETUSDC_TOKEN_ID);
+  // Find fastUSDC balance
+  const setusdcHex = bytesToHex(fastUSDC_TOKEN_ID);
   for (const bal of result.result.balances) {
     const tokenHex = bytesToHex(new Uint8Array(bal.token_id));
     if (tokenHex === setusdcHex) {
@@ -326,7 +326,7 @@ async function crossSignCertificate(
 // ─── Main Bridge Function ─────────────────────────────────────────────────────
 
 export interface BridgeParams {
-  /** Fast wallet with SETUSDC */
+  /** Fast wallet with fastUSDC */
   fastWallet: FastWallet;
   /** EVM address to receive USDC */
   evmReceiverAddress: string;
@@ -347,7 +347,7 @@ export interface BridgeResult {
 }
 
 /**
- * Bridge SETUSDC from Fast to USDC on EVM via AllSet
+ * Bridge fastUSDC from Fast to USDC on EVM via AllSet
  */
 export async function bridgeSetusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
   const { fastWallet, evmReceiverAddress, amount, network, verbose = false, logs = [] } = params;
@@ -365,20 +365,20 @@ export async function bridgeSetusdcToUsdc(params: BridgeParams): Promise<BridgeR
   }
 
   log(`━━━ AllSet Bridge START ━━━`);
-  log(`  Amount: ${Number(amount) / 1e6} SETUSDC`);
+  log(`  Amount: ${Number(amount) / 1e6} fastUSDC`);
   log(`  From: ${fastWallet.address}`);
   log(`  To: ${evmReceiverAddress} on ${network}`);
 
   try {
     const rpcUrl = fastWallet.rpcUrl || FAST_RPC_URL;
 
-    // Step 1: Transfer SETUSDC to Fast bridge account
-    log(`[Step 1] Transferring SETUSDC to Fast bridge...`);
+    // Step 1: Transfer fastUSDC to Fast bridge account
+    log(`[Step 1] Transferring fastUSDC to Fast bridge...`);
     const transferResult = await sendTokenTransfer(
       fastWallet,
       bridgeConfig.fastBridgeAddress,
       amount,
-      SETUSDC_TOKEN_ID,
+      fastUSDC_TOKEN_ID,
       rpcUrl
     );
     log(`  ✓ Transfer tx: ${transferResult.txHash}`);
