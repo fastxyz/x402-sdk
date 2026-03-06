@@ -12,31 +12,81 @@ npm install x402-server
 
 ## Quick Start
 
+### Single Network (EVM or FastSet)
+
 ```typescript
 import express from 'express';
 import { paymentMiddleware } from 'x402-server';
 
 const app = express();
 
-// Protect routes with payment requirements
+// EVM-only server
 app.use(paymentMiddleware(
-  "0x1234567890abcdef...",  // Your payment address
+  "0x1234567890abcdef...",  // Your EVM address
   {
-    "GET /api/premium/*": {
-      price: "$0.10",
-      network: "arbitrum-sepolia",
-    },
-    "POST /api/ai/generate": {
-      price: "$0.01", 
-      network: "fastset-devnet",
-    },
+    "GET /api/premium/*": { price: "$0.10", network: "arbitrum-sepolia" },
   },
   { url: "http://localhost:4020" }  // Facilitator URL
 ));
 
-// Your protected routes
+// OR FastSet-only server
+app.use(paymentMiddleware(
+  "fast1abc123...",  // Your FastSet address
+  {
+    "GET /api/premium/*": { price: "$0.10", network: "fastset-devnet" },
+  },
+  { url: "http://localhost:4020" }
+));
+
 app.get('/api/premium/data', (req, res) => {
   res.json({ data: 'Premium content!' });
+});
+
+app.listen(3000);
+```
+
+### Multiple Networks (EVM + FastSet)
+
+For servers that accept payments on both EVM and FastSet networks:
+
+```typescript
+import express from 'express';
+import { paymentMiddleware } from 'x402-server';
+
+const app = express();
+
+app.use(paymentMiddleware(
+  // Multiple payment addresses by network type
+  {
+    evm: "0x1234567890abcdef...",     // Receives EVM payments
+    fastset: "fast1abc123xyz...",      // Receives FastSet payments
+  },
+  {
+    // EVM routes - paid to your EVM address
+    "GET /api/evm/data": { 
+      price: "$0.10", 
+      network: "arbitrum-sepolia" 
+    },
+    "POST /api/evm/generate": { 
+      price: "$0.50", 
+      network: "base-sepolia" 
+    },
+    
+    // FastSet routes - paid to your FastSet address
+    "GET /api/fast/data": { 
+      price: "$0.01", 
+      network: "fastset-devnet" 
+    },
+  },
+  { url: "http://localhost:4020" }
+));
+
+app.get('/api/evm/data', (req, res) => {
+  res.json({ data: 'EVM premium content!' });
+});
+
+app.get('/api/fast/data', (req, res) => {
+  res.json({ data: 'FastSet premium content!' });
 });
 
 app.listen(3000);
@@ -48,13 +98,27 @@ The middleware intercepts requests and handles payment verification:
 
 ### FastSet Payments (Already On-Chain)
 ```
-Request → Verify with Facilitator → ✅ Serve Content
+Client signs & submits TokenTransfer → Gets certificate
+                    ↓
+Request with X-PAYMENT (certificate) → Server
+                    ↓
+Server calls Facilitator /verify → Certificate valid?
+                    ↓
+              ✅ Serve Content
 ```
-FastSet payments are submitted by the client before the request. The server only needs to verify the transaction certificate is valid.
+FastSet payments are submitted by the client before the request. The server only needs to verify the transaction certificate is valid — no settlement needed.
 
 ### EVM Payments (Authorization Only)
 ```
-Request → Verify with Facilitator → Settle with Facilitator → ✅ Serve Content
+Client signs EIP-3009 authorization
+                    ↓
+Request with X-PAYMENT (signature) → Server
+                    ↓
+Server calls Facilitator /verify → Signature valid?
+                    ↓
+Server calls Facilitator /settle → Submit on-chain
+                    ↓
+              ✅ Serve Content
 ```
 EVM payments use EIP-3009 `transferWithAuthorization`. The client signs an authorization, but the facilitator must submit it on-chain before content is served.
 
@@ -66,10 +130,24 @@ Creates Express middleware for payment-protected routes.
 
 ```typescript
 function paymentMiddleware(
-  payTo: string,                    // Address to receive payments
+  payTo: PayToConfig,               // Address(es) to receive payments
   routes: RoutesConfig,             // Route → payment config map
   facilitator: FacilitatorConfig    // Facilitator service config
 ): ExpressMiddleware;
+```
+
+### Payment Address Configuration
+
+```typescript
+// Option 1: Single address (for single network type)
+const payTo = "0x1234...";           // EVM address
+const payTo = "fast1abc...";         // FastSet address
+
+// Option 2: Multiple addresses (for multi-network servers)
+const payTo = {
+  evm: "0x1234...",                  // Used for EVM network routes
+  fastset: "fast1abc...",            // Used for FastSet network routes
+};
 ```
 
 ### Route Configuration
@@ -123,14 +201,18 @@ app.use('/api/premium', paywall(
 ## Supported Networks
 
 ### FastSet (Instant Settlement)
-- `fastset-devnet` - FastSet testnet
-- `fastset-mainnet` - FastSet mainnet
+| Network | Description |
+|---------|-------------|
+| `fastset-devnet` | FastSet testnet |
+| `fastset-mainnet` | FastSet mainnet |
 
 ### EVM (EIP-3009)
-- `arbitrum-sepolia` - Arbitrum testnet
-- `arbitrum` - Arbitrum mainnet  
-- `base-sepolia` - Base testnet
-- `base` - Base mainnet
+| Network | Chain ID | Description |
+|---------|----------|-------------|
+| `arbitrum-sepolia` | 421614 | Arbitrum testnet |
+| `arbitrum` | 42161 | Arbitrum mainnet |
+| `base-sepolia` | 84532 | Base testnet |
+| `base` | 8453 | Base mainnet |
 
 ## Response Headers
 
@@ -144,7 +226,7 @@ Decoded response:
 ```json
 {
   "success": true,
-  "txHash": "0x...",      // EVM settlement tx (EVM only)
+  "txHash": "0x...",      // Settlement tx hash (EVM only)
   "network": "arbitrum-sepolia",
   "payer": "0x..."
 }
@@ -152,8 +234,7 @@ Decoded response:
 
 ## Error Responses
 
-When payment is required or fails:
-
+### No Payment Header (402)
 ```json
 {
   "error": "X-PAYMENT header is required",
@@ -167,6 +248,24 @@ When payment is required or fails:
       "extra": { "name": "USD Coin", "version": "2" }
     }
   ]
+}
+```
+
+### Invalid Payment (402)
+```json
+{
+  "error": "Invalid signature",
+  "accepts": [...],
+  "payer": "0x..."
+}
+```
+
+### Settlement Failed (402)
+```json
+{
+  "error": "Insufficient balance for transfer",
+  "accepts": [...],
+  "payer": "0x..."
 }
 ```
 

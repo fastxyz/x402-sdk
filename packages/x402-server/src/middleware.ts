@@ -8,6 +8,7 @@ import type {
   RouteConfig,
   RoutesConfig,
   PaymentRequirement,
+  PayToConfig,
 } from "./types.js";
 import {
   createPaymentRequired,
@@ -85,30 +86,87 @@ function isFastSetNetwork(network: string): boolean {
 }
 
 /**
+ * Check if network is EVM-based
+ */
+function isEvmNetwork(network: string): boolean {
+  const evmNetworks = [
+    "ethereum", "arbitrum", "arbitrum-sepolia", 
+    "base", "base-sepolia", "optimism", "polygon"
+  ];
+  return evmNetworks.includes(network) || network.endsWith("-sepolia");
+}
+
+/**
+ * Resolve payment address based on network type
+ */
+function resolvePayTo(payTo: PayToConfig, network: string): string {
+  // If string, use as-is
+  if (typeof payTo === "string") {
+    return payTo;
+  }
+  
+  // Multi-address config
+  if (isFastSetNetwork(network)) {
+    if (!payTo.fastset) {
+      throw new Error(
+        `FastSet payment address not configured. ` +
+        `Add 'fastset' to payTo config for network: ${network}`
+      );
+    }
+    return payTo.fastset;
+  }
+  
+  if (isEvmNetwork(network)) {
+    if (!payTo.evm) {
+      throw new Error(
+        `EVM payment address not configured. ` +
+        `Add 'evm' to payTo config for network: ${network}`
+      );
+    }
+    return payTo.evm;
+  }
+  
+  throw new Error(`Unknown network type: ${network}`);
+}
+
+/**
  * Create x402 payment middleware for Express
  * 
  * Payment flow differs by network type:
  * - FastSet: Verify → Serve content (payment already on-chain)
  * - EVM: Verify → Settle → Serve content (payment must be submitted on-chain)
  * 
- * @param payTo - Address to receive payments
+ * @param payTo - Address(es) to receive payments. Can be:
+ *   - Single address string (must match network type)
+ *   - Object with `evm` and/or `fastset` addresses
  * @param routes - Route configuration map
  * @param facilitator - Facilitator configuration
  * 
  * @example
  * ```typescript
+ * // Single address (EVM only)
  * app.use(paymentMiddleware(
  *   "0x1234...",
+ *   { "GET /api/data": { price: "$0.10", network: "arbitrum-sepolia" } },
+ *   { url: "http://localhost:4020" }
+ * ));
+ * 
+ * // Multiple addresses (EVM + FastSet)
+ * app.use(paymentMiddleware(
  *   {
- *     "GET /api/premium/*": { price: "$0.10", network: "arbitrum-sepolia" },
- *     "POST /api/ai/generate": { price: "$0.01", network: "fastset-devnet" },
+ *     evm: "0x1234...",
+ *     fastset: "fast1abc...",
+ *   },
+ *   {
+ *     "GET /api/evm-data": { price: "$0.10", network: "arbitrum-sepolia" },
+ *     "GET /api/fast-data": { price: "$0.01", network: "fastset-devnet" },
  *   },
  *   { url: "http://localhost:4020" }
  * ));
  * ```
  */
 export function paymentMiddleware(
-  payTo: string,
+  payTo: PayToConfig,
   routes: RoutesConfig,
   facilitator: FacilitatorConfig
 ) {
@@ -128,10 +186,20 @@ export function paymentMiddleware(
     // Check for X-PAYMENT header
     const paymentHeader = req.header("X-PAYMENT");
     
+    // Resolve payment address for this network
+    let resolvedPayTo: string;
+    try {
+      resolvedPayTo = resolvePayTo(payTo, routeConfig.network);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500);
+      return res.json({ error: errorMessage });
+    }
+    
     if (!paymentHeader) {
       // Return 402 Payment Required
       const paymentRequired = createPaymentRequired(
-        payTo,
+        resolvedPayTo,
         routeConfig,
         req.path
       );
@@ -141,7 +209,7 @@ export function paymentMiddleware(
     
     // Create payment requirement for verification
     const paymentRequirement = createPaymentRequirement(
-      payTo,
+      resolvedPayTo,
       routeConfig,
       req.path
     );
@@ -226,7 +294,7 @@ export function paymentMiddleware(
  * Useful for single-endpoint protection
  */
 export function paywall(
-  payTo: string,
+  payTo: PayToConfig,
   config: RouteConfig,
   facilitator: FacilitatorConfig
 ) {

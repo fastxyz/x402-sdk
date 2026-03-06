@@ -33,6 +33,7 @@ export type {
   NetworkConfig,
   RoutesConfig,
   XPaymentPayload,
+  PayToConfig,
 } from "./types.js";
 
 // Utils

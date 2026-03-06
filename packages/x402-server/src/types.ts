@@ -4,6 +4,17 @@
  */
 
 /**
+ * Payment addresses configuration
+ * Can be a single address (string) or multiple addresses by network type
+ */
+export type PayToConfig = string | {
+  /** EVM address (0x...) for Arbitrum, Base, Ethereum, etc. */
+  evm?: string;
+  /** FastSet address (fast1...) for FastSet networks */
+  fastset?: string;
+};
+
+/**
  * Route configuration for paywall
  */
 export interface RouteConfig {
