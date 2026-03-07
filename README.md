@@ -80,6 +80,39 @@ const result = await x402Pay({
 console.log(result.body); // Your paid content
 ```
 
+### 4. Auto-Bridge: Pay EVM with Fast Funds
+
+Provide both wallets to automatically bridge fastUSDC → USDC when paying for EVM endpoints:
+
+```typescript
+import { x402Pay } from '@fast/x402-client';
+
+const result = await x402Pay({
+  url: 'https://api.example.com/api/premium/data',  // EVM endpoint
+  wallet: [
+    {
+      type: 'fast',
+      privateKey: '...',      // 32-byte Ed25519 key (hex)
+      publicKey: '...',       // 32-byte pubkey (hex)
+      address: 'fast1...',    // bech32m address
+    },
+    {
+      type: 'evm',
+      privateKey: '0x...',
+      address: '0x...',
+    },
+  ],
+  verbose: true,  // See bridge progress logs
+});
+
+// Flow:
+// 1. Detects EVM endpoint requires USDC
+// 2. Checks EVM USDC balance (insufficient)
+// 3. Bridges fastUSDC → USDC via AllSet (~3-4s)
+// 4. Signs EIP-3009 authorization
+// 5. Sends payment → 200 OK
+```
+
 ## Protocol Flow
 
 ```
