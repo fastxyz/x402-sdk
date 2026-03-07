@@ -7,13 +7,13 @@ Pay for 402-protected content with Fast or EVM wallets.
 ## Install
 
 ```bash
-npm install @fast/x402-client
+npm install @fastxyz/x402-client
 ```
 
 ## Quick Start
 
 ```typescript
-import { x402Pay } from '@fast/x402-client';
+import { x402Pay } from '@fastxyz/x402-client';
 
 // Pay with EVM wallet (Arbitrum, Base)
 const result = await x402Pay({
@@ -147,7 +147,7 @@ result.logs?.forEach(log => console.log(log));
 ### Manual Payment Flow
 
 ```typescript
-import { parse402Response, buildPaymentHeader } from '@fast/x402-client';
+import { parse402Response, buildPaymentHeader } from '@fastxyz/x402-client';
 
 // Get requirements
 const res = await fetch('https://api.example.com/data');

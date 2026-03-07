@@ -1,5 +1,5 @@
 {
-  "name": "@fast/x402-facilitator",
+  "name": "@fastxyz/x402-facilitator",
   "version": "0.1.0",
   "description": "x402 payment protocol - facilitator SDK for verifying and settling payments on-chain",
   "main": "dist/index.js",

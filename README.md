@@ -15,9 +15,9 @@ x402 is a payment protocol built on HTTP status code `402 Payment Required`. It 
 
 | Package | Description | npm |
 |---------|-------------|-----|
-| [x402-client](./packages/x402-client) | Client SDK - sign and pay for 402 content | `npm i @fast/x402-client` |
-| [x402-server](./packages/x402-server) | Server SDK - protect routes, verify payments | `npm i @fast/x402-server` |
-| [x402-facilitator](./packages/x402-facilitator) | Facilitator - verify signatures, settle on-chain | `npm i @fast/x402-facilitator` |
+| [x402-client](./packages/x402-client) | Client SDK - sign and pay for 402 content | `npm i @fastxyz/x402-client` |
+| [x402-server](./packages/x402-server) | Server SDK - protect routes, verify payments | `npm i @fastxyz/x402-server` |
+| [x402-facilitator](./packages/x402-facilitator) | Facilitator - verify signatures, settle on-chain | `npm i @fastxyz/x402-facilitator` |
 
 ## Quick Start
 
@@ -27,7 +27,7 @@ The facilitator verifies payment signatures and settles EVM payments on-chain.
 
 ```typescript
 import express from 'express';
-import { createFacilitatorServer } from '@fast/x402-facilitator';
+import { createFacilitatorServer } from '@fastxyz/x402-facilitator';
 
 const app = express();
 app.use(express.json());
@@ -44,7 +44,7 @@ app.listen(4020, () => console.log('Facilitator on :4020'));
 
 ```typescript
 import express from 'express';
-import { paymentMiddleware } from '@fast/x402-server';
+import { paymentMiddleware } from '@fastxyz/x402-server';
 
 const app = express();
 
@@ -66,7 +66,7 @@ app.listen(3000);
 ### 3. Pay for Content (Client)
 
 ```typescript
-import { x402Pay } from '@fast/x402-client';
+import { x402Pay } from '@fastxyz/x402-client';
 
 const result = await x402Pay({
   url: 'https://api.example.com/api/premium/data',
@@ -85,7 +85,7 @@ console.log(result.body); // Your paid content
 Provide both wallets to automatically bridge fastUSDC → USDC when paying for EVM endpoints:
 
 ```typescript
-import { x402Pay } from '@fast/x402-client';
+import { x402Pay } from '@fastxyz/x402-client';
 
 const result = await x402Pay({
   url: 'https://api.example.com/api/premium/data',  // EVM endpoint

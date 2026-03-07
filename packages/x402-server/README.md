@@ -7,14 +7,14 @@ Protect API routes with crypto payments — works with Express and compatible fr
 ## Install
 
 ```bash
-npm install @fast/x402-server
+npm install @fastxyz/x402-server
 ```
 
 ## Quick Start
 
 ```typescript
 import express from 'express';
-import { paymentMiddleware } from '@fast/x402-server';
+import { paymentMiddleware } from '@fastxyz/x402-server';
 
 const app = express();
 
@@ -88,7 +88,7 @@ EVM payments use EIP-3009 `transferWithAuthorization`. The client signs an autho
 ### paymentMiddleware
 
 ```typescript
-import { paymentMiddleware } from '@fast/x402-server';
+import { paymentMiddleware } from '@fastxyz/x402-server';
 
 paymentMiddleware(payTo, routes, facilitator)
 ```
