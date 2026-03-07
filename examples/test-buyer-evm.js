@@ -1,7 +1,7 @@
 /**
  * Test Buyer - Request paid content using x402-client (EVM with auto-bridge)
  */
-import { x402Pay } from '../packages/x402-client/dist/index.js';
+import { x402Pay } from '@fastxyz/x402-client';
 import { bech32m } from '@scure/base';
 
 // Buyer EVM wallet

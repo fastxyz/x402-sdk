@@ -2,7 +2,7 @@
  * Test x402 client - Premium endpoint ($0.05 EVM payment with auto-bridge)
  */
 
-import { x402Pay } from 'x402-client';
+import { x402Pay } from '@fastxyz/x402-client';
 
 const SERVER_URL = 'http://localhost:3000';
 const ENDPOINT = '/api/premium/forecast';

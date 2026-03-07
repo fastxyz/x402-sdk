@@ -34,7 +34,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Pi-Squared-Inc/x402-sdk"
+    "url": "https://github.com/fastxyz/x402-sdk"
   },
   "dependencies": {
     "@mysten/bcs": "^2.0.2",

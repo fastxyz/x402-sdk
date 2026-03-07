@@ -3,7 +3,7 @@
  * Runs on port 4020
  */
 import express from 'express';
-import { createFacilitatorServer } from '../packages/x402-facilitator/dist/index.js';
+import { createFacilitatorServer } from '@fastxyz/x402-facilitator';
 
 const app = express();
 app.use(express.json());

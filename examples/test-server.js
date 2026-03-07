@@ -3,7 +3,7 @@
  * Runs on port 3000
  */
 import express from 'express';
-import { paymentMiddleware } from '../packages/x402-server/dist/index.js';
+import { paymentMiddleware } from '@fastxyz/x402-server';
 
 const app = express();
 app.use(express.json());
