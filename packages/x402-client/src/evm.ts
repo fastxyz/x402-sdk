@@ -69,7 +69,7 @@ async function pollForBalance(
   usdcAddress: `0x${string}`,
   chain: Chain,
   targetAmount: bigint,
-  maxWaitMs: number = 120000,
+  maxWaitMs: number = 1200000,  // 20 minutes for slow chains like Ethereum
   pollIntervalMs: number = 1000,
   log: (msg: string) => void = () => {}
 ): Promise<{ arrived: boolean; balance: bigint }> {
