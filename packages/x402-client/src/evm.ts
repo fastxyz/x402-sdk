@@ -70,7 +70,7 @@ async function pollForBalance(
   chain: Chain,
   targetAmount: bigint,
   maxWaitMs: number = 120000,
-  pollIntervalMs: number = 3000,
+  pollIntervalMs: number = 1000,
   log: (msg: string) => void = () => {}
 ): Promise<{ arrived: boolean; balance: bigint }> {
   const startTime = Date.now();
