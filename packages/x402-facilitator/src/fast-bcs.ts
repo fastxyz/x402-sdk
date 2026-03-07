@@ -155,11 +155,22 @@ export function pubkeyToAddress(pubkey: Uint8Array): string {
 /**
  * Decode a Fast transaction envelope
  * 
- * @param envelopeHex - Hex-encoded BCS serialized transaction
+ * @param envelope - Hex-encoded string OR byte array (from Fast RPC)
  * @returns Decoded transaction details
  */
-export function decodeEnvelope(envelopeHex: string): DecodedFastTransaction {
-  const bytes = hexToBytes(envelopeHex);
+export function decodeEnvelope(envelope: string | number[] | Uint8Array): DecodedFastTransaction {
+  let bytes: Uint8Array;
+  
+  if (typeof envelope === "string") {
+    bytes = hexToBytes(envelope);
+  } else if (Array.isArray(envelope)) {
+    bytes = new Uint8Array(envelope);
+  } else if (envelope instanceof Uint8Array) {
+    bytes = envelope;
+  } else {
+    throw new Error(`Invalid envelope type: ${typeof envelope}`);
+  }
+  
   const decoded = TransactionBcs.parse(bytes);
   
   // Extract claim details

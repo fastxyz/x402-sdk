@@ -21,7 +21,7 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = 4020;
-app.listen(PORT, () => {
-  console.log(`Facilitator running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Facilitator running on http://0.0.0.0:${PORT}`);
   console.log('Endpoints: /verify, /settle, /supported');
 });

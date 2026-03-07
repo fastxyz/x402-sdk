@@ -1,5 +1,7 @@
 /**
  * Fast payment handler for x402
+ * 
+ * Uses the actual Fast protocol with proper BCS serialization and signing.
  */
 
 import type { 
@@ -20,6 +22,8 @@ async function createTxExecutor(wallet: FastWallet, rpcUrl: string) {
   const { bcs } = await import('@mysten/bcs');
   const ed = await import('@noble/ed25519');
   const { sha512 } = await import('@noble/hashes/sha512');
+  const { keccak_256 } = await import('@noble/hashes/sha3');
+  const { bech32m } = await import('@scure/base');
   
   // Configure ed25519 to use sha512
   ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m));
@@ -27,77 +31,162 @@ async function createTxExecutor(wallet: FastWallet, rpcUrl: string) {
   const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
 
-  // BCS schema for Fast transactions
-  const Address = bcs.fixedArray(32, bcs.u8());
-  const TokenId = bcs.fixedArray(32, bcs.u8());
-  const TokenTransfer = bcs.struct('TokenTransfer', {
-    from: Address,
-    to: Address,
-    token_id: TokenId,
-    amount: bcs.u64(),
+  // Helper to decode bech32m address to pubkey bytes
+  function addressToPubkey(address: string): number[] {
+    const decoded = bech32m.decode(address as `${string}1${string}`);
+    return Array.from(bech32m.fromWords(decoded.words));
+  }
+
+  // Helper to convert amount to hex (for BCS serialization)
+  const AmountBcs = bcs.u256().transform({
+    input: (val: string) => BigInt(`0x${val}`).toString(),
   });
+
+  // BCS schema matching Fast on-chain types
+  const TokenTransferBcs = bcs.struct('TokenTransfer', {
+    token_id: bcs.bytes(32),
+    amount: AmountBcs,
+    user_data: bcs.option(bcs.bytes(32)),
+  });
+
+  const ClaimTypeBcs = bcs.enum('ClaimType', {
+    TokenTransfer: TokenTransferBcs,
+    TokenCreation: bcs.struct('TokenCreation', { dummy: bcs.u8() }),
+    TokenManagement: bcs.struct('TokenManagement', { dummy: bcs.u8() }),
+    Mint: bcs.struct('Mint', { dummy: bcs.u8() }),
+    Burn: bcs.struct('Burn', { dummy: bcs.u8() }),
+    StateInitialization: bcs.struct('StateInitialization', { dummy: bcs.u8() }),
+    StateUpdate: bcs.struct('StateUpdate', { dummy: bcs.u8() }),
+    ExternalClaim: bcs.struct('ExternalClaim', { dummy: bcs.u8() }),
+    StateReset: bcs.struct('StateReset', { dummy: bcs.u8() }),
+    JoinCommittee: bcs.struct('JoinCommittee', { dummy: bcs.u8() }),
+    LeaveCommittee: bcs.struct('LeaveCommittee', { dummy: bcs.u8() }),
+    ChangeCommittee: bcs.struct('ChangeCommittee', { dummy: bcs.u8() }),
+    Batch: bcs.struct('Batch', { dummy: bcs.u8() }),
+  });
+
+  const TransactionBcs = bcs.struct('Transaction', {
+    sender: bcs.bytes(32),
+    recipient: bcs.bytes(32),
+    nonce: bcs.u64(),
+    timestamp_nanos: bcs.u128(),
+    claim: ClaimTypeBcs,
+    archival: bcs.bool(),
+  });
+
+  // RPC call helper
+  async function rpcCall(method: string, params: unknown): Promise<unknown> {
+    const response = await fetch(rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method,
+        params,
+      }),
+    });
+    const result = await response.json() as { result?: unknown; error?: { message: string } };
+    if (result.error) {
+      throw new Error(`Fast RPC error: ${result.error.message}`);
+    }
+    return result.result;
+  }
+
+  // Transaction type for serialization
+  type Transaction = Parameters<typeof TransactionBcs.serialize>[0];
+
+  // Hash transaction for txHash
+  function hashTransaction(tx: Transaction): string {
+    const bytes = TransactionBcs.serialize(tx).toBytes();
+    const hash = keccak_256(bytes);
+    return Buffer.from(hash).toString('hex');
+  }
 
   async function sendTokenTransfer(
     recipientAddress: string,
     amount: string,
     tokenId: Uint8Array
   ): Promise<{ txHash: string; certificate: unknown }> {
-    // Decode recipient address
-    const { bech32m } = await import('bech32');
-    const decoded = bech32m.decode(recipientAddress, 90);
-    const recipientPubKey = new Uint8Array(bech32m.fromWords(decoded.words));
+    const senderPubkey = Array.from(publicKeyBytes);
+    const recipientPubkey = addressToPubkey(recipientAddress);
+
+    // Convert amount to hex for BCS
+    const hexAmount = BigInt(amount).toString(16);
+
+    // Get nonce
+    const accountInfo = await rpcCall('proxy_getAccountInfo', {
+      address: senderPubkey,
+      token_balances_filter: [],
+      state_key_filter: null,
+      certificate_by_nonce: null,
+    }) as { next_nonce: number } | null;
+
+    const nonce = accountInfo?.next_nonce ?? 0;
 
     // Build transaction
-    const tx = {
-      from: Array.from(publicKeyBytes),
-      to: Array.from(recipientPubKey),
-      token_id: Array.from(tokenId),
-      amount: BigInt(amount),
+    const transaction = {
+      sender: senderPubkey,
+      recipient: recipientPubkey,
+      nonce,
+      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
+      claim: {
+        TokenTransfer: {
+          token_id: Array.from(tokenId),
+          amount: hexAmount,
+          user_data: null,
+        },
+      },
+      archival: false,
     };
 
-    const txBytes = TokenTransfer.serialize(tx).toBytes();
-    
-    // Sign transaction
-    const signatureBytes = await ed.signAsync(txBytes, privateKeyBytes.slice(0, 32));
-    const signature = Buffer.from(signatureBytes).toString('hex');
+    // Sign: ed25519("Transaction::" + BCS(transaction))
+    const msgHead = new TextEncoder().encode('Transaction::');
+    const msgBody = TransactionBcs.serialize(transaction).toBytes();
+    const msg = new Uint8Array(msgHead.length + msgBody.length);
+    msg.set(msgHead, 0);
+    msg.set(msgBody, msgHead.length);
+    const signature = await ed.signAsync(msg, privateKeyBytes.slice(0, 32));
 
-    // Submit to RPC
-    const payload = {
-      jsonrpc: '2.0',
-      id: Date.now(),
-      method: 'proxy_submitAndWait',
-      params: {
-        claim: {
-          TokenTransfer: tx,
-        },
-        signature: Array.from(signatureBytes),
-        public_key: Array.from(publicKeyBytes),
-      },
+    const txHash = hashTransaction(transaction);
+
+    // Custom JSON serializer for BigInt and Uint8Array
+    function toJSON(data: unknown): string {
+      return JSON.stringify(data, (_k, v) => {
+        if (v instanceof Uint8Array) return Array.from(v);
+        if (typeof v === 'bigint') return Number(v);
+        return v;
+      });
+    }
+
+    // Submit transaction (use custom serializer for BigInt)
+    const submitPayload = {
+      transaction,
+      signature: { Signature: Array.from(signature) },
     };
 
     const response = await fetch(rpcUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: toJSON({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method: 'proxy_submitTransaction',
+        params: submitPayload,
+      }),
     });
-
-    const result = await response.json() as {
-      result?: { tx_hash: string; certificate: unknown };
-      error?: { message: string };
-    };
-
+    const result = await response.json() as { result?: { Success?: unknown }; error?: { message: string } };
     if (result.error) {
-      throw new Error(`Fast RPC error: ${result.error.message}`);
+      throw new Error(`Fast RPC error (submit): ${result.error.message}`);
+    }
+    const submitResult = result.result as { Success?: unknown };
+
+    const certificate = submitResult?.Success ?? submitResult;
+    if (!certificate) {
+      throw new Error('proxy_submitTransaction returned empty result');
     }
 
-    if (!result.result) {
-      throw new Error('No result from Fast RPC');
-    }
-
-    return {
-      txHash: result.result.tx_hash,
-      certificate: result.result.certificate,
-    };
+    return { txHash, certificate };
   }
 
   return { sendTokenTransfer };
@@ -141,13 +230,20 @@ export async function handleFastPayment(
   log(`[Fast] Determining token ID...`);
   let tokenId: Uint8Array;
   if (fastReq.asset) {
-    tokenId = new Uint8Array(Buffer.from(fastReq.asset, 'base64'));
-    log(`  Token from asset: ${fastReq.asset}`);
+    // Handle both hex (0x...) and base64 formats
+    if (fastReq.asset.startsWith('0x')) {
+      tokenId = new Uint8Array(Buffer.from(fastReq.asset.slice(2), 'hex'));
+      log(`  Token from asset (hex): ${fastReq.asset}`);
+    } else {
+      tokenId = new Uint8Array(Buffer.from(fastReq.asset, 'base64'));
+      log(`  Token from asset (base64): ${fastReq.asset}`);
+    }
   } else {
     tokenId = new Uint8Array(32);
     tokenId.set([0xfa, 0x57, 0x5e, 0x70], 0); // Default FAST token
     log(`  Using default token ID`);
   }
+  log(`  Token ID bytes: ${tokenId.length}`);
 
   // Send TokenTransfer
   log(`[Fast] Sending TokenTransfer transaction...`);

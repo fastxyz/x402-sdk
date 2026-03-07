@@ -249,11 +249,53 @@ function normalizeAddress(addr: string): string {
 
 /**
  * Compare two addresses for equality
- * Supports hex pubkeys and bech32m addresses
+ * Supports hex pubkeys and bech32m addresses (fast1... or set1...)
  */
 function addressesMatch(a: string, b: string): boolean {
-  // If both start with "set1", compare directly
-  if (a.startsWith("set1") && b.startsWith("set1")) {
+  // Helper to decode bech32m to hex
+  const bech32mToHex = (addr: string): string | null => {
+    try {
+      // Import bech32m dynamically would be better but for sync use:
+      // Simple implementation: extract the data part and decode
+      const sep = addr.indexOf("1");
+      if (sep === -1) return null;
+      
+      const data = addr.slice(sep + 1);
+      const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+      
+      // Decode each character to 5-bit value
+      const values: number[] = [];
+      for (const c of data) {
+        const idx = CHARSET.indexOf(c.toLowerCase());
+        if (idx === -1) return null;
+        values.push(idx);
+      }
+      
+      // Remove checksum (last 6 characters)
+      const dataValues = values.slice(0, -6);
+      
+      // Convert 5-bit to 8-bit
+      let acc = 0;
+      let bits = 0;
+      const result: number[] = [];
+      for (const v of dataValues) {
+        acc = (acc << 5) | v;
+        bits += 5;
+        while (bits >= 8) {
+          bits -= 8;
+          result.push((acc >> bits) & 0xff);
+        }
+      }
+      
+      return Buffer.from(result).toString("hex");
+    } catch {
+      return null;
+    }
+  };
+
+  // If both start with "fast1" or "set1", compare directly
+  if ((a.startsWith("fast1") || a.startsWith("set1")) && 
+      (b.startsWith("fast1") || b.startsWith("set1"))) {
     return a.toLowerCase() === b.toLowerCase();
   }
   
@@ -263,19 +305,61 @@ function addressesMatch(a: string, b: string): boolean {
     return normalizeAddress(a) === normalizeAddress(b);
   }
   
-  // Mixed format - try to extract the hex portion from bech32m
-  // set1 addresses encode the 32-byte pubkey, so we compare the hex representation
-  // For simplicity, if formats don't match, return false
-  // In production, would decode bech32m to get the pubkey bytes
-  return false;
+  // Mixed format - decode bech32m to hex and compare
+  let hexA = a;
+  let hexB = b;
+  
+  if (a.startsWith("fast1") || a.startsWith("set1")) {
+    const decoded = bech32mToHex(a);
+    if (!decoded) return false;
+    hexA = decoded;
+  } else {
+    hexA = normalizeAddress(a);
+  }
+  
+  if (b.startsWith("fast1") || b.startsWith("set1")) {
+    const decoded = bech32mToHex(b);
+    if (!decoded) return false;
+    hexB = decoded;
+  } else {
+    hexB = normalizeAddress(b);
+  }
+  
+  return hexA.toLowerCase() === hexB.toLowerCase();
 }
 
 /**
- * Verify Fast payment by decoding the transaction certificate
+ * Fast transaction certificate structure (from RPC)
+ */
+interface FastTransactionCertificate {
+  envelope: {
+    transaction: {
+      sender: number[];
+      recipient: number[];
+      nonce: number;
+      timestamp_nanos: number;
+      claim: {
+        TokenTransfer?: {
+          token_id: number[];
+          amount: string;
+          user_data: number[] | null;
+        };
+      };
+      archival?: boolean;
+    };
+    signature: {
+      Signature: number[];
+    };
+  };
+  signatures: Array<[number[], number[]]>;
+}
+
+/**
+ * Verify Fast payment by validating the transaction certificate
  * 
  * Verifies:
  * 1. Certificate structure (envelope + signatures)
- * 2. Decode envelope to extract transaction details
+ * 2. Extract transaction details from envelope
  * 3. Verify recipient matches payTo
  * 4. Verify amount >= maxAmountRequired
  * 5. Verify token matches asset
@@ -311,10 +395,11 @@ async function verifyFastPayment(
     };
   }
 
-  const { envelope, signatures } = payload.transactionCertificate;
+  const certificate = payload.transactionCertificate as unknown as FastTransactionCertificate;
+  const { envelope, signatures } = certificate;
 
   // Validate certificate structure
-  if (!envelope) {
+  if (!envelope || !envelope.transaction) {
     return {
       isValid: false,
       invalidReason: "missing_envelope",
@@ -342,22 +427,11 @@ async function verifyFastPayment(
     };
   }
 
-  // Decode the envelope to extract transaction details
-  let decodedTx;
-  try {
-    decodedTx = decodeEnvelope(envelope);
-  } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return {
-      isValid: false,
-      invalidReason: `envelope_decode_failed: ${msg}`,
-      network: paymentPayload.network,
-    };
-  }
-
-  // Extract transfer details
-  const transfer = getTransferDetails(decodedTx);
-  if (!transfer) {
+  // Extract transaction details directly from the envelope structure
+  const tx = envelope.transaction;
+  
+  // Verify it's a TokenTransfer
+  if (!tx.claim.TokenTransfer) {
     return {
       isValid: false,
       invalidReason: "not_a_token_transfer",
@@ -365,30 +439,48 @@ async function verifyFastPayment(
     };
   }
 
-  // Verify recipient matches payTo
-  if (!addressesMatch(transfer.recipient, paymentRequirement.payTo)) {
+  const transfer = tx.claim.TokenTransfer;
+  
+  // Convert byte arrays to hex for comparison
+  const senderHex = "0x" + Buffer.from(tx.sender).toString("hex");
+  const recipientHex = "0x" + Buffer.from(tx.recipient).toString("hex");
+  const tokenIdHex = "0x" + Buffer.from(transfer.token_id).toString("hex");
+  
+  // Parse amount (it's a hex string like "2710" without 0x prefix, or with)
+  let amountBigInt: bigint;
+  try {
+    const amountStr = transfer.amount.startsWith("0x") 
+      ? transfer.amount 
+      : "0x" + transfer.amount;
+    amountBigInt = BigInt(amountStr);
+  } catch {
     return {
       isValid: false,
-      invalidReason: `recipient_mismatch: expected ${paymentRequirement.payTo}, got ${transfer.recipient}`,
-      payer: transfer.sender,
+      invalidReason: `invalid_amount_format: ${transfer.amount}`,
+      payer: senderHex,
+      network: paymentPayload.network,
+    };
+  }
+
+  // Verify recipient matches payTo (comparing hex pubkeys with bech32m addresses)
+  if (!addressesMatch(recipientHex, paymentRequirement.payTo)) {
+    return {
+      isValid: false,
+      invalidReason: `recipient_mismatch: expected ${paymentRequirement.payTo}, got ${recipientHex}`,
+      payer: senderHex,
       network: paymentPayload.network,
     };
   }
 
   // Verify amount >= maxAmountRequired
-  // Fast uses 18 decimals for fastUSDC, payment requirement uses 6 decimals
-  // Need to normalize: requirement amount * 10^12 = Fast amount
+  // Note: Both are in the same decimal format (6 decimals for USDC)
   const requiredAmount = BigInt(paymentRequirement.maxAmountRequired);
-  const fastDecimals = 18;
-  const requirementDecimals = 6; // USDC standard
-  const decimalDiff = fastDecimals - requirementDecimals;
-  const normalizedRequired = requiredAmount * BigInt(10 ** decimalDiff);
 
-  if (transfer.amount < normalizedRequired) {
+  if (amountBigInt < requiredAmount) {
     return {
       isValid: false,
-      invalidReason: `insufficient_amount: required ${normalizedRequired.toString()}, got ${transfer.amount.toString()}`,
-      payer: transfer.sender,
+      invalidReason: `insufficient_amount: required ${requiredAmount.toString()}, got ${amountBigInt.toString()}`,
+      payer: senderHex,
       network: paymentPayload.network,
     };
   }
@@ -396,13 +488,13 @@ async function verifyFastPayment(
   // Verify token matches asset (if asset is specified)
   if (paymentRequirement.asset) {
     const normalizedAsset = normalizeAddress(paymentRequirement.asset);
-    const normalizedTokenId = normalizeAddress(transfer.tokenId);
+    const normalizedTokenId = normalizeAddress(tokenIdHex);
     
     if (normalizedAsset !== normalizedTokenId) {
       return {
         isValid: false,
-        invalidReason: `token_mismatch: expected ${paymentRequirement.asset}, got ${transfer.tokenId}`,
-        payer: transfer.sender,
+        invalidReason: `token_mismatch: expected ${paymentRequirement.asset}, got ${tokenIdHex}`,
+        payer: senderHex,
         network: paymentPayload.network,
       };
     }
@@ -414,12 +506,9 @@ async function verifyFastPayment(
   // 2. Verifying each signature against the envelope hash
   // For now, we trust the certificate structure + signature count
 
-  // TODO: Query Fast RPC to verify transaction exists on-chain
-  // This would add an extra layer of verification but adds latency
-
   return {
     isValid: true,
-    payer: transfer.sender,
+    payer: senderHex,
     network: paymentPayload.network,
   };
 }

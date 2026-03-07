@@ -69,8 +69,8 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = 3000;
-app.listen(PORT, () => {
-  console.log(`Protected API running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Protected API running on http://0.0.0.0:${PORT}`);
   console.log('');
   console.log('Protected endpoints:');
   console.log('  GET /api/weather       - $0.01 (arbitrum-sepolia)');
