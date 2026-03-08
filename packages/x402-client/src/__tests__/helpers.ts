@@ -18,7 +18,7 @@ export const mockFastWallet: FastWallet = {
   privateKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
   publicKey: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
   // Valid bech32m address (same as bridge address for testing)
-  address: 'fast1pz07pdlspsydyt2g79yeshunhfyjsr5j4ahuyfv8hpdn00ks8u6q8axf9t',
+  address: 'fast1x0g58phuf0pf32e9uvp3mv6hak4z37ytpqyfzjzhfsehua9kmegqwzv0td',
 };
 
 // ─── Mock 402 Responses ───────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ export function mock402Response(network: string, amount: string = '100000'): Pay
         : 'fast19cjwajufyuqv883ydlvrp8xrhxejuvfe40pxq5dsrv675zgh89sqg9txs8',
       asset: isEvm 
         ? '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'
-        : '1b48766165f2cc84292d8c06b0523e1eefd7586049be0f82249c002f88a409ef',
+        : 'b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5',
       extra: isEvm ? { name: 'USD Coin', version: '2' } : undefined,
     }],
   };

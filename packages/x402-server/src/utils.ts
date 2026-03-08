@@ -10,11 +10,11 @@ import type { NetworkConfig } from "./types.js";
 export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
   // Fast networks
   "fast-testnet": {
-    asset: "0x1b48766165f2cc84292d8c06b0523e1eefd7586049be0f82249c002f88a409ef",
+    asset: "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
     decimals: 6,
   },
   "fast-mainnet": {
-    asset: "0x1b48766165f2cc84292d8c06b0523e1eefd7586049be0f82249c002f88a409ef",
+    asset: "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
     decimals: 6,
   },
   // EVM networks - USDC addresses
