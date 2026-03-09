@@ -354,6 +354,12 @@ interface FastTransactionCertificate {
   signatures: Array<[number[], number[]]>;
 }
 
+// Fast RPC object envelopes encode amounts as hex strings without a 0x prefix.
+function parseFastRpcAmount(amount: string): bigint {
+  const normalized = amount.startsWith("0x") ? amount : `0x${amount}`;
+  return BigInt(normalized);
+}
+
 /**
  * Verify Fast payment by validating the transaction certificate
  * 
@@ -438,7 +444,7 @@ async function verifyFastPayment(
   let senderHex: string;
   let recipientHex: string;
   let tokenIdHex: string;
-  let amountStr: string;
+  let amountBigInt: bigint;
 
   if (typeof envelope === "string") {
     // BCS serialized format - decode using decodeEnvelope
@@ -454,11 +460,11 @@ async function verifyFastPayment(
         };
       }
       
-      // getTransferDetails already returns hex strings without 0x prefix
+      // getTransferDetails already returns 0x-prefixed addresses and a bigint amount.
       senderHex = transferDetails.sender.startsWith("0x") ? transferDetails.sender : "0x" + transferDetails.sender;
       recipientHex = transferDetails.recipient.startsWith("0x") ? transferDetails.recipient : "0x" + transferDetails.recipient;
       tokenIdHex = transferDetails.tokenId.startsWith("0x") ? transferDetails.tokenId : "0x" + transferDetails.tokenId;
-      amountStr = transferDetails.amount.toString();
+      amountBigInt = transferDetails.amount;
     } catch (error) {
       return {
         isValid: false,
@@ -492,28 +498,17 @@ async function verifyFastPayment(
     senderHex = "0x" + Buffer.from(tx.sender).toString("hex");
     recipientHex = "0x" + Buffer.from(tx.recipient).toString("hex");
     tokenIdHex = "0x" + Buffer.from(transfer.token_id).toString("hex");
-    amountStr = transfer.amount;
-  }
-  
-  // Parse amount (it's a hex string like "2710" without 0x prefix, or with, or decimal string)
-  let amountBigInt: bigint;
-  try {
-    if (amountStr.startsWith("0x")) {
-      amountBigInt = BigInt(amountStr);
-    } else if (/^[0-9a-fA-F]+$/.test(amountStr) && amountStr.length >= 4) {
-      // Looks like hex without prefix
-      amountBigInt = BigInt("0x" + amountStr);
-    } else {
-      // Decimal string
-      amountBigInt = BigInt(amountStr);
+    
+    try {
+      amountBigInt = parseFastRpcAmount(transfer.amount);
+    } catch {
+      return {
+        isValid: false,
+        invalidReason: `invalid_amount_format: ${transfer.amount}`,
+        payer: senderHex,
+        network: paymentPayload.network,
+      };
     }
-  } catch {
-    return {
-      isValid: false,
-      invalidReason: `invalid_amount_format: ${amountStr}`,
-      payer: senderHex,
-      network: paymentPayload.network,
-    };
   }
 
   // Verify recipient matches payTo (comparing hex pubkeys with bech32m addresses)
