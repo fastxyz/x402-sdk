@@ -12,7 +12,7 @@ describe("verify", () => {
     // Helper to create a valid Fast certificate
     function createFastCertificate(
       recipient: Uint8Array,
-      amount: string,
+      amountHex: string,
       tokenId: Uint8Array
     ) {
       const sender = new Uint8Array(32).fill(0xaa);
@@ -24,7 +24,7 @@ describe("verify", () => {
         claim: {
           TokenTransfer: {
             token_id: tokenId,
-            amount,
+            amount: amountHex,
             user_data: null,
           },
         },
@@ -42,16 +42,52 @@ describe("verify", () => {
       };
     }
 
+    function createFastObjectCertificate(
+      recipient: Uint8Array,
+      amountHex: string,
+      tokenId: Uint8Array
+    ) {
+      const sender = new Uint8Array(32).fill(0xaa);
+      return {
+        envelope: {
+          transaction: {
+            sender: Array.from(sender),
+            recipient: Array.from(recipient),
+            nonce: 1,
+            timestamp_nanos: Date.now(),
+            claim: {
+              TokenTransfer: {
+                token_id: Array.from(tokenId),
+                amount: amountHex,
+                user_data: null,
+              },
+            },
+            archival: false,
+          },
+          signature: {
+            Signature: [],
+          },
+        },
+        signatures: [
+          [new Array(32).fill(0xaa), new Array(64).fill(0xaa)],
+          [new Array(32).fill(0xbb), new Array(64).fill(0xbb)],
+          [new Array(32).fill(0xcc), new Array(64).fill(0xcc)],
+        ],
+      };
+    }
+
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
 
     const recipient = new Uint8Array(32).fill(0xbb);
     const recipientHex = bytesToHex(recipient);
+    const oneUsdcUnits = 1_000_000n;
+    const oneUsdcHex = oneUsdcUnits.toString(16);
 
     it("validates a correct Fast payment", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "1000000", // 1 USDC (6 decimals)
+        oneUsdcHex, // 1 USDC in Fast hex amount format
         tokenId
       );
 
@@ -65,7 +101,7 @@ describe("verify", () => {
       const requirement: PaymentRequirement = {
         scheme: "exact",
         network: "fast-testnet",
-        maxAmountRequired: "1000000", // 1 USDC (6 decimals)
+        maxAmountRequired: oneUsdcUnits.toString(), // 1 USDC (6 decimals)
         resource: "/api/data",
         description: "Test",
         mimeType: "application/json",
@@ -83,7 +119,7 @@ describe("verify", () => {
       const wrongRecipient = new Uint8Array(32).fill(0xff);
       const certificate = createFastCertificate(
         wrongRecipient,
-        "1000000", // 1 USDC (6 decimals)
+        oneUsdcHex,
         tokenId
       );
 
@@ -97,7 +133,7 @@ describe("verify", () => {
       const requirement: PaymentRequirement = {
         scheme: "exact",
         network: "fast-testnet",
-        maxAmountRequired: "1000000",
+        maxAmountRequired: oneUsdcUnits.toString(),
         resource: "/api/data",
         description: "Test",
         mimeType: "application/json",
@@ -114,7 +150,7 @@ describe("verify", () => {
     it("rejects payment with insufficient amount", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "100", // 0.0001 USDC (too little, 6 decimals)
+        (100n).toString(16), // 0.0001 USDC in Fast hex amount format
         tokenId
       );
 
@@ -128,7 +164,7 @@ describe("verify", () => {
       const requirement: PaymentRequirement = {
         scheme: "exact",
         network: "fast-testnet",
-        maxAmountRequired: "1000000", // 1 USDC required
+        maxAmountRequired: oneUsdcUnits.toString(), // 1 USDC required
         resource: "/api/data",
         description: "Test",
         mimeType: "application/json",
@@ -146,7 +182,7 @@ describe("verify", () => {
       const wrongToken = new Uint8Array(32).fill(0x99);
       const certificate = createFastCertificate(
         recipient,
-        "1000000", // 1 USDC (6 decimals)
+        oneUsdcHex,
         wrongToken
       );
 
@@ -160,7 +196,7 @@ describe("verify", () => {
       const requirement: PaymentRequirement = {
         scheme: "exact",
         network: "fast-testnet",
-        maxAmountRequired: "1000000",
+        maxAmountRequired: oneUsdcUnits.toString(),
         resource: "/api/data",
         description: "Test",
         mimeType: "application/json",
@@ -190,7 +226,7 @@ describe("verify", () => {
       const requirement: PaymentRequirement = {
         scheme: "exact",
         network: "fast-testnet",
-        maxAmountRequired: "1000000",
+        maxAmountRequired: oneUsdcUnits.toString(),
         resource: "/api/data",
         description: "Test",
         mimeType: "application/json",
@@ -207,7 +243,7 @@ describe("verify", () => {
     it("rejects missing signatures", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "1000000",
+        oneUsdcHex,
         tokenId
       );
       certificate.signatures = [];
@@ -222,7 +258,7 @@ describe("verify", () => {
       const requirement: PaymentRequirement = {
         scheme: "exact",
         network: "fast-testnet",
-        maxAmountRequired: "1000000",
+        maxAmountRequired: oneUsdcUnits.toString(),
         resource: "/api/data",
         description: "Test",
         mimeType: "application/json",
@@ -239,7 +275,7 @@ describe("verify", () => {
     it("rejects wrong scheme", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "1000000",
+        oneUsdcHex,
         tokenId
       );
 
@@ -253,7 +289,7 @@ describe("verify", () => {
       const requirement: PaymentRequirement = {
         scheme: "exact",
         network: "fast-testnet",
-        maxAmountRequired: "1000000",
+        maxAmountRequired: oneUsdcUnits.toString(),
         resource: "/api/data",
         description: "Test",
         mimeType: "application/json",
@@ -270,7 +306,7 @@ describe("verify", () => {
     it("rejects network mismatch", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "1000000",
+        oneUsdcHex,
         tokenId
       );
 
@@ -284,7 +320,7 @@ describe("verify", () => {
       const requirement: PaymentRequirement = {
         scheme: "exact",
         network: "fast-testnet",
-        maxAmountRequired: "1000000",
+        maxAmountRequired: oneUsdcUnits.toString(),
         resource: "/api/data",
         description: "Test",
         mimeType: "application/json",
@@ -296,6 +332,68 @@ describe("verify", () => {
       const result = await verify(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_network");
+    });
+
+    it("rejects BCS envelopes that underpay after decoding", async () => {
+      const certificate = createFastCertificate(
+        recipient,
+        (50_000n).toString(16),
+        tokenId
+      );
+
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: { transactionCertificate: certificate },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: "60000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toContain("insufficient_amount");
+    });
+
+    it("accepts object-format envelopes with short hex amounts", async () => {
+      const certificate = createFastObjectCertificate(
+        recipient,
+        "3e8",
+        tokenId
+      );
+
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: { transactionCertificate: certificate },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: "1000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(true);
+      expect(result.payer).toBeDefined();
     });
   });
 
