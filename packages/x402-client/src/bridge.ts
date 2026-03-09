@@ -178,10 +178,10 @@ export async function getFastBalance(
   }
 
   // Find fastUSDC balance (token_balance is array of [token_id, hex_amount])
-  const setusdcHex = bytesToHex(fastUSDC_TOKEN_ID);
+  const fastusdcHex = bytesToHex(fastUSDC_TOKEN_ID);
   for (const [tokenId, hexAmount] of result.result.token_balance) {
     const tokenHex = bytesToHex(new Uint8Array(tokenId));
-    if (tokenHex === setusdcHex) {
+    if (tokenHex === fastusdcHex) {
       // Amount is hex string like "5f5e100"
       const amount = BigInt('0x' + hexAmount);
       return amount;
@@ -645,7 +645,7 @@ export interface BridgeResult {
 /**
  * Bridge fastUSDC from Fast to USDC on EVM via AllSet
  */
-export async function bridgeSetusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
+export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
   const { fastWallet, evmReceiverAddress, amount, network, verbose = false, logs = [] } = params;
   
   const log = (msg: string) => {

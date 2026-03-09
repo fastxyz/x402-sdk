@@ -57,7 +57,7 @@ export { FAST_NETWORKS, EVM_NETWORKS };
 
 // Re-export bridge utilities for manual use
 export { 
-  bridgeSetusdcToUsdc, 
+  bridgeFastusdcToUsdc, 
   getFastBalance,
   getBridgeConfig,
 } from './bridge.js';

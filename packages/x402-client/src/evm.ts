@@ -15,7 +15,7 @@ import type {
   X402PayResult,
   Eip3009Authorization 
 } from './types.js';
-import { bridgeSetusdcToUsdc, getFastBalance, getBridgeConfig } from './bridge.js';
+import { bridgeFastusdcToUsdc, getFastBalance, getBridgeConfig } from './bridge.js';
 
 /**
  * Network configuration
@@ -186,7 +186,7 @@ export async function handleEvmPayment(
     log(`[EVM] Auto-bridging ${Number(shortfall) / 1e6} fastUSDC → USDC via AllSet...`);
     const bridgeStartTime = Date.now();
     
-    const bridgeResult = await bridgeSetusdcToUsdc({
+    const bridgeResult = await bridgeFastusdcToUsdc({
       fastWallet,
       evmReceiverAddress: account.address,
       amount: shortfall,
