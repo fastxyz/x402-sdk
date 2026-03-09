@@ -1,0 +1,55 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - v*.*.*
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Upgrade npm
+        run: npm install --global npm@11.5.2
+
+      - name: Verify tag matches package versions
+        run: npm run release:verify-tag
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+      - name: Check publish tarballs
+        run: npm run pack:dry-run
+
+      - name: Smoke-test packages
+        run: npm run pack:smoke
+
+      - name: Publish x402-client
+        run: npm publish --access public --provenance -w @fastxyz/x402-client
+
+      - name: Publish x402-server
+        run: npm publish --access public --provenance -w @fastxyz/x402-server
+
+      - name: Publish x402-facilitator
+        run: npm publish --access public --provenance -w @fastxyz/x402-facilitator

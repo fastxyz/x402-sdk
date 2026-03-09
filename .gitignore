@@ -25,3 +25,4 @@ coverage/
 
 # Package
 *.tgz
+.npm-cache/
