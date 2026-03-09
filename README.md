@@ -291,6 +291,14 @@ npm run build --workspaces
 npm test --workspaces
 ```
 
+## Documentation
+
+See [SKILL.md](./SKILL.md) for detailed API documentation, troubleshooting, and integration examples.
+
+## Releasing
+
+See [RELEASING.md](./RELEASING.md) for the npm release workflow.
+
 ## License
 
 MIT

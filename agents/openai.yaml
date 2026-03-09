@@ -1,0 +1,4 @@
+interface:
+  display_name: "x402 SDK"
+  short_description: "x402 HTTP Payment Protocol for pay-per-request APIs"
+  default_prompt: "Use $x402-sdk to add payment protection to APIs, pay for 402 content, or run a facilitator service."
