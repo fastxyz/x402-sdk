@@ -51,7 +51,7 @@ describe("verify", () => {
     it("validates a correct Fast payment", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "1000000000000000000", // 1 token (18 decimals)
+        "1000000", // 1 USDC (6 decimals)
         tokenId
       );
 
@@ -83,7 +83,7 @@ describe("verify", () => {
       const wrongRecipient = new Uint8Array(32).fill(0xff);
       const certificate = createFastCertificate(
         wrongRecipient,
-        "1000000000000000000",
+        "1000000", // 1 USDC (6 decimals)
         tokenId
       );
 
@@ -114,7 +114,7 @@ describe("verify", () => {
     it("rejects payment with insufficient amount", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "100000000000000", // 0.0001 token (too little)
+        "100", // 0.0001 USDC (too little, 6 decimals)
         tokenId
       );
 
@@ -146,7 +146,7 @@ describe("verify", () => {
       const wrongToken = new Uint8Array(32).fill(0x99);
       const certificate = createFastCertificate(
         recipient,
-        "1000000000000000000",
+        "1000000", // 1 USDC (6 decimals)
         wrongToken
       );
 
@@ -207,7 +207,7 @@ describe("verify", () => {
     it("rejects missing signatures", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "1000000000000000000",
+        "1000000",
         tokenId
       );
       certificate.signatures = [];
@@ -239,7 +239,7 @@ describe("verify", () => {
     it("rejects wrong scheme", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "1000000000000000000",
+        "1000000",
         tokenId
       );
 
@@ -270,7 +270,7 @@ describe("verify", () => {
     it("rejects network mismatch", async () => {
       const certificate = createFastCertificate(
         recipient,
-        "1000000000000000000",
+        "1000000",
         tokenId
       );
 

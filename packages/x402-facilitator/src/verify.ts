@@ -395,11 +395,18 @@ async function verifyFastPayment(
     };
   }
 
-  const certificate = payload.transactionCertificate as unknown as FastTransactionCertificate;
-  const { envelope, signatures } = certificate;
+  const certificate = payload.transactionCertificate;
+  
+  // Handle both formats:
+  // 1. BCS serialized: { envelope: "0x...", signatures: [...] }
+  // 2. Object format: { envelope: { transaction: {...} }, signatures: [...] }
+  const { envelope, signatures } = certificate as { 
+    envelope: string | { transaction: FastTransactionCertificate["envelope"]["transaction"] };
+    signatures: unknown[];
+  };
 
   // Validate certificate structure
-  if (!envelope || !envelope.transaction) {
+  if (!envelope) {
     return {
       isValid: false,
       invalidReason: "missing_envelope",
@@ -427,36 +434,83 @@ async function verifyFastPayment(
     };
   }
 
-  // Extract transaction details directly from the envelope structure
-  const tx = envelope.transaction;
-  
-  // Verify it's a TokenTransfer
-  if (!tx.claim.TokenTransfer) {
-    return {
-      isValid: false,
-      invalidReason: "not_a_token_transfer",
-      network: paymentPayload.network,
-    };
-  }
+  // Decode envelope if it's a BCS-serialized string
+  let senderHex: string;
+  let recipientHex: string;
+  let tokenIdHex: string;
+  let amountStr: string;
 
-  const transfer = tx.claim.TokenTransfer;
+  if (typeof envelope === "string") {
+    // BCS serialized format - decode using decodeEnvelope
+    try {
+      const decoded = decodeEnvelope(envelope);
+      const transferDetails = getTransferDetails(decoded);
+      
+      if (!transferDetails) {
+        return {
+          isValid: false,
+          invalidReason: "not_a_token_transfer",
+          network: paymentPayload.network,
+        };
+      }
+      
+      // getTransferDetails already returns hex strings without 0x prefix
+      senderHex = transferDetails.sender.startsWith("0x") ? transferDetails.sender : "0x" + transferDetails.sender;
+      recipientHex = transferDetails.recipient.startsWith("0x") ? transferDetails.recipient : "0x" + transferDetails.recipient;
+      tokenIdHex = transferDetails.tokenId.startsWith("0x") ? transferDetails.tokenId : "0x" + transferDetails.tokenId;
+      amountStr = transferDetails.amount.toString();
+    } catch (error) {
+      return {
+        isValid: false,
+        invalidReason: `envelope_decode_error: ${error instanceof Error ? error.message : String(error)}`,
+        network: paymentPayload.network,
+      };
+    }
+  } else {
+    // Object format from RPC
+    const tx = envelope.transaction;
+    if (!tx) {
+      return {
+        isValid: false,
+        invalidReason: "missing_transaction",
+        network: paymentPayload.network,
+      };
+    }
+    
+    // Verify it's a TokenTransfer
+    if (!tx.claim.TokenTransfer) {
+      return {
+        isValid: false,
+        invalidReason: "not_a_token_transfer",
+        network: paymentPayload.network,
+      };
+    }
+
+    const transfer = tx.claim.TokenTransfer;
+    
+    // Convert byte arrays to hex for comparison
+    senderHex = "0x" + Buffer.from(tx.sender).toString("hex");
+    recipientHex = "0x" + Buffer.from(tx.recipient).toString("hex");
+    tokenIdHex = "0x" + Buffer.from(transfer.token_id).toString("hex");
+    amountStr = transfer.amount;
+  }
   
-  // Convert byte arrays to hex for comparison
-  const senderHex = "0x" + Buffer.from(tx.sender).toString("hex");
-  const recipientHex = "0x" + Buffer.from(tx.recipient).toString("hex");
-  const tokenIdHex = "0x" + Buffer.from(transfer.token_id).toString("hex");
-  
-  // Parse amount (it's a hex string like "2710" without 0x prefix, or with)
+  // Parse amount (it's a hex string like "2710" without 0x prefix, or with, or decimal string)
   let amountBigInt: bigint;
   try {
-    const amountStr = transfer.amount.startsWith("0x") 
-      ? transfer.amount 
-      : "0x" + transfer.amount;
-    amountBigInt = BigInt(amountStr);
+    if (amountStr.startsWith("0x")) {
+      amountBigInt = BigInt(amountStr);
+    } else if (/^[0-9a-fA-F]+$/.test(amountStr) && amountStr.length >= 4) {
+      // Looks like hex without prefix
+      amountBigInt = BigInt("0x" + amountStr);
+    } else {
+      // Decimal string
+      amountBigInt = BigInt(amountStr);
+    }
   } catch {
     return {
       isValid: false,
-      invalidReason: `invalid_amount_format: ${transfer.amount}`,
+      invalidReason: `invalid_amount_format: ${amountStr}`,
       payer: senderHex,
       network: paymentPayload.network,
     };
