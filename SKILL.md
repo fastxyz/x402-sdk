@@ -18,11 +18,11 @@ This monorepo contains three packages, each with its own skill file:
 
 | Skill | Package | Description |
 |-------|---------|-------------|
-| [client](./skills/client.md) | `@fastxyz/x402-client` | Pay for 402-protected content |
-| [server](./skills/server.md) | `@fastxyz/x402-server` | Protect API routes with payment requirements |
-| [facilitator](./skills/facilitator.md) | `@fastxyz/x402-facilitator` | Verify signatures and settle on-chain |
+| [client-skill](./skills/client-skill.md) | `@fastxyz/x402-client` | Pay for 402-protected content |
+| [server-skill](./skills/server-skill.md) | `@fastxyz/x402-server` | Protect API routes with payment requirements |
+| [facilitator-skill](./skills/facilitator-skill.md) | `@fastxyz/x402-facilitator` | Verify signatures and settle on-chain |
 
-**Most common use case:** Start with [client.md](./skills/client.md) for paying for protected APIs.
+**Most common use case:** Start with [client-skill.md](./skills/client-skill.md) for paying for protected APIs.
 
 ## Quick Overview
 
@@ -61,7 +61,7 @@ This monorepo contains three packages, each with its own skill file:
 
 ## Which Skill To Read
 
-- **"Pay for an API"** → [skills/client.md](./skills/client.md)
-- **"Protect my API with payments"** → [skills/server.md](./skills/server.md)
-- **"Run a facilitator service"** → [skills/facilitator.md](./skills/facilitator.md)
+- **"Pay for an API"** → [skills/client-skill.md](./skills/client-skill.md)
+- **"Protect my API with payments"** → [skills/server-skill.md](./skills/server-skill.md)
+- **"Run a facilitator service"** → [skills/facilitator-skill.md](./skills/facilitator-skill.md)
 - **"Full protocol flow"** → [README.md](./README.md)
