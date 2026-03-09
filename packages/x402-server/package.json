@@ -11,6 +11,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
+    "prepack": "npm run build",
     "test": "npm run build && node --test dist/__tests__/*.test.js"
   },
   "keywords": [
@@ -20,7 +21,16 @@
     "server",
     "middleware"
   ],
+  "author": "Fast.xyz",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastxyz/x402-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fastxyz/x402-sdk/issues"
+  },
+  "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {},
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -33,6 +43,9 @@
     "express": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": ">=18"
   },
   "publishConfig": {
     "access": "public"

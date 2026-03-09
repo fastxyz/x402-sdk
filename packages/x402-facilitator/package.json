@@ -11,6 +11,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist",
+    "prepack": "npm run build",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -20,7 +21,16 @@
     "facilitator",
     "settlement"
   ],
+  "author": "Fast.xyz",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fastxyz/x402-sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/fastxyz/x402-sdk/issues"
+  },
+  "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
     "viem": "^2.21.0",
     "@mysten/bcs": "^1.2.0"
@@ -37,6 +47,9 @@
     "express": {
       "optional": true
     }
+  },
+  "engines": {
+    "node": ">=18"
   },
   "publishConfig": {
     "access": "public"

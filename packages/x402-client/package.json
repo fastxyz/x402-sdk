@@ -17,6 +17,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "prepack": "npm run build",
     "test": "npm run build && node --test dist/__tests__/*.test.js",
     "test:watch": "tsc --watch & node --test --watch dist/__tests__/*.test.js"
   },
@@ -30,12 +31,16 @@
     "eip-3009",
     "crypto"
   ],
-  "author": "Pi Squared",
+  "author": "Fast.xyz",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/fastxyz/x402-sdk"
+    "url": "git+https://github.com/fastxyz/x402-sdk.git"
   },
+  "bugs": {
+    "url": "https://github.com/fastxyz/x402-sdk/issues"
+  },
+  "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
     "@mysten/bcs": "^2.0.2",
     "@noble/ed25519": "^2.1.0",

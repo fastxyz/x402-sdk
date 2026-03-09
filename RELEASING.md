@@ -16,36 +16,29 @@ This monorepo publishes three packages to npm:
 
 Trusted publishing is the expected path for this repo. Do not add a long-lived npm token unless trusted publishing is unavailable.
 
-## Release strategies
+## Release strategy
 
-### Coordinated release (recommended)
-
-All packages share the same version and are released together:
+This repo uses coordinated releases only. All three packages share the same version and are published together from one git tag.
 
 1. Update `version` in all three `packages/*/package.json` files to the same version.
-2. Run `npm install` at root to refresh the lockfile.
-3. Commit with message: `chore: release vX.Y.Z`
-4. Merge to `main`.
-5. Create and push a single tag: `vX.Y.Z`
-6. The publish workflow builds, tests, and publishes all packages.
-
-### Independent release
-
-If packages need independent versioning:
-
-1. Update `version` in the specific package's `package.json`.
-2. Run `npm install` at root.
-3. Commit with message: `chore: release @fastxyz/x402-client@X.Y.Z` (or relevant package).
-4. Merge to `main`.
-5. Create and push a scoped tag: `x402-client@X.Y.Z`
-6. The publish workflow detects which package changed and publishes only that one.
+2. Run `npm install` at root to refresh the lockfile if dependencies changed.
+3. Run the full release gates locally:
+   - `npm run build`
+   - `npm test`
+   - `npm run pack:dry-run`
+   - `npm run pack:smoke`
+4. Commit with message: `chore: release vX.Y.Z`
+5. Merge to `main`.
+6. Create and push a single tag: `vX.Y.Z`
+7. The publish workflow rebuilds, re-tests, re-packs, smoke-tests, and publishes all packages.
 
 ## Release invariants
 
 - Git tags must match `package.json` versions exactly.
 - The publish workflow rebuilds from source, runs tests, and runs smoke checks before publishing.
+- `npm pack` must include built `dist/*` artifacts for every package.
 - Public scoped packages must publish with `--access public`.
-- All packages in a coordinated release should have matching versions.
+- All packages in a release must have matching versions.
 
 ## Verifying releases
 
@@ -57,8 +50,8 @@ npm info @fastxyz/x402-server
 npm info @fastxyz/x402-facilitator
 ```
 
-Test fresh installs:
+Test fresh installs and imports:
 
 ```bash
-npm install @fastxyz/x402-client @fastxyz/x402-server
+npm install @fastxyz/x402-client @fastxyz/x402-server @fastxyz/x402-facilitator
 ```
