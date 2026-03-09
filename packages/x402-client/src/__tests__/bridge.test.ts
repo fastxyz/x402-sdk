@@ -55,7 +55,7 @@ describe('AllSet Bridge', () => {
     });
   });
 
-  // Note: Full bridge flow tests (bridgeSetusdcToUsdc, getFastBalance) require:
+  // Note: Full bridge flow tests (bridgeFastusdcToUsdc, getFastBalance) require:
   // - Valid Ed25519 key pairs
   // - Valid bech32m addresses
   // - Proper BCS serialization
