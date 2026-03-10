@@ -19,6 +19,10 @@ x402 is a payment protocol built on HTTP status code `402 Payment Required`. It 
 | [x402-server](./packages/x402-server) | Server SDK - protect routes, verify payments | `npm i @fastxyz/x402-server` |
 | [x402-facilitator](./packages/x402-facilitator) | Facilitator - verify signatures, settle on-chain | `npm i @fastxyz/x402-facilitator` |
 
+## Releasing
+
+Package publishing is handled by GitHub Actions via npm trusted publishing. See [RELEASING.md](./RELEASING.md) for the one-time npm setup and the coordinated tag-based release flow.
+
 ## Quick Start
 
 ### 1. Run a Facilitator
