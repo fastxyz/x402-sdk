@@ -26,6 +26,8 @@ coverage/
 # Package
 *.tgz
 .npm-cache/
+.npmrc
+.gh-cache/
 
 # Local agent guidance
 AGENTS.md
