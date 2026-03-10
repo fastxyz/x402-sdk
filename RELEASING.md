@@ -11,10 +11,20 @@ This monorepo publishes three packages to npm:
 ## One-time npm setup
 
 1. Create or verify access to the `@fastxyz` npm scope.
-2. Configure npm trusted publishing for `fastxyz/x402-sdk`.
-3. Register the publish workflow filename exactly as `.github/workflows/publish.yml`.
+2. Ensure the GitHub repo is public at `fastxyz/x402-sdk`.
+3. In npm, configure a trusted publisher for each package:
+   - `@fastxyz/x402-client`
+   - `@fastxyz/x402-server`
+   - `@fastxyz/x402-facilitator`
+4. For each trusted publisher entry, use:
+   - Owner: `fastxyz`
+   - Repository: `x402-sdk`
+   - Workflow filename: `publish.yml`
+5. Do not configure an `NPM_TOKEN` secret for the normal release path. This workflow is expected to authenticate via GitHub OIDC trusted publishing.
 
 Trusted publishing is the expected path for this repo. Do not add a long-lived npm token unless trusted publishing is unavailable.
+
+The publish workflow runs on GitHub-hosted runners and pins a current Node release so npm trusted publishing and provenance work reliably.
 
 ## Release strategy
 
