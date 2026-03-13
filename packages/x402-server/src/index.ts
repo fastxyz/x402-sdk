@@ -38,9 +38,11 @@ export type {
 
 // Utils
 export {
-  NETWORK_CONFIGS,
+  initNetworkConfig,
+  getX402Dir,
   parsePrice,
   getNetworkConfig,
+  getSupportedNetworks,
   encodePayload,
   decodePayload,
 } from "./utils.js";

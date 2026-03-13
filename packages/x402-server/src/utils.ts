@@ -1,56 +1,101 @@
 /**
  * x402-server utilities
+ *
+ * Config loading priority (first found wins, with merge):
+ * 1. Custom path (if provided via initNetworkConfig)
+ * 2. User config: ~/.x402/networks.json
+ * 3. Bundled defaults: data/networks.json
  */
 
+import { createRequire } from "module";
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 import type { NetworkConfig } from "./types.js";
 
+const require = createRequire(import.meta.url);
+
+// ---------------------------------------------------------------------------
+// Config state
+// ---------------------------------------------------------------------------
+
+let configInitialized = false;
+let customConfigPath: string | undefined;
+let NETWORK_CONFIGS: Record<string, NetworkConfig> = {};
+
+// ---------------------------------------------------------------------------
+// Config loading
+// ---------------------------------------------------------------------------
+
 /**
- * Default network configurations
+ * Get x402 config directory
  */
-export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
-  // Fast networks
-  "fast-testnet": {
-    asset: "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
-    decimals: 6,
-  },
-  "fast-mainnet": {
-    asset: "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
-    decimals: 6,
-  },
-  // EVM networks - USDC addresses
-  "arbitrum-sepolia": {
-    asset: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
-    decimals: 6,
-    extra: {
-      name: "USD Coin",
-      version: "2",
-    },
-  },
-  "arbitrum": {
-    asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-    decimals: 6,
-    extra: {
-      name: "USD Coin",
-      version: "2",
-    },
-  },
-  "ethereum-sepolia": {
-    asset: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-    decimals: 6,
-    extra: {
-      name: "USD Coin",
-      version: "2",
-    },
-  },
-  "ethereum": {
-    asset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    decimals: 6,
-    extra: {
-      name: "USD Coin",
-      version: "2",
-    },
-  },
-};
+export function getX402Dir(): string {
+  return join(homedir(), ".x402");
+}
+
+/**
+ * Load JSON config from a file path
+ */
+function loadJsonConfig(path: string): Record<string, NetworkConfig> | null {
+  if (!existsSync(path)) {
+    return null;
+  }
+  try {
+    return JSON.parse(readFileSync(path, "utf-8"));
+  } catch (err) {
+    console.warn(`Failed to load config from ${path}:`, err);
+    return null;
+  }
+}
+
+/**
+ * Load and merge network configs with priority
+ */
+function loadNetworkConfig(): Record<string, NetworkConfig> {
+  // Start with bundled defaults
+  const bundled: Record<string, NetworkConfig> = require("../data/networks.json");
+  let result = { ...bundled };
+
+  // Check for user config (~/.x402/networks.json)
+  const userConfigPath = join(getX402Dir(), "networks.json");
+  const userConfig = loadJsonConfig(userConfigPath);
+  if (userConfig) {
+    result = { ...result, ...userConfig };
+  }
+
+  // Check for custom config path (highest priority)
+  if (customConfigPath) {
+    const customConfig = loadJsonConfig(customConfigPath);
+    if (customConfig) {
+      result = { ...result, ...customConfig };
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Initialize network config (call before using getNetworkConfig)
+ */
+export function initNetworkConfig(configPath?: string): void {
+  customConfigPath = configPath;
+  NETWORK_CONFIGS = loadNetworkConfig();
+  configInitialized = true;
+}
+
+/**
+ * Ensure config is initialized (lazy init with defaults)
+ */
+function ensureInit(): void {
+  if (!configInitialized) {
+    initNetworkConfig();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Utilities
+// ---------------------------------------------------------------------------
 
 /**
  * Parse price string to amount in base units
@@ -58,18 +103,18 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
  */
 export function parsePrice(price: string, decimals: number = 6): string {
   const cleaned = price.replace(/[$,\s]/g, "").replace(/usdc/i, "").trim();
-  
+
   // Check if it's already a raw integer
   if (/^\d+$/.test(cleaned)) {
     return cleaned;
   }
-  
+
   // Parse as decimal
   const value = parseFloat(cleaned);
   if (isNaN(value)) {
     throw new Error(`Invalid price format: ${price}`);
   }
-  
+
   const amount = Math.round(value * Math.pow(10, decimals));
   return amount.toString();
 }
@@ -78,15 +123,25 @@ export function parsePrice(price: string, decimals: number = 6): string {
  * Get network config, with fallback to generic USDC
  */
 export function getNetworkConfig(network: string): NetworkConfig {
+  ensureInit();
+
   if (network in NETWORK_CONFIGS) {
     return NETWORK_CONFIGS[network];
   }
-  
+
   // Default to generic USDC config for unknown networks
   return {
     asset: "0x0000000000000000000000000000000000000000",
     decimals: 6,
   };
+}
+
+/**
+ * Get all supported networks
+ */
+export function getSupportedNetworks(): string[] {
+  ensureInit();
+  return Object.keys(NETWORK_CONFIGS);
 }
 
 /**

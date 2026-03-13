@@ -7,40 +7,57 @@ import assert from 'node:assert';
 import {
   parsePrice,
   getNetworkConfig,
+  getSupportedNetworks,
   encodePayload,
   decodePayload,
-  NETWORK_CONFIGS,
 } from '../utils.js';
 
 describe('x402-server utils', () => {
-  describe('NETWORK_CONFIGS', () => {
+  describe('getSupportedNetworks', () => {
     it('should include Fast networks', () => {
-      assert.ok(NETWORK_CONFIGS['fast-testnet']);
-      assert.ok(NETWORK_CONFIGS['fast-mainnet']);
+      const networks = getSupportedNetworks();
+      assert.ok(networks.includes('fast-testnet'));
+      assert.ok(networks.includes('fast-mainnet'));
     });
 
     it('should include EVM networks', () => {
-      assert.ok(NETWORK_CONFIGS['arbitrum-sepolia']);
-      assert.ok(NETWORK_CONFIGS['arbitrum']);
-      assert.ok(NETWORK_CONFIGS['ethereum-sepolia']);
-      assert.ok(NETWORK_CONFIGS['ethereum']);
+      const networks = getSupportedNetworks();
+      assert.ok(networks.includes('arbitrum-sepolia'));
+      assert.ok(networks.includes('arbitrum'));
+      assert.ok(networks.includes('ethereum-sepolia'));
+      assert.ok(networks.includes('ethereum'));
+    });
+  });
+
+  describe('getNetworkConfig', () => {
+    it('should return config for known networks', () => {
+      const config = getNetworkConfig('arbitrum-sepolia');
+      assert.ok(config);
+      assert.strictEqual(config.decimals, 6);
+      assert.ok(config.asset.startsWith('0x'));
     });
 
     it('should have correct decimals for USDC', () => {
-      assert.strictEqual(NETWORK_CONFIGS['arbitrum-sepolia'].decimals, 6);
-      assert.strictEqual(NETWORK_CONFIGS['fast-testnet'].decimals, 6);
+      assert.strictEqual(getNetworkConfig('arbitrum-sepolia').decimals, 6);
+      assert.strictEqual(getNetworkConfig('fast-testnet').decimals, 6);
     });
 
     it('should include EIP-712 extra for EVM networks', () => {
-      const config = NETWORK_CONFIGS['arbitrum-sepolia'];
+      const config = getNetworkConfig('arbitrum-sepolia');
       assert.ok(config.extra);
       assert.strictEqual(config.extra.name, 'USD Coin');
       assert.strictEqual(config.extra.version, '2');
     });
 
     it('should not include extra for Fast networks', () => {
-      const config = NETWORK_CONFIGS['fast-testnet'];
+      const config = getNetworkConfig('fast-testnet');
       assert.strictEqual(config.extra, undefined);
+    });
+
+    it('should return default config for unknown networks', () => {
+      const config = getNetworkConfig('unknown-network');
+      assert.ok(config);
+      assert.strictEqual(config.decimals, 6);
     });
   });
 
@@ -78,29 +95,14 @@ describe('x402-server utils', () => {
     });
   });
 
-  describe('getNetworkConfig', () => {
-    it('should return config for known networks', () => {
-      const config = getNetworkConfig('arbitrum-sepolia');
-      assert.ok(config);
-      assert.strictEqual(config.decimals, 6);
-      assert.ok(config.asset.startsWith('0x'));
-    });
-
-    it('should return default config for unknown networks', () => {
-      const config = getNetworkConfig('unknown-network');
-      assert.ok(config);
-      assert.strictEqual(config.decimals, 6);
-    });
-  });
-
   describe('encodePayload / decodePayload', () => {
     it('should encode and decode JSON payload', () => {
       const payload = { success: true, txHash: '0x123' };
       const encoded = encodePayload(payload);
-      
+
       assert.ok(typeof encoded === 'string');
       assert.ok(encoded.length > 0);
-      
+
       const decoded = decodePayload(encoded);
       assert.deepStrictEqual(decoded, payload);
     });
@@ -110,7 +112,7 @@ describe('x402-server utils', () => {
         nested: { deep: { value: [1, 2, 3] } },
         unicode: '日本語',
       };
-      
+
       const encoded = encodePayload(payload);
       const decoded = decodePayload(encoded);
       assert.deepStrictEqual(decoded, payload);
