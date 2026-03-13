@@ -28,7 +28,7 @@
  *   url: 'https://api.example.com/premium-data',
  *   wallet: [
  *     { type: 'evm', privateKey: '0x...', address: '0x...' },
- *     { type: 'fast', privateKey: '...' },  // address derived from privateKey
+ *     { type: 'fast', privateKey: '...', address: 'fast1...' },
  *   ],
  * });
  * 
@@ -87,12 +87,13 @@ export {
  *   },
  * });
  * 
- * // Fast wallet (only privateKey needed)
+ * // Fast wallet
  * const result = await x402Pay({
  *   url: 'https://api.example.com/data',
  *   wallet: {
  *     type: 'fast',
  *     privateKey: '...',
+ *     address: 'fast1...',
  *   },
  * });
  * 

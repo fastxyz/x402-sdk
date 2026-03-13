@@ -37,13 +37,11 @@ export interface PaymentRequired {
  * Simple Fast wallet configuration (legacy format)
  * 
  * Use this when you have raw keys and don't want to create a FastWallet instance.
- * Only privateKey is required - publicKey and address are derived by the SDK.
  */
 export interface FastWalletConfig {
   type: 'fast';
   privateKey: string;  // Hex-encoded Ed25519 private key (no 0x prefix)
-  publicKey?: string;  // Optional - derived from privateKey if not provided
-  address?: string;    // Optional - derived from privateKey if not provided
+  address: string;     // bech32m address (fast1...)
   rpcUrl?: string;     // Fast RPC endpoint (optional, uses default)
 }
 

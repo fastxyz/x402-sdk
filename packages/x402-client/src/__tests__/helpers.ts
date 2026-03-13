@@ -2,21 +2,20 @@
  * Test helpers and mocks
  */
 
-import type { FastWallet, EvmWallet, PaymentRequired } from '../types.js';
+import type { FastWalletConfig, EvmWalletConfig, PaymentRequired } from '../types.js';
 
 // ─── Mock Wallets ─────────────────────────────────────────────────────────────
 
-export const mockEvmWallet: EvmWallet = {
+export const mockEvmWallet: EvmWalletConfig = {
   type: 'evm',
   privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', // Hardhat account #0
   address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
 };
 
-export const mockFastWallet: FastWallet = {
+export const mockFastWallet: FastWalletConfig = {
   type: 'fast',
   // Valid Ed25519 key pair for testing
   privateKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-  publicKey: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
   // Valid bech32m address (same as bridge address for testing)
   address: 'fast1x0g58phuf0pf32e9uvp3mv6hak4z37ytpqyfzjzhfsehua9kmegqwzv0td',
 };

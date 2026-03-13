@@ -102,11 +102,11 @@ const result = await x402Pay({
 Plain objects work too, useful for quick scripts or when you have raw keys:
 
 ```typescript
-// Fast wallet config (only privateKey required!)
+// Fast wallet config
 const fastWallet = {
   type: 'fast' as const,
-  privateKey: '...',    // 32-byte Ed25519 seed (hex, no 0x) - REQUIRED
-  // publicKey and address are derived automatically if not provided
+  privateKey: '...',    // 32-byte Ed25519 seed (hex, no 0x)
+  address: 'fast1...',  // bech32m address
   rpcUrl: 'https://testnet.api.fast.xyz/proxy', // optional
 };
 
@@ -121,22 +121,48 @@ const evmWallet = {
 ### Type Definitions
 
 ```typescript
-// From @fastxyz/sdk
-import { FastWallet } from '@fastxyz/sdk';
+// ─── From @fastxyz/sdk ────────────────────────────────────────────────────────
 
-// From @fastxyz/allset-sdk
+/**
+ * FastWallet class - manages Ed25519 keys and Fast network operations
+ */
+class FastWallet {
+  /** bech32m address (fast1...) */
+  readonly address: string;
+  
+  /** Create from hex private key */
+  static fromPrivateKey(privateKey: string, provider: FastProvider): Promise<FastWallet>;
+  
+  /** Load from keyfile (~/.fast/keys/*.json) */
+  static fromKeyfile(path: string, provider: FastProvider): Promise<FastWallet>;
+  
+  /** Generate new wallet */
+  static generate(provider: FastProvider): Promise<FastWallet>;
+  
+  /** Send tokens (returns txHash) */
+  send(params: { to: string; amount: string; token?: string }): Promise<SendResult>;
+  
+  /** Submit transaction (returns txHash + certificate) */
+  submit(params: { recipient: string; claim: object }): Promise<SubmitResult>;
+  
+  /** Sign a message */
+  sign(params: { message: string | Uint8Array }): Promise<SignResult>;
+}
+
+// ─── From @fastxyz/allset-sdk ─────────────────────────────────────────────────
+
 interface EvmWallet {
   privateKey: `0x${string}`;
   address: `0x${string}`;
 }
 
-// Legacy config formats
+// ─── Simple Config Formats ────────────────────────────────────────────────────
+
 interface FastWalletConfig {
   type: 'fast';
-  privateKey: string;   // Required - everything else derived from this
-  publicKey?: string;   // Optional
-  address?: string;     // Optional
-  rpcUrl?: string;      // Optional
+  privateKey: string;   // Hex-encoded Ed25519 private key (no 0x)
+  address: string;      // bech32m address (fast1...)
+  rpcUrl?: string;      // Optional custom RPC endpoint
 }
 
 interface EvmWalletConfig {
@@ -144,6 +170,8 @@ interface EvmWalletConfig {
   privateKey: `0x${string}`;
   address: `0x${string}`;
 }
+
+// ─── Combined Type ────────────────────────────────────────────────────────────
 
 // x402-client accepts all of these
 type Wallet = FastWallet | EvmWallet | FastWalletConfig | EvmWalletConfig;

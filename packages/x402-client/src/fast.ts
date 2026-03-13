@@ -84,8 +84,7 @@ export async function handleFastPayment(
       rpcUrl: config.rpcUrl,
     });
     fastWallet = await FastWalletClass.fromPrivateKey(config.privateKey, provider);
-    // Use provided address or get from wallet (derived from privateKey)
-    walletAddress = config.address ?? fastWallet.address;
+    walletAddress = config.address;
     log(`  Created FastWallet from config`);
   }
 

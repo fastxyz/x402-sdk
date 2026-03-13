@@ -114,14 +114,7 @@ export async function getFastBalance(wallet: FastWallet): Promise<bigint> {
     rpcUrl = undefined;
   } else {
     const config = wallet as FastWalletConfig;
-    // If address not provided, we need to derive it - create a temp provider
-    if (config.address) {
-      address = config.address;
-    } else {
-      const tempProvider = new FastProvider({ network: 'testnet', rpcUrl: config.rpcUrl });
-      const tempWallet = await FastWalletClass.fromPrivateKey(config.privateKey, tempProvider);
-      address = tempWallet.address;
-    }
+    address = config.address;
     rpcUrl = config.rpcUrl;
   }
 
@@ -178,8 +171,7 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
       rpcUrl: config.rpcUrl,
     });
     sdkFastWallet = await FastWalletClass.fromPrivateKey(config.privateKey, fastProvider);
-    // Use provided address or get from wallet (derived from privateKey)
-    walletAddress = config.address ?? sdkFastWallet.address;
+    walletAddress = config.address;
   }
 
   log(`━━━ AllSet Bridge START ━━━`);
