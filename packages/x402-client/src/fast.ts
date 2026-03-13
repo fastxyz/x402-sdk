@@ -2,15 +2,18 @@
  * Fast payment handler for x402
  *
  * Uses @fastxyz/sdk for Fast network operations.
+ * Accepts both FastWallet class instances and simple config objects.
  */
 
-import { FastProvider, FastWallet } from '@fastxyz/sdk';
+import { FastProvider, FastWallet as FastWalletClass } from '@fastxyz/sdk';
 import type {
-  FastWallet as X402FastWallet,
+  FastWallet,
+  FastWalletConfig,
   PaymentRequired,
   PaymentRequirement,
   X402PayResult,
 } from './types.js';
+import { isFastWalletClass } from './types.js';
 
 export const FAST_NETWORKS = ['fast-testnet', 'fast-mainnet', 'fast'];
 
@@ -37,6 +40,8 @@ function hexToTokenId(hex: string): Uint8Array {
 
 /**
  * Handle x402 payment on Fast network
+ *
+ * @param wallet - FastWallet class from @fastxyz/sdk OR simple config object
  */
 export async function handleFastPayment(
   url: string,
@@ -45,7 +50,7 @@ export async function handleFastPayment(
   requestBody: string | undefined,
   paymentRequired: PaymentRequired,
   fastReq: PaymentRequirement,
-  wallet: X402FastWallet,
+  wallet: FastWallet,
   verbose: boolean = false,
   logs: string[] = []
 ): Promise<X402PayResult> {
@@ -61,18 +66,30 @@ export async function handleFastPayment(
   log(`  Amount: ${fastReq.maxAmountRequired} (raw)`);
   log(`  Recipient: ${fastReq.payTo}`);
 
-  // Create provider and wallet using @fastxyz/sdk
-  const network = mapNetwork(fastReq.network);
-  const provider = new FastProvider({
-    network,
-    rpcUrl: wallet.rpcUrl,
-  });
+  // Resolve wallet - either use directly or create from config
+  let fastWallet: FastWalletClass;
+  let walletAddress: string;
 
-  log(`  Using @fastxyz/sdk provider (network: ${network})`);
-  log(`  Payer: ${wallet.address}`);
+  if (isFastWalletClass(wallet)) {
+    // Already a FastWallet class instance
+    fastWallet = wallet;
+    walletAddress = wallet.address;
+    log(`  Using provided FastWallet instance`);
+  } else {
+    // Simple config - create FastWallet from private key
+    const config = wallet as FastWalletConfig;
+    const network = mapNetwork(fastReq.network);
+    const provider = new FastProvider({
+      network,
+      rpcUrl: config.rpcUrl,
+    });
+    fastWallet = await FastWalletClass.fromPrivateKey(config.privateKey, provider);
+    walletAddress = config.address;
+    log(`  Created FastWallet from config`);
+  }
 
-  // Create FastWallet from private key
-  const fastWallet = await FastWallet.fromPrivateKey(wallet.privateKey, provider);
+  log(`  Using @fastxyz/sdk`);
+  log(`  Payer: ${walletAddress}`);
 
   // Determine token ID
   let tokenId: Uint8Array;

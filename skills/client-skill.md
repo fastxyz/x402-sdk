@@ -57,32 +57,97 @@ console.log(result.body); // Paid content
 | File | Purpose |
 |------|---------|
 | `index.ts` | Main `x402Pay()` function, network routing |
-| `types.ts` | Wallet and payment type definitions |
+| `types.ts` | Wallet and payment type definitions, type guards |
 | `evm.ts` | EIP-3009 signing, balance checks |
 | `fast.ts` | Fast payment via `FastWallet.submit()` |
 | `bridge.ts` | AllSet bridge wrapper for auto-bridge |
 
 ## Wallet Types
 
-### EVM Wallet
+x402-client accepts wallets in two formats:
+
+1. **SDK class instances** (recommended) - Use wallets from `@fastxyz/sdk` and `@fastxyz/allset-sdk`
+2. **Simple config objects** (legacy) - Plain objects with keys and addresses
+
+### Option 1: SDK Wallet Classes (Recommended)
+
+Use wallet classes from the underlying SDKs for better integration:
 
 ```typescript
-const wallet = {
-  type: 'evm',
+import { FastProvider, FastWallet } from '@fastxyz/sdk';
+import { createEvmWallet } from '@fastxyz/allset-sdk';
+import { x402Pay } from '@fastxyz/x402-client';
+
+// Create Fast wallet from @fastxyz/sdk
+const fastProvider = new FastProvider({ network: 'testnet' });
+const fastWallet = await FastWallet.fromKeyfile('~/.fast/keys/default.json', fastProvider);
+
+// Create EVM wallet from @fastxyz/allset-sdk
+const evmWallet = await createEvmWallet(); // Loads from ~/.allset/.evm/keys/default.json
+
+// Use directly with x402Pay
+const result = await x402Pay({
+  url: 'https://api.example.com/premium',
+  wallet: [fastWallet, evmWallet],
+});
+```
+
+**Benefits:**
+- Single source of truth for wallet management
+- Type-safe integration
+- Consistent key storage (`~/.fast/keys/`, `~/.allset/.evm/keys/`)
+
+### Option 2: Simple Config Objects (Legacy)
+
+Plain objects work too, useful for quick scripts or when you have raw keys:
+
+```typescript
+// Fast wallet config
+const fastWallet = {
+  type: 'fast' as const,
+  privateKey: '...',    // 32-byte Ed25519 seed (hex, no 0x)
+  publicKey: '...',     // 32-byte pubkey (hex)
+  address: 'fast1...',  // bech32m address
+  rpcUrl: 'https://testnet.api.fast.xyz/proxy', // optional
+};
+
+// EVM wallet config
+const evmWallet = {
+  type: 'evm' as const,
   privateKey: '0x...',  // 32-byte hex with 0x prefix
   address: '0x...',     // EVM address
 };
 ```
 
-### Fast Wallet
+### Type Definitions
 
 ```typescript
-const wallet = {
-  type: 'fast',
-  privateKey: '...',    // 32-byte Ed25519 seed (hex, no 0x)
-  publicKey: '...',     // 32-byte pubkey (hex)
-  address: 'fast1...',  // bech32m address
-};
+// From @fastxyz/sdk
+import { FastWallet } from '@fastxyz/sdk';
+
+// From @fastxyz/allset-sdk
+interface EvmWallet {
+  privateKey: `0x${string}`;
+  address: `0x${string}`;
+}
+
+// Legacy config formats
+interface FastWalletConfig {
+  type: 'fast';
+  privateKey: string;
+  publicKey: string;
+  address: string;
+  rpcUrl?: string;
+}
+
+interface EvmWalletConfig {
+  type: 'evm';
+  privateKey: `0x${string}`;
+  address: `0x${string}`;
+}
+
+// x402-client accepts all of these
+type Wallet = FastWallet | EvmWallet | FastWalletConfig | EvmWalletConfig;
 ```
 
 ## Payment Flows
@@ -92,11 +157,7 @@ const wallet = {
 ```typescript
 const result = await x402Pay({
   url: 'https://api.example.com/evm-endpoint',
-  wallet: {
-    type: 'evm',
-    privateKey: '0x...',
-    address: '0x...',
-  },
+  wallet: evmWallet,  // Either SDK class or config object
 });
 ```
 
@@ -112,12 +173,7 @@ Flow:
 ```typescript
 const result = await x402Pay({
   url: 'https://api.example.com/fast-endpoint',
-  wallet: {
-    type: 'fast',
-    privateKey: '...',
-    publicKey: '...',
-    address: 'fast1...',
-  },
+  wallet: fastWallet,  // Either SDK class or config object
 });
 ```
 
@@ -135,21 +191,14 @@ Provide both wallets to automatically bridge when EVM balance is insufficient:
 ```typescript
 const result = await x402Pay({
   url: 'https://api.example.com/evm-endpoint',
-  wallet: [
-    {
-      type: 'fast',
-      privateKey: '...',
-      publicKey: '...',
-      address: 'fast1...',
-    },
-    {
-      type: 'evm',
-      privateKey: '0x...',
-      address: '0x...',
-    },
-  ],
+  wallet: [fastWallet, evmWallet],  // Order doesn't matter
   verbose: true,  // Log bridge progress
 });
+
+// Check if bridging occurred
+if (result.payment?.bridged) {
+  console.log('Auto-bridged via:', result.payment.bridgeTxHash);
+}
 ```
 
 Flow:
@@ -168,7 +217,8 @@ Uses `FastWallet.submit()` for certificate-inclusive transactions:
 
 ```typescript
 // Internal flow in fast.ts
-const fastWallet = await FastWallet.fromPrivateKey(privateKey, provider);
+// If SDK wallet class is provided, use directly
+// If config object, create FastWallet from privateKey
 
 const result = await fastWallet.submit({
   recipient: payTo,
@@ -198,8 +248,35 @@ const result = await allset.sendToExternal({
   amount: amountString,
   from: fastWalletAddress,
   to: evmAddress,
-  fastWallet: sdkFastWallet,
+  fastWallet: sdkFastWallet,  // Resolved from input wallet
 });
+```
+
+### Type Guards
+
+The SDK provides type guards for runtime wallet detection:
+
+```typescript
+import { 
+  isFastWallet,
+  isEvmWallet,
+  isFastWalletClass,
+  isFastWalletConfig,
+} from '@fastxyz/x402-client';
+
+// Check any wallet type
+if (isFastWallet(wallet)) {
+  // wallet is FastWallet (class or config)
+}
+
+// Distinguish class from config
+if (isFastWalletClass(wallet)) {
+  // wallet is FastWallet class from @fastxyz/sdk
+  await wallet.submit({ ... });
+} else if (isFastWalletConfig(wallet)) {
+  // wallet is simple config object
+  console.log(wallet.privateKey);
+}
 ```
 
 ## Options
@@ -207,7 +284,7 @@ const result = await allset.sendToExternal({
 ```typescript
 const result = await x402Pay({
   url: string,              // Required: URL to pay for
-  wallet: Wallet | Wallet[],// Required: Single wallet or [fast, evm] for auto-bridge
+  wallet: Wallet | Wallet[],// Required: Single wallet or array for auto-bridge
   method?: string,          // HTTP method (default: 'GET')
   headers?: Headers,        // Additional headers
   body?: any,               // Request body for POST/PUT

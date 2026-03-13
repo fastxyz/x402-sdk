@@ -49,6 +49,7 @@ import type {
   FastWallet,
   EvmWallet,
 } from './types.js';
+import { isFastWallet, isEvmWallet } from './types.js';
 
 import { handleFastPayment, FAST_NETWORKS } from './fast.js';
 import { handleEvmPayment, EVM_NETWORKS } from './evm.js';
@@ -61,20 +62,6 @@ export {
   getFastBalance,
   getBridgeConfig,
 } from './bridge.js';
-
-/**
- * Check if wallet is Fast type
- */
-function isFastWallet(wallet: Wallet): wallet is FastWallet {
-  return wallet.type === 'fast';
-}
-
-/**
- * Check if wallet is EVM type
- */
-function isEvmWallet(wallet: Wallet): wallet is EvmWallet {
-  return wallet.type === 'evm';
-}
 
 /**
  * Pay for x402-protected content.
