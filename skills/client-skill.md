@@ -102,12 +102,11 @@ const result = await x402Pay({
 Plain objects work too, useful for quick scripts or when you have raw keys:
 
 ```typescript
-// Fast wallet config
+// Fast wallet config (only privateKey required!)
 const fastWallet = {
   type: 'fast' as const,
-  privateKey: '...',    // 32-byte Ed25519 seed (hex, no 0x)
-  publicKey: '...',     // 32-byte pubkey (hex)
-  address: 'fast1...',  // bech32m address
+  privateKey: '...',    // 32-byte Ed25519 seed (hex, no 0x) - REQUIRED
+  // publicKey and address are derived automatically if not provided
   rpcUrl: 'https://testnet.api.fast.xyz/proxy', // optional
 };
 
@@ -134,10 +133,10 @@ interface EvmWallet {
 // Legacy config formats
 interface FastWalletConfig {
   type: 'fast';
-  privateKey: string;
-  publicKey: string;
-  address: string;
-  rpcUrl?: string;
+  privateKey: string;   // Required - everything else derived from this
+  publicKey?: string;   // Optional
+  address?: string;     // Optional
+  rpcUrl?: string;      // Optional
 }
 
 interface EvmWalletConfig {
