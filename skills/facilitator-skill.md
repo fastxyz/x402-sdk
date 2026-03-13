@@ -31,7 +31,7 @@ const app = express();
 app.use(express.json());
 
 app.use(createFacilitatorServer({
-  evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
+  evmPrivateKey: '0xFacilitatorEVMPrivateKey...',
 }));
 
 app.listen(4020, () => console.log('Facilitator on :4020'));
@@ -48,6 +48,8 @@ app.listen(4020, () => console.log('Facilitator on :4020'));
 
 ## Configuration
 
+`createFacilitatorServer()` accepts a `FacilitatorConfig` object:
+
 ```typescript
 interface FacilitatorConfig {
   // Required: Private key for settling EVM payments (pays gas)
@@ -60,6 +62,14 @@ interface FacilitatorConfig {
     // ...
   };
 }
+
+// Usage
+const server = createFacilitatorServer({
+  evmPrivateKey: '0x...',
+  rpcUrls: {
+    'arbitrum-sepolia': 'https://my-custom-rpc.com',
+  },
+});
 ```
 
 ## API Endpoints
@@ -74,13 +84,15 @@ Verify a payment signature or certificate.
   "paymentPayload": { ... },
   "paymentRequirement": {
     "scheme": "exact",
-    "network": "arbitrum-sepolia",
+    "network": "fast-testnet",
     "maxAmountRequired": "100000",
-    "payTo": "0x1234...",
+    "payTo": "fast1abc123...",
     "maxTimeoutSeconds": 60
   }
 }
 ```
+
+> **Note:** The `network` can be any supported network: `fast-testnet`, `fast-mainnet`, `arbitrum-sepolia`, `arbitrum`, `ethereum-sepolia`, or `ethereum`.
 
 **Response (valid):**
 ```json
@@ -99,13 +111,36 @@ Verify a payment signature or certificate.
 
 ### POST /settle
 
-Settle an EVM payment on-chain. Not needed for Fast payments.
+Settle an EVM payment on-chain. Not needed for Fast payments (they're already on-chain).
 
 **Request:**
 ```json
 {
-  "paymentPayload": { ... },
-  "paymentRequirement": { ... }
+  "paymentPayload": {
+    "x402Version": 1,
+    "scheme": "exact",
+    "network": "arbitrum-sepolia",
+    "payload": {
+      "signature": "0x...",
+      "authorization": {
+        "from": "0xBuyerAddress...",
+        "to": "0xMerchantAddress...",
+        "value": "100000",
+        "validAfter": "0",
+        "validBefore": "1741859999",
+        "nonce": "0x1234567890abcdef..."
+      }
+    }
+  },
+  "paymentRequirement": {
+    "scheme": "exact",
+    "network": "arbitrum-sepolia",
+    "maxAmountRequired": "100000",
+    "payTo": "0xMerchantAddress...",
+    "maxTimeoutSeconds": 60,
+    "asset": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+    "extra": {}
+  }
 }
 ```
 
@@ -113,7 +148,7 @@ Settle an EVM payment on-chain. Not needed for Fast payments.
 ```json
 {
   "success": true,
-  "txHash": "0x...",
+  "txHash": "0xabc123...",
   "network": "arbitrum-sepolia"
 }
 ```
