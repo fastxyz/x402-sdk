@@ -66,6 +66,70 @@ const server = createFacilitatorServer({
 });
 ```
 
+### Chain Configuration
+
+Chain configs (RPC URLs, USDC addresses) are loaded from JSON files with a hierarchical override system.
+
+#### Config Loading Priority
+
+1. **Custom path** (via `configPath` option) — highest priority
+2. **User config**: `~/.x402/chains.json` — local overrides
+3. **Bundled defaults**: `data/chains.json` — fallback
+
+Each level merges over the previous, so you only need to specify values you want to override.
+
+#### Config File Format
+
+```json
+{
+  "evm": {
+    "arbitrum-sepolia": {
+      "chainId": 421614,
+      "rpcUrl": "https://sepolia-rollup.arbitrum.io/rpc",
+      "usdc": {
+        "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+        "name": "USD Coin",
+        "version": "2",
+        "decimals": 6
+      }
+    }
+  },
+  "fast": {
+    "fast-testnet": {
+      "rpcUrl": "https://testnet.api.fast.xyz/proxy"
+    }
+  }
+}
+```
+
+#### Example: Override RPC URL Locally
+
+Create `~/.x402/chains.json`:
+```json
+{
+  "evm": {
+    "arbitrum-sepolia": {
+      "chainId": 421614,
+      "rpcUrl": "https://my-private-rpc.example.com",
+      "usdc": {
+        "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+        "name": "USD Coin",
+        "version": "2",
+        "decimals": 6
+      }
+    }
+  }
+}
+```
+
+#### How Config Is Used
+
+- **verify.ts**: Loads chain config to verify EIP-712 signatures (needs chainId, USDC address)
+- **settle.ts**: Loads chain config to submit on-chain transactions (needs RPC URL, USDC address)
+- **server.ts**: Lists supported networks from loaded config
+
+The facilitator maps `chainId` to viem chain objects internally, so JSON configs only contain serializable data.
+
 ## API Endpoints
 
 ### POST /verify
@@ -245,80 +309,6 @@ const settleResult = await settle(
 );
 console.log('Settled:', settleResult.txHash);
 ```
-
-## Chain Configuration
-
-Chain configs (RPC URLs, USDC addresses) are loaded from JSON files with a hierarchical override system.
-
-### Config Loading Priority
-
-1. **Custom path** (via `configPath` option) — highest priority
-2. **User config**: `~/.x402/chains.json` — local overrides
-3. **Bundled defaults**: `data/chains.json` — fallback
-
-Each level merges over the previous, so you only need to specify values you want to override.
-
-### Using Custom Config Path
-
-```typescript
-const app = express();
-app.use(createFacilitatorServer({
-  evmPrivateKey: '0x...',
-  configPath: '/path/to/my-chains.json',  // Custom config file
-}));
-```
-
-### Config File Format
-
-```json
-{
-  "evm": {
-    "arbitrum-sepolia": {
-      "chainId": 421614,
-      "rpcUrl": "https://sepolia-rollup.arbitrum.io/rpc",
-      "usdc": {
-        "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
-        "name": "USD Coin",
-        "version": "2",
-        "decimals": 6
-      }
-    }
-  },
-  "fast": {
-    "fast-testnet": {
-      "rpcUrl": "https://testnet.api.fast.xyz/proxy"
-    }
-  }
-}
-```
-
-### Example: Override RPC URL Locally
-
-Create `~/.x402/chains.json`:
-```json
-{
-  "evm": {
-    "arbitrum-sepolia": {
-      "chainId": 421614,
-      "rpcUrl": "https://my-private-rpc.example.com",
-      "usdc": {
-        "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
-        "name": "USD Coin",
-        "version": "2",
-        "decimals": 6
-      }
-    }
-  }
-}
-```
-
-### How Config Is Used
-
-- **verify.ts**: Loads chain config to verify EIP-712 signatures (needs chainId, USDC address)
-- **settle.ts**: Loads chain config to submit on-chain transactions (needs RPC URL, USDC address)
-- **server.ts**: Lists supported networks from loaded config
-
-The facilitator maps `chainId` to viem chain objects internally, so JSON configs only contain serializable data.
 
 ## Troubleshooting
 
