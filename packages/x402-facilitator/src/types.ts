@@ -106,6 +106,8 @@ export interface FacilitatorConfig {
   fastRpcUrl?: string;
   /** Custom chain configs */
   chains?: Record<string, Chain>;
+  /** Custom path to chains.json config file */
+  configPath?: string;
 }
 
 /**

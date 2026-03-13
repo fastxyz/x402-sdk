@@ -12,7 +12,12 @@ import type {
 } from "./types.js";
 import { verify } from "./verify.js";
 import { settle } from "./settle.js";
-import { EVM_CHAINS, SUPPORTED_EVM_NETWORKS, SUPPORTED_FAST_NETWORKS } from "./chains.js";
+import {
+  initChainConfig,
+  EVM_CHAINS,
+  SUPPORTED_EVM_NETWORKS,
+  SUPPORTED_FAST_NETWORKS,
+} from "./chains.js";
 
 /**
  * Create facilitator Express routes
@@ -26,6 +31,9 @@ import { EVM_CHAINS, SUPPORTED_EVM_NETWORKS, SUPPORTED_FAST_NETWORKS } from "./c
  * @returns Express router with facilitator endpoints
  */
 export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
+  // Initialize chain config (supports custom path)
+  initChainConfig(config.configPath);
+
   const routes: Array<{
     method: "get" | "post";
     path: string;

@@ -55,20 +55,14 @@ interface FacilitatorConfig {
   // Required: Private key for settling EVM payments (pays gas)
   evmPrivateKey: `0x${string}`;
   
-  // Optional: Custom RPC URLs
-  rpcUrls?: {
-    'arbitrum-sepolia'?: string;
-    'ethereum-sepolia'?: string;
-    // ...
-  };
+  // Optional: Path to custom chains.json config file
+  configPath?: string;
 }
 
 // Usage
 const server = createFacilitatorServer({
   evmPrivateKey: '0x...',
-  rpcUrls: {
-    'arbitrum-sepolia': 'https://my-custom-rpc.com',
-  },
+  configPath: './my-chains.json',  // Optional: custom config
 });
 ```
 
@@ -256,12 +250,23 @@ console.log('Settled:', settleResult.txHash);
 
 Chain configs (RPC URLs, USDC addresses) are loaded from JSON files with a hierarchical override system.
 
-### Config Loading Order
+### Config Loading Priority
 
-1. **Bundled defaults**: `data/chains.json` (in the npm package)
-2. **User overrides**: `~/.x402/chains.json` (if exists)
+1. **Custom path** (via `configPath` option) — highest priority
+2. **User config**: `~/.x402/chains.json` — local overrides
+3. **Bundled defaults**: `data/chains.json` — fallback
 
-User config is merged over bundled defaults, so you only need to specify the values you want to override.
+Each level merges over the previous, so you only need to specify values you want to override.
+
+### Using Custom Config Path
+
+```typescript
+const app = express();
+app.use(createFacilitatorServer({
+  evmPrivateKey: '0x...',
+  configPath: '/path/to/my-chains.json',  // Custom config file
+}));
+```
 
 ### Config File Format
 

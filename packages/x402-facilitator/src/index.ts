@@ -42,6 +42,8 @@ export { getNetworkType } from "./types.js";
 
 // Chains
 export {
+  initChainConfig,
+  getX402Dir,
   EVM_CHAINS,
   FAST_RPC_URLS,
   SUPPORTED_EVM_NETWORKS,
