@@ -147,7 +147,7 @@ describe('x402-server middleware', () => {
       it('should include payment requirements in 402', async () => {
         const middleware = paymentMiddleware(
           '0xPaymentAddress123',
-          { '/api/data': { price: '$0.50', network: 'base-sepolia' } },
+          { '/api/data': { price: '$0.50', network: 'ethereum-sepolia' } },
           { url: 'http://localhost:4020' }
         );
 
@@ -159,7 +159,7 @@ describe('x402-server middleware', () => {
         const body = res.body as { accepts: Array<{ payTo: string; maxAmountRequired: string; network: string }> };
         assert.strictEqual(body.accepts[0].payTo, '0xPaymentAddress123');
         assert.strictEqual(body.accepts[0].maxAmountRequired, '500000');
-        assert.strictEqual(body.accepts[0].network, 'base-sepolia');
+        assert.strictEqual(body.accepts[0].network, 'ethereum-sepolia');
       });
     });
 

@@ -483,6 +483,5 @@ result.logs?.forEach(console.log);
 | `fast-mainnet` | Fast | fastUSDC | api.fast.xyz |
 | `arbitrum-sepolia` | EVM | USDC | (viem default) |
 | `arbitrum` | EVM | USDC | (viem default) |
-| `base-sepolia` | EVM | USDC | (viem default) |
-| `base` | EVM | USDC | (viem default) |
+| `ethereum-sepolia` | EVM | USDC | (viem default) |
 | `ethereum` | EVM | USDC | (viem default) |

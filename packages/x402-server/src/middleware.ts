@@ -91,7 +91,7 @@ function isFastNetwork(network: string): boolean {
 function isEvmNetwork(network: string): boolean {
   const evmNetworks = [
     "ethereum", "arbitrum", "arbitrum-sepolia", 
-    "base", "base-sepolia", "optimism", "polygon"
+    "ethereum", "ethereum-sepolia"
   ];
   return evmNetworks.includes(network) || network.endsWith("-sepolia");
 }

@@ -23,7 +23,7 @@ app.use(paymentMiddleware(
   "0x1234567890abcdef...",  // Your payment address
   {
     "GET /api/premium/*": { price: "$0.10", network: "arbitrum-sepolia" },
-    "POST /api/generate": { price: "$0.50", network: "base-sepolia" },
+    "POST /api/generate": { price: "$0.50", network: "ethereum-sepolia" },
   },
   { url: "http://localhost:4020" }  // Facilitator URL
 ));
@@ -146,7 +146,7 @@ interface FacilitatorConfig {
 |---------|----------|
 | `arbitrum-sepolia` | 421614 |
 | `arbitrum` | 42161 |
-| `base-sepolia` | 84532 |
+| `ethereum-sepolia` | 11155111 |
 | `base` | 8453 |
 | `ethereum` | 1 |
 

@@ -148,10 +148,6 @@ export function getNetworkId(network: string): number {
     "ethereum-sepolia": 11155111,
     "arbitrum": 42161,
     "arbitrum-sepolia": 421614,
-    "base": 8453,
-    "base-sepolia": 84532,
-    "optimism": 10,
-    "polygon": 137,
   };
   return networkIds[network] || 0;
 }

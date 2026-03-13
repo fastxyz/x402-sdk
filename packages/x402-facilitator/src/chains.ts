@@ -5,8 +5,6 @@
 import {
   arbitrum,
   arbitrumSepolia,
-  base,
-  baseSepolia,
   mainnet,
   sepolia,
 } from "viem/chains";
@@ -28,27 +26,15 @@ export const EVM_CHAINS: Record<string, EvmChainConfig> = {
     usdcName: "USD Coin",
     usdcVersion: "2",
   },
-  "base-sepolia": {
-    chain: baseSepolia,
-    usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-    usdcName: "USDC",
-    usdcVersion: "2",
-  },
-  base: {
-    chain: base,
-    usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  "ethereum-sepolia": {
+    chain: sepolia,
+    usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     usdcName: "USD Coin",
     usdcVersion: "2",
   },
   ethereum: {
     chain: mainnet,
     usdcAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    usdcName: "USD Coin",
-    usdcVersion: "2",
-  },
-  "ethereum-sepolia": {
-    chain: sepolia,
-    usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     usdcName: "USD Coin",
     usdcVersion: "2",
   },

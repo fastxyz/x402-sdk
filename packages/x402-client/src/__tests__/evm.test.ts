@@ -17,12 +17,12 @@ describe('EVM Payment Handler', () => {
   describe('EVM_NETWORKS', () => {
     it('should include testnet networks', () => {
       assert.ok(EVM_NETWORKS.includes('arbitrum-sepolia'));
-      assert.ok(EVM_NETWORKS.includes('base-sepolia'));
+      assert.ok(EVM_NETWORKS.includes('ethereum-sepolia'));
     });
 
     it('should include mainnet networks', () => {
       assert.ok(EVM_NETWORKS.includes('arbitrum'));
-      assert.ok(EVM_NETWORKS.includes('base'));
+      assert.ok(EVM_NETWORKS.includes('ethereum'));
     });
   });
 

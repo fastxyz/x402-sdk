@@ -44,7 +44,6 @@ export interface BridgeConfig {
 function mapEvmNetworkToChain(network: string): string {
   const mapping: Record<string, string> = {
     'arbitrum-sepolia': 'arbitrum',
-    'base-sepolia': 'base',
     'ethereum-sepolia': 'ethereum',
   };
   return mapping[network] ?? network;

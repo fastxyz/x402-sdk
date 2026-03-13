@@ -5,7 +5,7 @@
  */
 
 import { createPublicClient, http, erc20Abi, type Chain } from 'viem';
-import { arbitrumSepolia, baseSepolia, arbitrum, base } from 'viem/chains';
+import { arbitrumSepolia, arbitrum, sepolia, mainnet } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { 
   EvmWallet, 
@@ -29,8 +29,8 @@ interface NetworkConfig {
 const NETWORK_MAP: Record<string, NetworkConfig> = {
   'arbitrum-sepolia': { chain: arbitrumSepolia, network: 'testnet', chainId: 421614 },
   'arbitrum': { chain: arbitrum, network: 'mainnet', chainId: 42161 },
-  'base-sepolia': { chain: baseSepolia, network: 'testnet', chainId: 84532 },
-  'base': { chain: base, network: 'mainnet', chainId: 8453 },
+  'ethereum-sepolia': { chain: sepolia, network: 'testnet', chainId: 11155111 },
+  'ethereum': { chain: mainnet, network: 'mainnet', chainId: 1 },
 };
 
 export const EVM_NETWORKS = Object.keys(NETWORK_MAP);

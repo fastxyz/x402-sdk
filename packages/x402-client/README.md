@@ -40,8 +40,8 @@ if (result.success) {
 ### EVM (EIP-3009)
 - `arbitrum-sepolia` - Arbitrum testnet
 - `arbitrum` - Arbitrum mainnet
-- `base-sepolia` - Base testnet
-- `base` - Base mainnet
+- `ethereum-sepolia` - Ethereum testnet
+- `ethereum` - Ethereum mainnet
 
 ## API
 

@@ -22,8 +22,8 @@ describe('x402-server utils', () => {
     it('should include EVM networks', () => {
       assert.ok(NETWORK_CONFIGS['arbitrum-sepolia']);
       assert.ok(NETWORK_CONFIGS['arbitrum']);
-      assert.ok(NETWORK_CONFIGS['base-sepolia']);
-      assert.ok(NETWORK_CONFIGS['base']);
+      assert.ok(NETWORK_CONFIGS['ethereum-sepolia']);
+      assert.ok(NETWORK_CONFIGS['ethereum']);
     });
 
     it('should have correct decimals for USDC', () => {

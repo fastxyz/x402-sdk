@@ -33,7 +33,7 @@ describe('x402-client', () => {
     it('should export EVM_NETWORKS', () => {
       assert.ok(Array.isArray(EVM_NETWORKS));
       assert.ok(EVM_NETWORKS.includes('arbitrum-sepolia'));
-      assert.ok(EVM_NETWORKS.includes('base-sepolia'));
+      assert.ok(EVM_NETWORKS.includes('ethereum-sepolia'));
     });
   });
 

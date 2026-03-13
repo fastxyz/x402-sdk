@@ -6,7 +6,7 @@
  * 
  * Supports:
  * - Fast networks (fast-testnet, fast-mainnet)
- * - EVM networks with EIP-3009 (arbitrum-sepolia, base-sepolia, etc.)
+ * - EVM networks with EIP-3009 (arbitrum-sepolia, ethereum-sepolia, etc.)
  * - Auto-bridge from Fast → EVM when EVM balance is insufficient
  * 
  * @example

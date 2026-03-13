@@ -79,7 +79,7 @@ describe("GET /supported", () => {
     
     // Check for EVM networks
     expect(networks).toContain("arbitrum-sepolia");
-    expect(networks).toContain("base-sepolia");
+    expect(networks).toContain("ethereum-sepolia");
     
     // Check for Fast networks
     expect(networks).toContain("fast-testnet");

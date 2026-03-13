@@ -51,12 +51,11 @@ This monorepo contains three packages, each with its own skill file:
 
 | Network | Type | Token | Settlement |
 |---------|------|-------|------------|
-| `fast-testnet` | Fast | fastUSDC | ~300ms |
+| `fast-testnet` | Fast | testUSDC | ~300ms |
 | `fast-mainnet` | Fast | fastUSDC | ~300ms |
-| `arbitrum-sepolia` | EVM | USDC | ~15s |
-| `arbitrum` | EVM | USDC | ~15s |
-| `base-sepolia` | EVM | USDC | ~15s |
-| `base` | EVM | USDC | ~15s |
+| `arbitrum-sepolia` | EVM | USDC | ~5s |
+| `arbitrum` | EVM | USDC | ~5s |
+| `ethereum-sepolia` | EVM | USDC | ~15s |
 | `ethereum` | EVM | USDC | ~15s |
 
 ## Which Skill To Read

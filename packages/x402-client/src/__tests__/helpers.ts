@@ -23,7 +23,7 @@ export const mockFastWallet: FastWalletConfig = {
 // ─── Mock 402 Responses ───────────────────────────────────────────────────────
 
 export function mock402Response(network: string, amount: string = '100000'): PaymentRequired {
-  const isEvm = ['arbitrum-sepolia', 'base-sepolia', 'arbitrum', 'base'].includes(network);
+  const isEvm = ['arbitrum-sepolia', 'ethereum-sepolia', 'arbitrum', 'ethereum'].includes(network);
   
   return {
     x402Version: 1,
