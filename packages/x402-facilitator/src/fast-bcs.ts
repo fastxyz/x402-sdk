@@ -1,6 +1,16 @@
 /**
  * Fast BCS (Binary Canonical Serialization) types
  * For decoding transaction envelopes
+ *
+ * NOTE: Once @fastxyz/sdk v0.1.6+ is published, replace this file with:
+ *
+ *   export {
+ *     TransactionBcs, VersionedTransactionBcs,
+ *     decodeTransactionEnvelope, getTransferDetails,
+ *     bytesToHex, hexToBytes, hexToTokenId,
+ *   } from '@fastxyz/sdk';
+ *   export type { DecodedTransaction as DecodedFastTransaction } from '@fastxyz/sdk';
+ *   export { decodeTransactionEnvelope as decodeEnvelope } from '@fastxyz/sdk';
  */
 
 import { bcs } from "@mysten/bcs";
@@ -123,7 +133,6 @@ export interface DecodedFastTransaction {
       amount: string;
       user_data: Uint8Array | null;
     };
-    // Other claim types can be added as needed
     [key: string]: unknown;
   };
   archival: boolean;
@@ -149,25 +158,16 @@ export function hexToBytes(hex: string): Uint8Array {
 }
 
 /**
- * Convert 32-byte pubkey to bech32m address (set1...)
- */
-export function pubkeyToAddress(pubkey: Uint8Array): string {
-  // Simplified bech32m encoding for display
-  // In production, use proper bech32m library
-  return "set1" + Buffer.from(pubkey).toString("hex").slice(0, 38);
-}
-
-/**
  * Decode a Fast transaction envelope
- * 
- * Supports both legacy (unversioned) and versioned transaction formats.
- * 
+ *
+ * Supports both versioned (Release20260303) and legacy formats.
+ *
  * @param envelope - Hex-encoded string OR byte array (from Fast RPC)
  * @returns Decoded transaction details
  */
 export function decodeEnvelope(envelope: string | number[] | Uint8Array): DecodedFastTransaction {
   let bytes: Uint8Array;
-  
+
   if (typeof envelope === "string") {
     bytes = hexToBytes(envelope);
   } else if (Array.isArray(envelope)) {
@@ -177,12 +177,11 @@ export function decodeEnvelope(envelope: string | number[] | Uint8Array): Decode
   } else {
     throw new Error(`Invalid envelope type: ${typeof envelope}`);
   }
-  
-  // Try versioned first (Release20260303), fall back to legacy
+
+  // Try versioned first, fall back to legacy
   let decoded;
   try {
     const versioned = VersionedTransactionBcs.parse(bytes);
-    // Extract the transaction from the versioned envelope
     if (versioned && typeof versioned === "object" && "Release20260303" in versioned) {
       decoded = (versioned as { Release20260303: ReturnType<typeof TransactionBcs.parse> }).Release20260303;
     } else {
@@ -192,27 +191,26 @@ export function decodeEnvelope(envelope: string | number[] | Uint8Array): Decode
     // Fall back to legacy unversioned format
     decoded = TransactionBcs.parse(bytes);
   }
-  
+
   // Extract claim details
   let claim: DecodedFastTransaction["claim"] = {};
-  
+
   if (decoded.claim && typeof decoded.claim === "object") {
-    // BCS enum returns { VariantName: data }
     const claimObj = decoded.claim as Record<string, unknown>;
-    
+
     if ("TokenTransfer" in claimObj) {
       const tt = claimObj.TokenTransfer as {
-        token_id: Uint8Array;
+        token_id: Iterable<number>;
         amount: string;
-        user_data: Uint8Array | null;
+        user_data: Iterable<number> | null;
       };
       claim.TokenTransfer = {
-        token_id: tt.token_id,
+        token_id: new Uint8Array(tt.token_id),
         amount: tt.amount,
-        user_data: tt.user_data,
+        user_data: tt.user_data ? new Uint8Array(tt.user_data) : null,
       };
     }
-    
+
     // Copy other claim types as-is
     for (const [key, value] of Object.entries(claimObj)) {
       if (key !== "TokenTransfer") {
@@ -220,10 +218,10 @@ export function decodeEnvelope(envelope: string | number[] | Uint8Array): Decode
       }
     }
   }
-  
+
   return {
-    sender: decoded.sender,
-    recipient: decoded.recipient,
+    sender: new Uint8Array(decoded.sender as Iterable<number>),
+    recipient: new Uint8Array(decoded.recipient as Iterable<number>),
     nonce: BigInt(decoded.nonce),
     timestamp_nanos: BigInt(decoded.timestamp_nanos),
     claim,
@@ -233,7 +231,7 @@ export function decodeEnvelope(envelope: string | number[] | Uint8Array): Decode
 
 /**
  * Extract transfer details from a decoded transaction
- * 
+ *
  * @param tx - Decoded transaction
  * @returns Transfer details or null if not a TokenTransfer
  */
@@ -246,13 +244,10 @@ export function getTransferDetails(tx: DecodedFastTransaction): {
   if (!tx.claim.TokenTransfer) {
     return null;
   }
-  
+
   const tt = tx.claim.TokenTransfer;
-  
-  // Amount is stored as decimal string representation of the value
-  // Convert to bigint
   const amount = BigInt(tt.amount);
-  
+
   return {
     sender: bytesToHex(tx.sender),
     recipient: bytesToHex(tx.recipient),
