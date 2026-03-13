@@ -1,11 +1,17 @@
 /**
  * Chain configurations for x402-facilitator
  *
- * Loads config from data/chains.json and maps to viem chain objects.
- * Edit data/chains.json to update addresses/RPC URLs without code changes.
+ * Config loading order (later overrides earlier):
+ * 1. Bundled defaults: data/chains.json (in package)
+ * 2. User config: ~/.x402/chains.json (if exists)
+ *
+ * Edit ~/.x402/chains.json to override addresses/RPC URLs locally.
  */
 
 import { createRequire } from "module";
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 import {
   arbitrum,
   arbitrumSepolia,
@@ -18,27 +24,70 @@ import type { EvmChainConfig } from "./types.js";
 const require = createRequire(import.meta.url);
 
 // ---------------------------------------------------------------------------
-// Load chain config from JSON
+// Types
 // ---------------------------------------------------------------------------
 
-interface ChainJsonConfig {
-  evm: Record<
-    string,
-    {
-      chainId: number;
-      rpcUrl: string;
-      usdc: {
-        address: string;
-        name: string;
-        version: string;
-        decimals: number;
-      };
-    }
-  >;
-  fast: Record<string, { rpcUrl: string }>;
+interface EvmChainJsonConfig {
+  chainId: number;
+  rpcUrl: string;
+  usdc: {
+    address: string;
+    name: string;
+    version: string;
+    decimals: number;
+  };
 }
 
-const chainsJson: ChainJsonConfig = require("../data/chains.json");
+interface FastChainJsonConfig {
+  rpcUrl: string;
+}
+
+interface ChainJsonConfig {
+  evm: Record<string, EvmChainJsonConfig>;
+  fast: Record<string, FastChainJsonConfig>;
+}
+
+// ---------------------------------------------------------------------------
+// Config loading with hierarchy
+// ---------------------------------------------------------------------------
+
+/**
+ * Get x402 config directory
+ */
+export function getX402Dir(): string {
+  return join(homedir(), ".x402");
+}
+
+/**
+ * Load and merge chain configs
+ */
+function loadChainConfig(): ChainJsonConfig {
+  // 1. Load bundled defaults
+  const bundled: ChainJsonConfig = require("../data/chains.json");
+
+  // 2. Check for user config
+  const userConfigPath = join(getX402Dir(), "chains.json");
+
+  if (existsSync(userConfigPath)) {
+    try {
+      const userConfig: Partial<ChainJsonConfig> = JSON.parse(
+        readFileSync(userConfigPath, "utf-8")
+      );
+
+      // Merge user config over bundled (deep merge for evm/fast)
+      return {
+        evm: { ...bundled.evm, ...userConfig.evm },
+        fast: { ...bundled.fast, ...userConfig.fast },
+      };
+    } catch (err) {
+      console.warn(`Failed to load user config from ${userConfigPath}:`, err);
+    }
+  }
+
+  return bundled;
+}
+
+const chainsJson = loadChainConfig();
 
 // ---------------------------------------------------------------------------
 // Map chainId to viem chain objects
@@ -52,7 +101,7 @@ const VIEM_CHAINS: Record<number, Chain> = {
 };
 
 // ---------------------------------------------------------------------------
-// Build EVM_CHAINS from JSON config
+// Build EVM_CHAINS from merged config
 // ---------------------------------------------------------------------------
 
 export const EVM_CHAINS: Record<string, EvmChainConfig> = {};
@@ -73,7 +122,7 @@ for (const [network, config] of Object.entries(chainsJson.evm)) {
 }
 
 // ---------------------------------------------------------------------------
-// Fast RPC endpoints from JSON
+// Fast RPC endpoints from merged config
 // ---------------------------------------------------------------------------
 
 export const FAST_RPC_URLS: Record<string, string> = {};

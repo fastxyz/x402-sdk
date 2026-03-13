@@ -254,25 +254,66 @@ console.log('Settled:', settleResult.txHash);
 
 ## Chain Configuration
 
-Default RPC URLs and USDC contract addresses are configured in `src/chains.ts`.
+Chain configs (RPC URLs, USDC addresses) are loaded from JSON files with a hierarchical override system.
 
-```typescript
-// EVM chains
-const EVM_CHAINS = {
-  'arbitrum-sepolia': {
-    chainId: 421614,
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-    usdc: '0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d',
+### Config Loading Order
+
+1. **Bundled defaults**: `data/chains.json` (in the npm package)
+2. **User overrides**: `~/.x402/chains.json` (if exists)
+
+User config is merged over bundled defaults, so you only need to specify the values you want to override.
+
+### Config File Format
+
+```json
+{
+  "evm": {
+    "arbitrum-sepolia": {
+      "chainId": 421614,
+      "rpcUrl": "https://sepolia-rollup.arbitrum.io/rpc",
+      "usdc": {
+        "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+        "name": "USD Coin",
+        "version": "2",
+        "decimals": 6
+      }
+    }
   },
-  // ...
-};
-
-// Fast RPC endpoints
-const FAST_RPC_URLS = {
-  'fast-testnet': 'https://testnet.api.fast.xyz/proxy',
-  'fast-mainnet': 'https://api.fast.xyz/proxy',
-};
+  "fast": {
+    "fast-testnet": {
+      "rpcUrl": "https://testnet.api.fast.xyz/proxy"
+    }
+  }
+}
 ```
+
+### Example: Override RPC URL Locally
+
+Create `~/.x402/chains.json`:
+```json
+{
+  "evm": {
+    "arbitrum-sepolia": {
+      "chainId": 421614,
+      "rpcUrl": "https://my-private-rpc.example.com",
+      "usdc": {
+        "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+        "name": "USD Coin",
+        "version": "2",
+        "decimals": 6
+      }
+    }
+  }
+}
+```
+
+### How Config Is Used
+
+- **verify.ts**: Loads chain config to verify EIP-712 signatures (needs chainId, USDC address)
+- **settle.ts**: Loads chain config to submit on-chain transactions (needs RPC URL, USDC address)
+- **server.ts**: Lists supported networks from loaded config
+
+The facilitator maps `chainId` to viem chain objects internally, so JSON configs only contain serializable data.
 
 ## Troubleshooting
 
