@@ -1,52 +1,90 @@
 /**
  * Chain configurations for x402-facilitator
+ *
+ * Loads config from data/chains.json and maps to viem chain objects.
+ * Edit data/chains.json to update addresses/RPC URLs without code changes.
  */
 
+import { createRequire } from "module";
 import {
   arbitrum,
   arbitrumSepolia,
   mainnet,
   sepolia,
+  type Chain,
 } from "viem/chains";
 import type { EvmChainConfig } from "./types.js";
 
-/**
- * EVM chain configurations with USDC addresses
- */
-export const EVM_CHAINS: Record<string, EvmChainConfig> = {
-  "arbitrum-sepolia": {
-    chain: arbitrumSepolia,
-    usdcAddress: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
-    usdcName: "USD Coin",
-    usdcVersion: "2",
-  },
-  arbitrum: {
-    chain: arbitrum,
-    usdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-    usdcName: "USD Coin",
-    usdcVersion: "2",
-  },
-  "ethereum-sepolia": {
-    chain: sepolia,
-    usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-    usdcName: "USD Coin",
-    usdcVersion: "2",
-  },
-  ethereum: {
-    chain: mainnet,
-    usdcAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-    usdcName: "USD Coin",
-    usdcVersion: "2",
-  },
+const require = createRequire(import.meta.url);
+
+// ---------------------------------------------------------------------------
+// Load chain config from JSON
+// ---------------------------------------------------------------------------
+
+interface ChainJsonConfig {
+  evm: Record<
+    string,
+    {
+      chainId: number;
+      rpcUrl: string;
+      usdc: {
+        address: string;
+        name: string;
+        version: string;
+        decimals: number;
+      };
+    }
+  >;
+  fast: Record<string, { rpcUrl: string }>;
+}
+
+const chainsJson: ChainJsonConfig = require("../data/chains.json");
+
+// ---------------------------------------------------------------------------
+// Map chainId to viem chain objects
+// ---------------------------------------------------------------------------
+
+const VIEM_CHAINS: Record<number, Chain> = {
+  421614: arbitrumSepolia,
+  42161: arbitrum,
+  11155111: sepolia,
+  1: mainnet,
 };
 
-/**
- * Fast RPC endpoints
- */
-export const FAST_RPC_URLS: Record<string, string> = {
-  "fast-testnet": "https://testnet.api.fast.xyz/proxy",
-  "fast-mainnet": "https://api.fast.xyz/proxy",
-};
+// ---------------------------------------------------------------------------
+// Build EVM_CHAINS from JSON config
+// ---------------------------------------------------------------------------
+
+export const EVM_CHAINS: Record<string, EvmChainConfig> = {};
+
+for (const [network, config] of Object.entries(chainsJson.evm)) {
+  const viemChain = VIEM_CHAINS[config.chainId];
+  if (!viemChain) {
+    console.warn(`Unknown chainId ${config.chainId} for network ${network}`);
+    continue;
+  }
+
+  EVM_CHAINS[network] = {
+    chain: viemChain,
+    usdcAddress: config.usdc.address as `0x${string}`,
+    usdcName: config.usdc.name,
+    usdcVersion: config.usdc.version,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Fast RPC endpoints from JSON
+// ---------------------------------------------------------------------------
+
+export const FAST_RPC_URLS: Record<string, string> = {};
+
+for (const [network, config] of Object.entries(chainsJson.fast)) {
+  FAST_RPC_URLS[network] = config.rpcUrl;
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions
+// ---------------------------------------------------------------------------
 
 /**
  * Get chain config for a network
