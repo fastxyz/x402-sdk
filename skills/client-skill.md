@@ -179,12 +179,123 @@ type Wallet = FastWallet | EvmWallet | FastWalletConfig | EvmWalletConfig;
 
 ## Payment Flows
 
-### EVM Payment
+### Unified Flow (Recommended)
+
+**Provide both Fast and EVM wallets** - x402Pay automatically handles any payment requirement:
+
+```typescript
+import { x402Pay } from '@fastxyz/x402-client';
+
+const result = await x402Pay({
+  url: 'https://api.example.com/protected-resource',
+  wallet: [fastWallet, evmWallet],  // Order doesn't matter
+  verbose: true,
+});
+```
+
+The SDK intelligently routes based on what the server accepts:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              x402Pay Flow                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. Initial Request → Server returns 402 with accepted networks             │
+│                                                                             │
+│  2. Match network to wallet:                                                │
+│     ┌─────────────────────────────────────────────────────────────────┐     │
+│     │ Server accepts: fast-testnet, arbitrum-sepolia                  │     │
+│     │ You provided: [fastWallet, evmWallet]                           │     │
+│     └─────────────────────────────────────────────────────────────────┘     │
+│                                                                             │
+│  3. Route to payment path (Fast preferred for speed):                       │
+│                                                                             │
+│     ┌──────────────────────┐      ┌──────────────────────────────────┐     │
+│     │  FAST NETWORK PATH   │      │      EVM NETWORK PATH            │     │
+│     │  (fast-testnet, etc) │      │  (arbitrum-sepolia, base, etc)   │     │
+│     ├──────────────────────┤      ├──────────────────────────────────┤     │
+│     │                      │      │                                  │     │
+│     │  FastWallet.submit() │      │  Check EVM USDC balance          │     │
+│     │         │            │      │         │                        │     │
+│     │         ▼            │      │         ▼                        │     │
+│     │  Get certificate     │      │  ┌─────────────────────────┐     │     │
+│     │         │            │      │  │ Sufficient balance?     │     │     │
+│     │         ▼            │      │  └──────────┬──────────────┘     │     │
+│     │  Send X-PAYMENT      │      │       YES   │   NO               │     │
+│     │         │            │      │         │   │   │                │     │
+│     │         ▼            │      │         │   ▼   ▼                │     │
+│     │  ✓ Done (~300ms)     │      │         │  Auto-Bridge           │     │
+│     │                      │      │         │  (sendToExternal)      │     │
+│     └──────────────────────┘      │         │   │                    │     │
+│                                   │         │   ▼                    │     │
+│                                   │         │  Wait for USDC arrival │     │
+│                                   │         │   │                    │     │
+│                                   │         ▼   ▼                    │     │
+│                                   │  Sign EIP-3009 authorization     │     │
+│                                   │         │                        │     │
+│                                   │         ▼                        │     │
+│                                   │  Send X-PAYMENT                  │     │
+│                                   │         │                        │     │
+│                                   │         ▼                        │     │
+│                                   │  ✓ Done (~5s, or ~8s if bridged) │     │
+│                                   └──────────────────────────────────┘     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Example with both wallets:**
+
+```typescript
+import { FastProvider, FastWallet } from '@fastxyz/sdk';
+import { createEvmWallet } from '@fastxyz/allset-sdk';
+import { x402Pay } from '@fastxyz/x402-client';
+
+// Setup wallets once
+const fastProvider = new FastProvider({ network: 'testnet' });
+const fastWallet = await FastWallet.fromKeyfile('~/.fast/keys/default.json', fastProvider);
+const evmWallet = await createEvmWallet();
+
+// Pay for any x402 endpoint - SDK figures out the rest
+const result = await x402Pay({
+  url: 'https://api.example.com/premium-data',
+  wallet: [fastWallet, evmWallet],
+});
+
+// Check what path was used
+console.log('Network:', result.payment?.network);      // 'fast-testnet' or 'arbitrum-sepolia'
+console.log('Amount:', result.payment?.amount);        // '0.10' (human-readable)
+console.log('Bridged:', result.payment?.bridged);      // true if auto-bridged
+console.log('Data:', result.body);
+```
+
+### Fast-Only Payment
+
+If you only have a Fast wallet:
+
+```typescript
+const result = await x402Pay({
+  url: 'https://api.example.com/fast-endpoint',
+  wallet: fastWallet,
+});
+```
+
+Flow:
+1. Fetch URL → receive 402 with payment requirements
+2. Submit TokenTransfer using `FastWallet.submit()`
+3. Send request with transaction certificate in `X-PAYMENT`
+4. Server verifies certificate
+5. Server returns content (already settled on-chain)
+
+**Speed:** ~300ms total
+
+### EVM-Only Payment
+
+If you only have an EVM wallet:
 
 ```typescript
 const result = await x402Pay({
   url: 'https://api.example.com/evm-endpoint',
-  wallet: evmWallet,  // Either SDK class or config object
+  wallet: evmWallet,
 });
 ```
 
@@ -195,46 +306,42 @@ Flow:
 4. Facilitator verifies signature and settles on-chain
 5. Server returns content
 
-### Fast Payment
+**Speed:** ~5s (depends on chain confirmation)
 
-```typescript
-const result = await x402Pay({
-  url: 'https://api.example.com/fast-endpoint',
-  wallet: fastWallet,  // Either SDK class or config object
-});
-```
+**Note:** Without a Fast wallet, auto-bridge is not available. If EVM balance is insufficient, the payment will fail.
 
-Flow:
-1. Fetch URL → receive 402 with payment requirements
-2. Submit TokenTransfer using `FastWallet.submit()` from @fastxyz/sdk
-3. Send request with transaction certificate in `X-PAYMENT`
-4. Server verifies certificate
-5. Server returns content (no settlement needed - already on-chain)
+### Auto-Bridge Details
 
-### Auto-Bridge (Fast → EVM)
-
-Provide both wallets to automatically bridge when EVM balance is insufficient:
+When both wallets are provided and an EVM payment is required:
 
 ```typescript
 const result = await x402Pay({
   url: 'https://api.example.com/evm-endpoint',
-  wallet: [fastWallet, evmWallet],  // Order doesn't matter
-  verbose: true,  // Log bridge progress
+  wallet: [fastWallet, evmWallet],
+  verbose: true,  // See bridge progress in logs
 });
 
-// Check if bridging occurred
 if (result.payment?.bridged) {
-  console.log('Auto-bridged via:', result.payment.bridgeTxHash);
+  console.log('Auto-bridged!');
+  console.log('Fast tx:', result.payment.bridgeTxHash);
 }
 ```
 
-Flow:
-1. Detect EVM endpoint requires USDC
-2. Check EVM USDC balance → insufficient
-3. Check Fast fastUSDC/testUSDC balance → sufficient
-4. Bridge via `AllSetProvider.sendToExternal()` (~3-4s)
-5. Sign EIP-3009 authorization
-6. Complete payment
+**Auto-bridge flow:**
+1. Server requires EVM payment (e.g., `arbitrum-sepolia`)
+2. Check EVM wallet USDC balance → insufficient
+3. Check Fast wallet testUSDC/fastUSDC balance → sufficient
+4. Execute `AllSetProvider.sendToExternal()`:
+   - Transfer testUSDC to Fast bridge address
+   - Cross-sign the transaction
+   - Submit to relayer
+5. Poll EVM USDC balance until funds arrive (~3-4s)
+6. Sign EIP-3009 authorization with now-funded EVM wallet
+7. Complete payment
+
+**Token mapping:**
+- Testnet: `testUSDC` (Fast) → `USDC` (EVM)
+- Mainnet: `fastUSDC` (Fast) → `USDC` (EVM)
 
 ## Technical Details
 
