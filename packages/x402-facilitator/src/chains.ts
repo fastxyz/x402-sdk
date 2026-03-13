@@ -58,8 +58,8 @@ export const EVM_CHAINS: Record<string, EvmChainConfig> = {
  * Fast RPC endpoints
  */
 export const FAST_RPC_URLS: Record<string, string> = {
-  "fast-testnet": "https://staging.proxy.fastset.xyz/",
-  "fast-mainnet": "https://staging.proxy.fastset.xyz/",
+  "fast-testnet": "https://testnet.api.fast.xyz/proxy",
+  "fast-mainnet": "https://api.fast.xyz/proxy",
 };
 
 /**

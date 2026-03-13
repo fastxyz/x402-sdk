@@ -103,6 +103,11 @@ export const TransactionBcs = bcs.struct("Transaction", {
   archival: bcs.bool(),
 });
 
+// Versioned Transaction envelope (Release20260303)
+export const VersionedTransactionBcs = bcs.enum("VersionedTransaction", {
+  Release20260303: TransactionBcs,
+});
+
 // ---------------------------------------------------------------------------
 // Decoded transaction type
 // ---------------------------------------------------------------------------
@@ -155,6 +160,8 @@ export function pubkeyToAddress(pubkey: Uint8Array): string {
 /**
  * Decode a Fast transaction envelope
  * 
+ * Supports both legacy (unversioned) and versioned transaction formats.
+ * 
  * @param envelope - Hex-encoded string OR byte array (from Fast RPC)
  * @returns Decoded transaction details
  */
@@ -171,7 +178,20 @@ export function decodeEnvelope(envelope: string | number[] | Uint8Array): Decode
     throw new Error(`Invalid envelope type: ${typeof envelope}`);
   }
   
-  const decoded = TransactionBcs.parse(bytes);
+  // Try versioned first (Release20260303), fall back to legacy
+  let decoded;
+  try {
+    const versioned = VersionedTransactionBcs.parse(bytes);
+    // Extract the transaction from the versioned envelope
+    if (versioned && typeof versioned === "object" && "Release20260303" in versioned) {
+      decoded = (versioned as { Release20260303: ReturnType<typeof TransactionBcs.parse> }).Release20260303;
+    } else {
+      throw new Error("Unknown versioned format");
+    }
+  } catch {
+    // Fall back to legacy unversioned format
+    decoded = TransactionBcs.parse(bytes);
+  }
   
   // Extract claim details
   let claim: DecodedFastTransaction["claim"] = {};
