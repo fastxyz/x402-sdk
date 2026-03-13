@@ -42,6 +42,7 @@ app.listen(4020, () => console.log('Facilitator on :4020'));
 - `packages/x402-facilitator/src/verify.ts` - Signature verification
 - `packages/x402-facilitator/src/settle.ts` - On-chain settlement
 - `packages/x402-facilitator/src/chains.ts` - Chain configurations
+- `packages/x402-facilitator/src/fast-bcs.ts` - BCS decoding for Fast transactions
 
 ## Configuration
 
@@ -156,10 +157,17 @@ List supported networks.
 
 ### Fast Payments
 
-1. Check certificate structure (envelope + signatures)
-2. Validate scheme matches (`fast`)
-3. Validate network matches (`fast-testnet` or `fast-mainnet`)
-4. *(Future: Query Fast RPC for on-chain verification)*
+1. Decode transaction envelope (supports both versioned and legacy formats)
+2. Check certificate structure (envelope + committee signatures)
+3. Validate scheme matches (`fast`)
+4. Validate network matches (`fast-testnet` or `fast-mainnet`)
+5. Validate recipient matches `paymentRequirement.payTo`
+6. Validate amount >= `paymentRequirement.maxAmountRequired`
+
+**Versioned Transaction Support (Release20260303):**
+The facilitator automatically detects and decodes both formats:
+- Legacy: Raw BCS-encoded transaction
+- Versioned: `{ Release20260303: transaction }` envelope
 
 ## Settlement Logic
 
@@ -200,6 +208,7 @@ console.log('Settled:', settleResult.txHash);
 Default RPC URLs and USDC contract addresses are configured in `src/chains.ts`.
 
 ```typescript
+// EVM chains
 const EVM_CHAINS = {
   'arbitrum-sepolia': {
     chainId: 421614,
@@ -207,6 +216,12 @@ const EVM_CHAINS = {
     usdc: '0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d',
   },
   // ...
+};
+
+// Fast RPC endpoints
+const FAST_RPC_URLS = {
+  'fast-testnet': 'https://testnet.api.fast.xyz/proxy',
+  'fast-mainnet': 'https://api.fast.xyz/proxy',
 };
 ```
 

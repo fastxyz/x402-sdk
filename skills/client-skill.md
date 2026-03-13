@@ -13,6 +13,16 @@ metadata:
 
 Pay for 402-protected content with crypto. Handles EVM (EIP-3009) and Fast payment flows.
 
+## Dependencies
+
+```json
+{
+  "@fastxyz/sdk": "^0.1.5",
+  "@fastxyz/allset-sdk": "^0.1.2",
+  "viem": "^2.46.2"
+}
+```
+
 ## Install
 
 ```bash
@@ -36,13 +46,21 @@ const result = await x402Pay({
 console.log(result.body); // Paid content
 ```
 
-## Files To Read
+## Architecture
 
-- `packages/x402-client/src/index.ts` - Main `x402Pay()` function
-- `packages/x402-client/src/types.ts` - Wallet and payment types
-- `packages/x402-client/src/evm.ts` - EIP-3009 signing
-- `packages/x402-client/src/fast.ts` - Fast transaction signing
-- `packages/x402-client/src/bridge.ts` - Auto-bridge logic
+**Internal dependencies:**
+- `@fastxyz/sdk` - Fast wallet operations, transaction signing, BCS serialization
+- `@fastxyz/allset-sdk` - Auto-bridge from Fast to EVM via AllSet
+- `viem` - EVM wallet operations, EIP-3009 signing
+
+**Code structure:**
+| File | Purpose |
+|------|---------|
+| `index.ts` | Main `x402Pay()` function, network routing |
+| `types.ts` | Wallet and payment type definitions |
+| `evm.ts` | EIP-3009 signing, balance checks |
+| `fast.ts` | Fast payment via `FastWallet.submit()` |
+| `bridge.ts` | AllSet bridge wrapper for auto-bridge |
 
 ## Wallet Types
 
@@ -105,7 +123,7 @@ const result = await x402Pay({
 
 Flow:
 1. Fetch URL → receive 402 with payment requirements
-2. Submit TokenTransfer to Fast network
+2. Submit TokenTransfer using `FastWallet.submit()` from @fastxyz/sdk
 3. Send request with transaction certificate in `X-PAYMENT`
 4. Server verifies certificate
 5. Server returns content (no settlement needed - already on-chain)
@@ -137,10 +155,52 @@ const result = await x402Pay({
 Flow:
 1. Detect EVM endpoint requires USDC
 2. Check EVM USDC balance → insufficient
-3. Check Fast fastUSDC balance → sufficient
-4. Bridge fastUSDC → USDC via AllSet (~3-4s)
+3. Check Fast fastUSDC/testUSDC balance → sufficient
+4. Bridge via `AllSetProvider.sendToExternal()` (~3-4s)
 5. Sign EIP-3009 authorization
 6. Complete payment
+
+## Technical Details
+
+### Fast Payment Internals
+
+Uses `FastWallet.submit()` for certificate-inclusive transactions:
+
+```typescript
+// Internal flow in fast.ts
+const fastWallet = await FastWallet.fromPrivateKey(privateKey, provider);
+
+const result = await fastWallet.submit({
+  recipient: payTo,
+  claim: {
+    TokenTransfer: {
+      token_id: tokenIdBytes,
+      amount: hexAmount,
+      user_data: null,
+    },
+  },
+});
+
+// result.certificate contains the full transaction certificate
+```
+
+### Auto-Bridge Internals
+
+Uses `@fastxyz/allset-sdk` for bridging:
+
+```typescript
+// Internal flow in bridge.ts
+const allset = new AllSetProvider({ network: 'testnet' });
+
+const result = await allset.sendToExternal({
+  chain: 'arbitrum',
+  token: 'testUSDC',  // or 'fastUSDC' on mainnet
+  amount: amountString,
+  from: fastWalletAddress,
+  to: evmAddress,
+  fastWallet: sdkFastWallet,
+});
+```
 
 ## Options
 
@@ -159,13 +219,20 @@ const result = await x402Pay({
 
 ```typescript
 interface X402PayResult {
-  response: Response;       // Raw fetch Response
-  body: any;                // Parsed response body
-  paymentInfo: {
+  success: boolean;         // Request succeeded
+  statusCode: number;       // HTTP status
+  headers: Record<string, string>;
+  body: unknown;            // Response body
+  payment?: {
     network: string;        // Network used
-    amount: string;         // Amount paid
-    txHash?: string;        // Transaction hash (if available)
+    amount: string;         // Amount paid (human-readable)
+    recipient: string;      // Recipient address
+    txHash: string;         // Transaction hash
+    bridged?: boolean;      // True if auto-bridged
+    bridgeTxHash?: string;  // Bridge tx hash if bridged
   };
+  note: string;             // Human-readable summary
+  logs?: string[];          // Debug logs if verbose=true
 }
 ```
 
@@ -173,7 +240,7 @@ interface X402PayResult {
 
 ### `INSUFFICIENT_BALANCE`
 - Check token balance on the required network
-- For auto-bridge: ensure Fast wallet has sufficient fastUSDC
+- For auto-bridge: ensure Fast wallet has sufficient fastUSDC/testUSDC
 
 ### `INVALID_SIGNATURE`  
 - EVM: Check private key matches address
@@ -182,7 +249,7 @@ interface X402PayResult {
 ### `BRIDGE_TIMEOUT`
 - AllSet bridge typically takes 3-4 seconds
 - Increase timeout if network is slow
-- Check Fast wallet has fastUSDC balance
+- Check Fast wallet has fastUSDC/testUSDC balance
 
 ### Debug mode
 
@@ -192,16 +259,19 @@ const result = await x402Pay({
   wallet: [...],
   verbose: true,  // Logs each step
 });
+
+// Check logs
+result.logs?.forEach(console.log);
 ```
 
 ## Supported Networks
 
-| Network | Type | Token |
-|---------|------|-------|
-| `fast-testnet` | Fast | fastUSDC |
-| `fast-mainnet` | Fast | fastUSDC |
-| `arbitrum-sepolia` | EVM | USDC |
-| `arbitrum` | EVM | USDC |
-| `base-sepolia` | EVM | USDC |
-| `base` | EVM | USDC |
-| `ethereum` | EVM | USDC |
+| Network | Type | Token | RPC Endpoint |
+|---------|------|-------|--------------|
+| `fast-testnet` | Fast | testUSDC | testnet.api.fast.xyz |
+| `fast-mainnet` | Fast | fastUSDC | api.fast.xyz |
+| `arbitrum-sepolia` | EVM | USDC | (viem default) |
+| `arbitrum` | EVM | USDC | (viem default) |
+| `base-sepolia` | EVM | USDC | (viem default) |
+| `base` | EVM | USDC | (viem default) |
+| `ethereum` | EVM | USDC | (viem default) |
