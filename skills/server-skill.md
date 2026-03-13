@@ -193,8 +193,7 @@ if (verification.isValid) {
 | `fast-mainnet` | Fast | fastUSDC |
 | `arbitrum-sepolia` | EVM | USDC |
 | `arbitrum` | EVM | USDC |
-| `base-sepolia` | EVM | USDC |
-| `base` | EVM | USDC |
+| `ethereum-sepolia` | EVM | USDC |
 | `ethereum` | EVM | USDC |
 
 ## Troubleshooting
