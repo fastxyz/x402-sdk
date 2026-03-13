@@ -78,10 +78,23 @@ const server = createFacilitatorServer({
 
 Verify a payment signature or certificate.
 
-**Request:**
+**Request (Fast payment):**
 ```json
 {
-  "paymentPayload": { ... },
+  "paymentPayload": {
+    "x402Version": 1,
+    "scheme": "exact",
+    "network": "fast-testnet",
+    "payload": {
+      "transactionCertificate": {
+        "envelope": "0x...",
+        "signatures": [
+          ["0xcommitteePubKey1...", "0xsignature1..."],
+          ["0xcommitteePubKey2...", "0xsignature2..."]
+        ]
+      }
+    }
+  },
   "paymentRequirement": {
     "scheme": "exact",
     "network": "fast-testnet",
