@@ -4,7 +4,6 @@
  * Uses @fastxyz/allset-sdk for bridging fastUSDC/testUSDC from Fast to USDC on EVM chains.
  */
 
-import { FastProvider } from '@fastxyz/sdk';
 import type { FastWallet } from '@fastxyz/sdk';
 import { AllSetProvider } from '@fastxyz/allset-sdk';
 
@@ -112,8 +111,7 @@ export function getBridgeConfig(network: string): BridgeConfig | null {
 export async function getFastBalance(wallet: FastWallet, network: 'testnet' | 'mainnet' = 'testnet'): Promise<bigint> {
   const token = network === 'mainnet' ? 'fastUSDC' : 'testUSDC';
 
-  const provider = new FastProvider({ network });
-  const balance = await provider.getBalance(wallet.address, token);
+  const balance = await wallet.provider.getBalance(wallet.address, token);
 
   // Convert human-readable balance to raw units (6 decimals)
   const parts = balance.amount.split('.');

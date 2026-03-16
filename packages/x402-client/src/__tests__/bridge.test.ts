@@ -5,7 +5,7 @@
  * integration tests. These unit tests focus on configuration and utilities.
  */
 
-import { describe, it, afterEach } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { 
   getBridgeConfig,
@@ -13,13 +13,7 @@ import {
 } from '../bridge.js';
 import { mockFastWalletData } from './helpers.js';
 
-const originalFetch = globalThis.fetch;
-
 describe('AllSet Bridge', () => {
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
   describe('getBridgeConfig', () => {
     it('should return config for arbitrum-sepolia', () => {
       const config = getBridgeConfig('arbitrum-sepolia');
@@ -63,43 +57,32 @@ describe('AllSet Bridge', () => {
   });
 
   describe('getFastBalance', () => {
-    it('should use mainnet token resolution when requested', async () => {
-      const fastUsdcTokenId = Array.from(
-        Buffer.from('b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5', 'hex')
-      );
-      const rpcCalls: Array<{ url: string; method?: string }> = [];
+    it('should use the wallet provider for mainnet balance checks', async () => {
+      let requestedAddress = '';
+      let requestedToken = '';
 
-      globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
-        const url = typeof input === 'string' ? input : input.toString();
-        const body = init?.body ? JSON.parse(init.body as string) as { method?: string } : {};
-        rpcCalls.push({ url, method: body.method });
-
-        if (body.method === 'proxy_getAccountInfo') {
-          return new Response(JSON.stringify({
-            result: {
-              token_balance: [[fastUsdcTokenId, 'f4240']],
-            },
-          }), { status: 200 });
-        }
-
-        if (body.method === 'proxy_getTokenInfo') {
-          return new Response(JSON.stringify({
-            result: {
-              requested_token_metadata: [[fastUsdcTokenId, { decimals: 6 }]],
-            },
-          }), { status: 200 });
-        }
-
-        throw new Error(`Unexpected RPC method: ${body.method}`);
-      };
+      const wallet = {
+        address: mockFastWalletData.address,
+        provider: {
+          getBalance: async (address: string, token?: string) => {
+            requestedAddress = address;
+            requestedToken = token ?? '';
+            return {
+              amount: '1',
+              token: token ?? 'FAST',
+            };
+          },
+        },
+      } as unknown as import('@fastxyz/sdk').FastWallet;
 
       const balance = await getFastBalance(
-        { address: mockFastWalletData.address } as unknown as import('@fastxyz/sdk').FastWallet,
+        wallet,
         'mainnet'
       );
 
       assert.strictEqual(balance, 1_000_000n);
-      assert.strictEqual(rpcCalls[0]?.url, 'https://api.fast.xyz/proxy');
+      assert.strictEqual(requestedAddress, mockFastWalletData.address);
+      assert.strictEqual(requestedToken, 'fastUSDC');
     });
   });
 

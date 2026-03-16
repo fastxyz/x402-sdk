@@ -17,6 +17,7 @@ import {
   settlePayment,
   encodePaymentResponse,
 } from "./payment.js";
+import { getSupportedNetworks } from "./utils.js";
 
 // Express types (minimal to avoid hard dependency)
 interface Request {
@@ -89,11 +90,10 @@ function isFastNetwork(network: string): boolean {
  * Check if network is EVM-based
  */
 function isEvmNetwork(network: string): boolean {
-  const evmNetworks = [
-    "ethereum", "arbitrum", "arbitrum-sepolia", 
-    "ethereum", "ethereum-sepolia"
-  ];
-  return evmNetworks.includes(network) || network.endsWith("-sepolia");
+  return !isFastNetwork(network) && (
+    getSupportedNetworks().includes(network) ||
+    network.endsWith("-sepolia")
+  );
 }
 
 /**

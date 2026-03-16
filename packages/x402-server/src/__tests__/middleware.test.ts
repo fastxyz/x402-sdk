@@ -4,7 +4,11 @@
 
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { paymentMiddleware, paywall } from '../middleware.js';
+import { initNetworkConfig } from '../utils.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -53,6 +57,7 @@ function mockResponse(): MockResponse {
 describe('x402-server middleware', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    initNetworkConfig();
   });
 
   describe('paymentMiddleware', () => {
@@ -211,6 +216,47 @@ describe('x402-server middleware', () => {
         assert.strictEqual(res.statusCode, 500);
         const body = res.body as { error: string };
         assert.ok(body.error.includes('Fast payment address not configured'));
+      });
+
+      it('should use EVM address for configured custom EVM networks', async () => {
+        const tempDir = mkdtempSync(join(tmpdir(), 'x402-server-networks-'));
+        const configPath = join(tempDir, 'networks.json');
+
+        writeFileSync(configPath, JSON.stringify({
+          'my-custom-network': {
+            asset: '0x1234567890abcdef1234567890abcdef12345678',
+            decimals: 6,
+            extra: {
+              name: 'USD Coin',
+              version: '2',
+            },
+          },
+        }));
+
+        try {
+          initNetworkConfig(configPath);
+
+          const middleware = paymentMiddleware(
+            { evm: '0xEvmAddress', fast: 'fast1FastAddress' },
+            { '/api/custom': { price: '$0.10', network: 'my-custom-network' } },
+            { url: 'http://localhost:4020' }
+          );
+
+          const req = mockRequest('/api/custom');
+          const res = mockResponse();
+
+          await middleware(req, res, () => {});
+
+          assert.strictEqual(res.statusCode, 402);
+          const body = res.body as {
+            accepts: Array<{ payTo: string; asset: string; network: string }>;
+          };
+          assert.strictEqual(body.accepts[0].payTo, '0xEvmAddress');
+          assert.strictEqual(body.accepts[0].asset, '0x1234567890abcdef1234567890abcdef12345678');
+          assert.strictEqual(body.accepts[0].network, 'my-custom-network');
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
       });
     });
   });
