@@ -474,7 +474,8 @@ async function verifyFastPayment(
     }
   } else {
     // Object format from RPC
-    const tx = envelope.transaction;
+    // Handle both versioned (Release20260303) and legacy formats
+    let tx = envelope.transaction as Record<string, unknown>;
     if (!tx) {
       return {
         isValid: false,
@@ -483,8 +484,14 @@ async function verifyFastPayment(
       };
     }
     
+    // Unwrap versioned transaction if present
+    if (tx.Release20260303) {
+      tx = tx.Release20260303 as Record<string, unknown>;
+    }
+    
     // Verify it's a TokenTransfer
-    if (!tx.claim.TokenTransfer) {
+    const claim = tx.claim as Record<string, unknown> | undefined;
+    if (!claim?.TokenTransfer) {
       return {
         isValid: false,
         invalidReason: "not_a_token_transfer",
@@ -492,11 +499,15 @@ async function verifyFastPayment(
       };
     }
 
-    const transfer = tx.claim.TokenTransfer;
+    const transfer = claim.TokenTransfer as {
+      token_id: number[];
+      amount: string;
+      user_data: number[] | null;
+    };
     
     // Convert byte arrays to hex for comparison
-    senderHex = "0x" + Buffer.from(tx.sender).toString("hex");
-    recipientHex = "0x" + Buffer.from(tx.recipient).toString("hex");
+    senderHex = "0x" + Buffer.from(tx.sender as number[]).toString("hex");
+    recipientHex = "0x" + Buffer.from(tx.recipient as number[]).toString("hex");
     tokenIdHex = "0x" + Buffer.from(transfer.token_id).toString("hex");
     
     try {
