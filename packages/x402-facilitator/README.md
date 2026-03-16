@@ -171,7 +171,6 @@ interface FacilitatorConfig {
 | `arbitrum-sepolia` | 421614 | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |
 | `arbitrum` | 42161 | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` |
 | `ethereum-sepolia` | 11155111 | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
-| `base` | 8453 | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 | `ethereum` | 1 | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` |
 
 ### Fast
@@ -208,6 +207,10 @@ interface FacilitatorConfig {
 | `recipient_mismatch` | Recipient doesn't match payTo |
 | `insufficient_amount` | Transfer amount too low |
 | `token_mismatch` | Token doesn't match asset |
+
+## Documentation
+
+For detailed technical specifications, chain configuration, and advanced usage, see [skills/facilitator-skill.md](../../skills/facilitator-skill.md).
 
 ## License
 
