@@ -5,7 +5,7 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { handleEvmPayment, EVM_NETWORKS } from '../evm.js';
-import { mockEvmWallet, mockFastWallet, mock402Response, createMockFetch } from './helpers.js';
+import { mockEvmWallet, mock402Response, createMockFetch } from './helpers.js';
 
 const originalFetch = globalThis.fetch;
 

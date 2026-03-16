@@ -2,28 +2,16 @@
  * Fast payment handler for x402
  *
  * Uses @fastxyz/sdk for Fast network operations.
- * Accepts both FastWallet class instances and simple config objects.
  */
 
-import { FastProvider, FastWallet as FastWalletClass } from '@fastxyz/sdk';
+import type { FastWallet } from '@fastxyz/sdk';
 import type {
-  FastWallet,
-  FastWalletConfig,
   PaymentRequired,
   PaymentRequirement,
   X402PayResult,
 } from './types.js';
-import { isFastWalletClass } from './types.js';
 
 export const FAST_NETWORKS = ['fast-testnet', 'fast-mainnet', 'fast'];
-
-/**
- * Map x402 network name to @fastxyz/sdk network type
- */
-function mapNetwork(network: string): 'testnet' | 'mainnet' {
-  if (network === 'fast-mainnet') return 'mainnet';
-  return 'testnet';
-}
 
 /**
  * Convert hex token ID to Uint8Array
@@ -41,7 +29,7 @@ function hexToTokenId(hex: string): Uint8Array {
 /**
  * Handle x402 payment on Fast network
  *
- * @param wallet - FastWallet class from @fastxyz/sdk OR simple config object
+ * @param wallet - FastWallet from @fastxyz/sdk
  */
 export async function handleFastPayment(
   url: string,
@@ -65,31 +53,7 @@ export async function handleFastPayment(
   log(`  Network: ${fastReq.network}`);
   log(`  Amount: ${fastReq.maxAmountRequired} (raw)`);
   log(`  Recipient: ${fastReq.payTo}`);
-
-  // Resolve wallet - either use directly or create from config
-  let fastWallet: FastWalletClass;
-  let walletAddress: string;
-
-  if (isFastWalletClass(wallet)) {
-    // Already a FastWallet class instance
-    fastWallet = wallet;
-    walletAddress = wallet.address;
-    log(`  Using provided FastWallet instance`);
-  } else {
-    // Simple config - create FastWallet from private key
-    const config = wallet as FastWalletConfig;
-    const network = mapNetwork(fastReq.network);
-    const provider = new FastProvider({
-      network,
-      rpcUrl: config.rpcUrl,
-    });
-    fastWallet = await FastWalletClass.fromPrivateKey(config.privateKey, provider);
-    walletAddress = config.address;
-    log(`  Created FastWallet from config`);
-  }
-
-  log(`  Using @fastxyz/sdk`);
-  log(`  Payer: ${walletAddress}`);
+  log(`  Payer: ${wallet.address}`);
 
   // Determine token ID
   let tokenId: Uint8Array;
@@ -110,7 +74,7 @@ export async function handleFastPayment(
   const txStartTime = Date.now();
 
   // Use submit() to get the full certificate
-  const result = await fastWallet.submit({
+  const result = await wallet.submit({
     recipient: fastReq.payTo,
     claim: {
       TokenTransfer: {

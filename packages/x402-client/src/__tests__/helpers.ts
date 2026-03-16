@@ -2,23 +2,48 @@
  * Test helpers and mocks
  */
 
-import type { FastWalletConfig, EvmWalletConfig, PaymentRequired } from '../types.js';
+import type { EvmWallet, PaymentRequired } from '../types.js';
 
 // ─── Mock Wallets ─────────────────────────────────────────────────────────────
 
-export const mockEvmWallet: EvmWalletConfig = {
-  type: 'evm',
+/**
+ * Mock EVM wallet for testing (matches @fastxyz/allset-sdk EvmWallet)
+ */
+export const mockEvmWallet: EvmWallet = {
   privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', // Hardhat account #0
   address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
 };
 
-export const mockFastWallet: FastWalletConfig = {
-  type: 'fast',
-  // Valid Ed25519 key pair for testing
+/**
+ * Mock Fast wallet data for testing
+ * Note: FastWallet class from @fastxyz/sdk should be mocked in actual tests
+ */
+export const mockFastWalletData = {
   privateKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-  // Valid bech32m address (same as bridge address for testing)
   address: 'fast1x0g58phuf0pf32e9uvp3mv6hak4z37ytpqyfzjzhfsehua9kmegqwzv0td',
 };
+
+import type { FastWallet } from '@fastxyz/sdk';
+
+/**
+ * Create a mock FastWallet-like object for type guard tests
+ * This mimics the FastWallet class interface with enough to pass type guards
+ */
+export function createMockFastWallet(address: string = mockFastWalletData.address): FastWallet {
+  // Cast through unknown to satisfy TypeScript while providing mock implementation
+  return {
+    address,
+    submit: async () => ({
+      txHash: '0x' + '1'.repeat(64),
+      certificate: { envelope: {}, signatures: [] },
+    }),
+    send: async () => ({
+      txHash: '0x' + '2'.repeat(64),
+      certificate: { envelope: {}, signatures: [] },
+      explorerUrl: null,
+    }),
+  } as unknown as FastWallet;
+}
 
 // ─── Mock 402 Responses ───────────────────────────────────────────────────────
 

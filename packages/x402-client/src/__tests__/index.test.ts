@@ -12,7 +12,7 @@ import {
   FAST_NETWORKS,
   EVM_NETWORKS,
 } from '../index.js';
-import { mockEvmWallet, mockFastWallet, mock402Response, createMockFetch } from './helpers.js';
+import { mockEvmWallet, createMockFastWallet, mock402Response, createMockFetch } from './helpers.js';
 
 // Store original fetch
 const originalFetch = globalThis.fetch;
@@ -128,7 +128,7 @@ describe('x402-client', () => {
       await assert.rejects(
         () => x402Pay({
           url: 'https://api.example.com/paid',
-          wallet: mockFastWallet, // Only Fast wallet, but server wants EVM
+          wallet: createMockFastWallet(), // Only Fast wallet, but server wants EVM
         }),
         /No matching wallet/
       );
@@ -143,7 +143,7 @@ describe('x402-client', () => {
 
       const result = await x402Pay({
         url: 'https://api.example.com/data',
-        wallet: [mockEvmWallet, mockFastWallet],
+        wallet: [mockEvmWallet, createMockFastWallet()],
       });
 
       assert.strictEqual(result.success, true);

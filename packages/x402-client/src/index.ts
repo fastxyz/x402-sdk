@@ -11,25 +11,31 @@
  * 
  * @example
  * ```typescript
- * import { x402Pay } from 'x402-client';
+ * import { x402Pay } from '@fastxyz/x402-client';
+ * import { FastWallet, FastProvider } from '@fastxyz/sdk';
+ * import { createEvmWallet } from '@fastxyz/allset-sdk';
  * 
- * // Simple EVM payment
+ * // Create wallets using SDKs
+ * const fastProvider = new FastProvider({ network: 'testnet' });
+ * const fastWallet = await FastWallet.fromKeyfile('~/.fast/keys/default.json', fastProvider);
+ * const evmWallet = createEvmWallet('~/.allset/.evm/keys/default.json');
+ * 
+ * // EVM payment
  * const result = await x402Pay({
  *   url: 'https://api.example.com/premium-data',
- *   wallet: {
- *     type: 'evm',
- *     privateKey: '0x...',
- *     address: '0x...',
- *   },
+ *   wallet: evmWallet,
  * });
  * 
- * // With auto-bridge support (provide both wallets)
+ * // Fast payment
+ * const result = await x402Pay({
+ *   url: 'https://api.example.com/fast-data',
+ *   wallet: fastWallet,
+ * });
+ * 
+ * // Both wallets (enables auto-bridge for EVM payments)
  * const result = await x402Pay({
  *   url: 'https://api.example.com/premium-data',
- *   wallet: [
- *     { type: 'evm', privateKey: '0x...', address: '0x...' },
- *     { type: 'fast', privateKey: '...', address: 'fast1...' },
- *   ],
+ *   wallet: [evmWallet, fastWallet],
  * });
  * 
  * if (result.success) {
@@ -45,9 +51,6 @@ import type {
   X402PayParams, 
   X402PayResult, 
   PaymentRequired, 
-  Wallet,
-  FastWallet,
-  EvmWallet,
 } from './types.js';
 import { isFastWallet, isEvmWallet } from './types.js';
 
@@ -77,24 +80,24 @@ export {
  * 
  * @example
  * ```typescript
- * // EVM wallet only
+ * import { FastWallet, FastProvider } from '@fastxyz/sdk';
+ * import { createEvmWallet } from '@fastxyz/allset-sdk';
+ * 
+ * // Create wallets
+ * const fastProvider = new FastProvider({ network: 'testnet' });
+ * const fastWallet = await FastWallet.fromKeyfile('~/.fast/keys/default.json', fastProvider);
+ * const evmWallet = createEvmWallet('~/.allset/.evm/keys/default.json');
+ * 
+ * // EVM payment
  * const result = await x402Pay({
  *   url: 'https://api.example.com/data',
- *   wallet: {
- *     type: 'evm',
- *     privateKey: '0x...',
- *     address: '0x...',
- *   },
+ *   wallet: evmWallet,
  * });
  * 
- * // Fast wallet
+ * // Fast payment  
  * const result = await x402Pay({
  *   url: 'https://api.example.com/data',
- *   wallet: {
- *     type: 'fast',
- *     privateKey: '...',
- *     address: 'fast1...',
- *   },
+ *   wallet: fastWallet,
  * });
  * 
  * // Both wallets (enables auto-bridge for EVM payments)
@@ -209,8 +212,8 @@ export async function x402Pay(params: X402PayParams): Promise<X402PayResult> {
 
   // No matching wallet
   const supportedNetworks = [];
-  if (fastReq) supportedNetworks.push(`Fast (${fastReq.network}) - needs FastWallet`);
-  if (evmReq) supportedNetworks.push(`EVM (${evmReq.network}) - needs EvmWallet`);
+  if (fastReq) supportedNetworks.push(`Fast (${fastReq.network}) - needs FastWallet from @fastxyz/sdk`);
+  if (evmReq) supportedNetworks.push(`EVM (${evmReq.network}) - needs EvmWallet from @fastxyz/allset-sdk`);
 
   throw new Error(
     `No matching wallet for available networks.\n` +

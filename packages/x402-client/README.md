@@ -1,6 +1,6 @@
 # x402-client
 
-Client SDK for the [x402 HTTP payment protocol](https://github.com/Pi-Squared-Inc/x402-sdk).
+Client SDK for the [x402 HTTP payment protocol](https://github.com/fastxyz/x402-sdk).
 
 Pay for 402-protected content with Fast or EVM wallets.
 
@@ -17,22 +17,31 @@ Pay for 402-protected content with Fast or EVM wallets.
 ## Install
 
 ```bash
-npm install @fastxyz/x402-client
+npm install @fastxyz/x402-client @fastxyz/sdk @fastxyz/allset-sdk
 ```
 
 ## Quick Start
 
 ```typescript
 import { x402Pay } from '@fastxyz/x402-client';
+import { FastWallet, FastProvider } from '@fastxyz/sdk';
+import { createEvmWallet } from '@fastxyz/allset-sdk';
 
-// Pay with EVM wallet (Arbitrum, Base)
+// Create wallets using SDKs
+const fastProvider = new FastProvider({ network: 'testnet' });
+const fastWallet = await FastWallet.fromKeyfile('~/.fast/keys/default.json', fastProvider);
+const evmWallet = createEvmWallet('~/.allset/.evm/keys/default.json');
+
+// EVM payment
 const result = await x402Pay({
   url: 'https://api.example.com/premium-data',
-  wallet: {
-    type: 'evm',
-    privateKey: '0x...',
-    address: '0x...',
-  },
+  wallet: evmWallet,
+});
+
+// Fast payment
+const result = await x402Pay({
+  url: 'https://api.example.com/fast-data',
+  wallet: fastWallet,
 });
 
 if (result.success) {
@@ -80,24 +89,40 @@ interface X402PayResult {
 }
 ```
 
-### Wallet Types
+## Wallet Types
+
+Wallets must be created using the respective SDKs:
+
+### FastWallet (from @fastxyz/sdk)
 
 ```typescript
-// EVM wallet (for Arbitrum, Base, etc.)
-interface EvmWallet {
-  type: 'evm';
-  privateKey: `0x${string}`;
-  address: `0x${string}`;
-}
+import { FastWallet, FastProvider } from '@fastxyz/sdk';
 
-// Fast wallet
-interface FastWallet {
-  type: 'fast';
-  privateKey: string;   // Hex-encoded Ed25519 key
-  publicKey: string;    // Hex-encoded public key
-  address: string;      // bech32m address (fast1...)
-  rpcUrl?: string;      // Optional custom RPC
-}
+const provider = new FastProvider({ network: 'testnet' });
+
+// From keyfile
+const wallet = await FastWallet.fromKeyfile('~/.fast/keys/default.json', provider);
+
+// From private key
+const wallet = await FastWallet.fromPrivateKey('your-hex-private-key', provider);
+
+// Generate new wallet
+const wallet = await FastWallet.create(provider);
+```
+
+### EvmWallet (from @fastxyz/allset-sdk)
+
+```typescript
+import { createEvmWallet } from '@fastxyz/allset-sdk';
+
+// From keyfile
+const wallet = createEvmWallet('~/.allset/.evm/keys/default.json');
+
+// From private key
+const wallet = createEvmWallet('0x...');
+
+// Generate new wallet
+const wallet = createEvmWallet();
 ```
 
 ## How It Works
@@ -107,21 +132,19 @@ interface FastWallet {
 3. **Payment**: Client creates and signs payment based on server requirements:
 
    **Case A: Fast Payment**
-   - Client sends a `TokenTransfer` transaction directly to the server's Fast account
+   - Client sends a `TokenTransfer` transaction to the server's Fast account
    - Transaction is submitted on-chain and a certificate is returned
    - Client includes the transaction certificate in the `X-PAYMENT` header
 
-   **Case B: EVM Payment (Arbitrum, Base, etc.)**
+   **Case B: EVM Payment (Arbitrum, Ethereum)**
    - Client checks if their EVM wallet has sufficient USDC balance
-   - **If sufficient**: Client signs an EIP-3009 `transferWithAuthorization` and sends it as the `X-PAYMENT` header
-   - **If insufficient**: Client automatically bridges fastUSDC from their Fast account to their EVM account via AllSet, then signs the EIP-3009 authorization
+   - **If sufficient**: Client signs an EIP-3009 `transferWithAuthorization`
+   - **If insufficient**: Client auto-bridges fastUSDC → USDC via AllSet, then signs
 
 4. **Retry**: Client retries the original request with the `X-PAYMENT` header
 5. **Content**: Server verifies payment (via facilitator) and returns the protected content
 
-## Examples
-
-### Multiple Wallets (with Auto-Bridge)
+## Auto-Bridge
 
 When you provide both Fast and EVM wallets, the SDK enables **auto-bridge**: if an EVM payment is required but your EVM wallet lacks sufficient USDC, the SDK will automatically bridge fastUSDC from your Fast account via AllSet.
 
@@ -129,10 +152,7 @@ When you provide both Fast and EVM wallets, the SDK enables **auto-bridge**: if 
 // Provide both wallets for auto-bridge support
 const result = await x402Pay({
   url: 'https://api.example.com/data',
-  wallet: [
-    { type: 'fast', privateKey: '...', publicKey: '...', address: 'fast1...' },
-    { type: 'evm', privateKey: '0x...', address: '0x...' },
-  ],
+  wallet: [evmWallet, fastWallet],
 });
 
 // Check if bridging occurred
@@ -141,7 +161,7 @@ if (result.payment?.bridged) {
 }
 ```
 
-### Verbose Logging
+## Verbose Logging
 
 ```typescript
 const result = await x402Pay({
@@ -154,7 +174,7 @@ const result = await x402Pay({
 result.logs?.forEach(log => console.log(log));
 ```
 
-### Manual Payment Flow
+## Manual Payment Flow
 
 ```typescript
 import { parse402Response, buildPaymentHeader } from '@fastxyz/x402-client';
@@ -178,7 +198,7 @@ if (res.status === 402) {
 
 ## Documentation
 
-For detailed technical specifications, wallet configuration, and advanced usage, see [skills/client-skill.md](../../skills/client-skill.md).
+For detailed technical specifications and advanced usage, see [skills/client-skill.md](../../skills/client-skill.md).
 
 ## License
 

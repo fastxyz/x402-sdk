@@ -2,13 +2,11 @@
  * AllSet bridge integration for x402-client
  *
  * Uses @fastxyz/allset-sdk for bridging fastUSDC/testUSDC from Fast to USDC on EVM chains.
- * Accepts both FastWallet class instances and simple config objects.
  */
 
-import { FastProvider, FastWallet as FastWalletClass } from '@fastxyz/sdk';
+import { FastProvider } from '@fastxyz/sdk';
+import type { FastWallet } from '@fastxyz/sdk';
 import { AllSetProvider } from '@fastxyz/allset-sdk';
-import type { FastWallet, FastWalletConfig } from './types.js';
-import { isFastWalletClass } from './types.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -100,32 +98,14 @@ export function getBridgeConfig(network: string): BridgeConfig | null {
 /**
  * Get Fast balance for fastUSDC/testUSDC
  *
- * @param wallet - FastWallet class or simple config
+ * @param wallet - FastWallet from @fastxyz/sdk
  * @returns Balance in raw units (6 decimals)
  */
-export async function getFastBalance(wallet: FastWallet): Promise<bigint> {
-  let address: string;
-  let rpcUrl: string | undefined;
+export async function getFastBalance(wallet: FastWallet, network: 'testnet' | 'mainnet' = 'testnet'): Promise<bigint> {
+  const token = network === 'mainnet' ? 'fastUSDC' : 'testUSDC';
 
-  if (isFastWalletClass(wallet)) {
-    address = wallet.address;
-    // FastWallet class doesn't expose rpcUrl directly, use default
-    rpcUrl = undefined;
-  } else {
-    const config = wallet as FastWalletConfig;
-    address = config.address;
-    rpcUrl = config.rpcUrl;
-  }
-
-  const sdkNetwork = rpcUrl?.includes('mainnet') ? 'mainnet' : 'testnet';
-  const token = sdkNetwork === 'mainnet' ? 'fastUSDC' : 'testUSDC';
-
-  const provider = new FastProvider({
-    network: sdkNetwork,
-    rpcUrl,
-  });
-
-  const balance = await provider.getBalance(address, token);
+  const provider = new FastProvider({ network });
+  const balance = await provider.getBalance(wallet.address, token);
 
   // Convert human-readable balance to raw units (6 decimals)
   const parts = balance.amount.split('.');
@@ -139,7 +119,7 @@ export async function getFastBalance(wallet: FastWallet): Promise<bigint> {
 /**
  * Bridge fastUSDC/testUSDC from Fast to USDC on EVM chain
  *
- * @param params - Bridge parameters (accepts FastWallet class or config)
+ * @param params - Bridge parameters
  * @returns Bridge result
  */
 export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
@@ -156,26 +136,9 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
   const sdkNetwork = mapToSdkNetwork(network);
   const token = getBridgeToken(network);
 
-  // Resolve wallet
-  let sdkFastWallet: FastWalletClass;
-  let walletAddress: string;
-
-  if (isFastWalletClass(fastWallet)) {
-    sdkFastWallet = fastWallet;
-    walletAddress = fastWallet.address;
-  } else {
-    const config = fastWallet as FastWalletConfig;
-    const fastProvider = new FastProvider({
-      network: sdkNetwork,
-      rpcUrl: config.rpcUrl,
-    });
-    sdkFastWallet = await FastWalletClass.fromPrivateKey(config.privateKey, fastProvider);
-    walletAddress = config.address;
-  }
-
   log(`━━━ AllSet Bridge START ━━━`);
   log(`  Amount: ${Number(amount) / 1e6} ${token}`);
-  log(`  From: ${walletAddress}`);
+  log(`  From: ${fastWallet.address}`);
   log(`  To: ${evmReceiverAddress} on ${network}`);
   log(`  Using @fastxyz/allset-sdk`);
 
@@ -190,9 +153,9 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
       chain,
       token,
       amount: amount.toString(),
-      from: sdkFastWallet.address,
+      from: fastWallet.address,
       to: evmReceiverAddress,
-      fastWallet: sdkFastWallet,
+      fastWallet,
     });
 
     const duration = Date.now() - startTime;

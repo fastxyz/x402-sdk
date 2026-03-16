@@ -34,99 +34,51 @@ export interface PaymentRequired {
 // ─── Wallet Types ─────────────────────────────────────────────────────────────
 
 /**
- * Simple Fast wallet configuration (legacy format)
+ * Fast wallet from @fastxyz/sdk
+ */
+export type FastWallet = FastWalletClass;
+
+/**
+ * EVM wallet from @fastxyz/allset-sdk
  * 
- * Use this when you have raw keys and don't want to create a FastWallet instance.
+ * Create with: `createEvmWallet()` from @fastxyz/allset-sdk
  */
-export interface FastWalletConfig {
-  type: 'fast';
-  privateKey: string;  // Hex-encoded Ed25519 private key (no 0x prefix)
-  address: string;     // bech32m address (fast1...)
-  rpcUrl?: string;     // Fast RPC endpoint (optional, uses default)
-}
+export type EvmWallet = AllSetEvmWallet;
 
 /**
- * Simple EVM wallet configuration (legacy format)
- * 
- * Use this when you have raw keys and don't want to use allset-sdk's wallet.
- */
-export interface EvmWalletConfig {
-  type: 'evm';
-  privateKey: `0x${string}`;  // Hex-encoded secp256k1 private key
-  address: `0x${string}`;     // Ethereum address
-}
-
-/**
- * Fast wallet - accepts either:
- * - FastWallet class from @fastxyz/sdk (recommended)
- * - Simple config object with type: 'fast' (legacy)
- */
-export type FastWallet = FastWalletClass | FastWalletConfig;
-
-/**
- * EVM wallet - accepts either:
- * - EvmWallet from @fastxyz/allset-sdk
- * - Simple config object with type: 'evm' (legacy)
- */
-export type EvmWallet = AllSetEvmWallet | EvmWalletConfig;
-
-/**
- * Combined wallet type - any supported wallet format
+ * Combined wallet type
  */
 export type Wallet = FastWallet | EvmWallet;
 
 // ─── Type Guards ──────────────────────────────────────────────────────────────
 
 /**
- * Check if wallet is a FastWallet class instance from @fastxyz/sdk
+ * Check if wallet is a FastWallet from @fastxyz/sdk
  */
-export function isFastWalletClass(wallet: unknown): wallet is FastWalletClass {
+export function isFastWallet(wallet: unknown): wallet is FastWallet {
   return (
     wallet !== null &&
     typeof wallet === 'object' &&
     'submit' in wallet &&
-    typeof (wallet as FastWalletClass).submit === 'function'
+    typeof (wallet as FastWallet).submit === 'function'
   );
 }
 
 /**
- * Check if wallet is a simple Fast wallet config
- */
-export function isFastWalletConfig(wallet: unknown): wallet is FastWalletConfig {
-  if (wallet === null || typeof wallet !== 'object') return false;
-  const w = wallet as Record<string, unknown>;
-  return w.type === 'fast' && typeof w.privateKey === 'string';
-}
-
-/**
- * Check if wallet is any type of Fast wallet
- */
-export function isFastWallet(wallet: unknown): wallet is FastWallet {
-  return isFastWalletClass(wallet) || isFastWalletConfig(wallet);
-}
-
-/**
- * Check if wallet is an EVM wallet (either format)
+ * Check if wallet is an EvmWallet from @fastxyz/allset-sdk
  */
 export function isEvmWallet(wallet: unknown): wallet is EvmWallet {
   if (wallet === null || typeof wallet !== 'object') return false;
   const w = wallet as Record<string, unknown>;
   
-  // Check for legacy config format
-  if (w.type === 'evm') return true;
-  
-  // Check for allset-sdk format (has privateKey starting with 0x, no type field)
-  if (
+  // EvmWallet has privateKey (0x...) and address (0x...), no 'submit' method
+  return (
     typeof w.privateKey === 'string' &&
     w.privateKey.startsWith('0x') &&
     typeof w.address === 'string' &&
     w.address.startsWith('0x') &&
-    !('type' in w)
-  ) {
-    return true;
-  }
-  
-  return false;
+    !('submit' in w)
+  );
 }
 
 // ─── API Types ────────────────────────────────────────────────────────────────
