@@ -9,7 +9,7 @@ x402 is a payment protocol built on HTTP status code `402 Payment Required`. It 
 - **Pay-per-request APIs**: Charge for individual API calls
 - **No accounts needed**: Just sign and pay
 - **Instant settlement**: Sub-second on Fast, ~15s on EVM
-- **Multi-chain**: Fast, Arbitrum, Base, and more
+- **Multi-chain**: Fast, Arbitrum, Ethereum, and more
 
 ## Packages
 
@@ -152,7 +152,7 @@ const result = await x402Pay({
 
 ## Payment Flows
 
-### EVM (Arbitrum, Base, Ethereum)
+### EVM (Arbitrum, Ethereum)
 
 Uses **EIP-3009 `transferWithAuthorization`** - client signs, facilitator settles.
 
@@ -274,8 +274,7 @@ app.use(paymentMiddleware(
 | `fast-mainnet` | Fast | - | fastUSDC | ~300ms |
 | `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
 | `arbitrum` | EVM | 42161 | USDC | ~15s |
-| `base-sepolia` | EVM | 84532 | USDC | ~15s |
-| `base` | EVM | 8453 | USDC | ~15s |
+| `ethereum-sepolia` | EVM | 11155111 | USDC | ~15s |
 | `ethereum` | EVM | 1 | USDC | ~15s |
 
 ## Development
