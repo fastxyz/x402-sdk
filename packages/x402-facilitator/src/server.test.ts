@@ -2,6 +2,8 @@
  * Tests for facilitator server endpoints
  */
 
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
 import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
@@ -84,6 +86,76 @@ describe("GET /supported", () => {
     // Check for Fast networks
     expect(networks).toContain("fast-testnet");
     expect(networks).toContain("fast-mainnet");
+  });
+
+  it("keeps custom config isolated per route instance", async () => {
+    const configAPath = join("/tmp", `x402-fac-config-a-${process.pid}.json`);
+    const configBPath = join("/tmp", `x402-fac-config-b-${process.pid}.json`);
+
+    writeFileSync(configAPath, JSON.stringify({
+      evm: {
+        "arbitrum-sepolia": {
+          chainId: 421614,
+          rpcUrl: "https://a.example/rpc",
+          usdc: {
+            address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            name: "USD Coin A",
+            version: "2",
+            decimals: 6,
+          },
+        },
+      },
+      fast: {
+        "fast-testnet": {
+          rpcUrl: "https://fast-a.example/rpc",
+        },
+      },
+    }));
+
+    writeFileSync(configBPath, JSON.stringify({
+      evm: {
+        "arbitrum-sepolia": {
+          chainId: 421614,
+          rpcUrl: "https://b.example/rpc",
+          usdc: {
+            address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            name: "USD Coin B",
+            version: "2",
+            decimals: 6,
+          },
+        },
+      },
+      fast: {
+        "fast-testnet": {
+          rpcUrl: "https://fast-b.example/rpc",
+        },
+      },
+    }));
+
+    try {
+      const routesA = createFacilitatorRoutes({ configPath: configAPath });
+      const routesB = createFacilitatorRoutes({ configPath: configBPath });
+      const supportedRouteA = routesA.find(r => r.path === "/supported");
+      const supportedRouteB = routesB.find(r => r.path === "/supported");
+
+      const req = createMockRequest("get", "/supported");
+      const resA = createMockResponse();
+      const resB = createMockResponse();
+
+      await supportedRouteA!.handler(req as any, resA as any);
+      await supportedRouteB!.handler(req as any, resB as any);
+
+      const paymentKindsA = (resA.getJson() as { paymentKinds: Array<{ network: string; extra?: { asset?: string } }> }).paymentKinds;
+      const paymentKindsB = (resB.getJson() as { paymentKinds: Array<{ network: string; extra?: { asset?: string } }> }).paymentKinds;
+
+      expect(paymentKindsA.find(kind => kind.network === "arbitrum-sepolia")?.extra?.asset)
+        .toBe("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+      expect(paymentKindsB.find(kind => kind.network === "arbitrum-sepolia")?.extra?.asset)
+        .toBe("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    } finally {
+      rmSync(configAPath, { force: true });
+      rmSync(configBPath, { force: true });
+    }
   });
 });
 

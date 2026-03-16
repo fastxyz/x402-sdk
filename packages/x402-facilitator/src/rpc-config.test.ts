@@ -40,6 +40,7 @@ vi.mock("viem", async () => {
 describe("RPC config overrides", () => {
   const configPath = join("/tmp", `x402-facilitator-rpc-config-${process.pid}.json`);
   const customRpcUrl = "https://custom-rpc.example.com";
+  const customChainId = 42161;
   const requirement: PaymentRequirement = {
     scheme: "exact",
     network: "arbitrum-sepolia",
@@ -75,7 +76,7 @@ describe("RPC config overrides", () => {
     writeFileSync(configPath, JSON.stringify({
       evm: {
         "arbitrum-sepolia": {
-          chainId: 421614,
+          chainId: customChainId,
           rpcUrl: customRpcUrl,
           usdc: {
             address: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
@@ -121,6 +122,10 @@ describe("RPC config overrides", () => {
 
     const [clientConfig] = vi.mocked(viem.createPublicClient).mock.calls[0];
     expect(clientConfig.transport).toEqual({ url: customRpcUrl });
+    expect(clientConfig.chain?.id).toBe(customChainId);
+
+    const [verifyArgs] = viemMocks.publicClient.verifyTypedData.mock.calls[0];
+    expect(verifyArgs.domain.chainId).toBe(customChainId);
   });
 
   it("uses the configured rpcUrl during settlement", async () => {

@@ -21,8 +21,8 @@ import type {
   FacilitatorConfig,
 } from "./types.js";
 import { getNetworkType } from "./types.js";
-import { getEvmChainConfig } from "./chains.js";
-import { verify } from "./verify.js";
+import { type ChainMaps, getEvmChainConfig, getEvmChainConfigFromMaps } from "./chains.js";
+import { verify, verifyWithChainMaps } from "./verify.js";
 
 /**
  * USDC ABI for transferWithAuthorization
@@ -40,11 +40,29 @@ export async function settle(
   paymentRequirement: PaymentRequirement,
   config: FacilitatorConfig
 ): Promise<SettleResponse> {
+  return settleInternal(paymentPayload, paymentRequirement, config);
+}
+
+export async function settleWithChainMaps(
+  paymentPayload: PaymentPayload,
+  paymentRequirement: PaymentRequirement,
+  config: FacilitatorConfig,
+  chainMaps: ChainMaps
+): Promise<SettleResponse> {
+  return settleInternal(paymentPayload, paymentRequirement, config, chainMaps);
+}
+
+async function settleInternal(
+  paymentPayload: PaymentPayload,
+  paymentRequirement: PaymentRequirement,
+  config: FacilitatorConfig,
+  chainMaps?: ChainMaps
+): Promise<SettleResponse> {
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {
     case "evm":
-      return settleEvmPayment(paymentPayload, paymentRequirement, config);
+      return settleEvmPayment(paymentPayload, paymentRequirement, config, chainMaps);
     case "fast":
       return settleFastPayment(paymentPayload, paymentRequirement);
     default:
@@ -62,7 +80,8 @@ export async function settle(
 async function settleEvmPayment(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement,
-  config: FacilitatorConfig
+  config: FacilitatorConfig,
+  chainMaps?: ChainMaps
 ): Promise<SettleResponse> {
   if (!config.evmPrivateKey) {
     return {
@@ -72,7 +91,9 @@ async function settleEvmPayment(
     };
   }
 
-  const chainConfig = getEvmChainConfig(paymentPayload.network);
+  const chainConfig = chainMaps
+    ? getEvmChainConfigFromMaps(chainMaps, paymentPayload.network)
+    : getEvmChainConfig(paymentPayload.network);
   if (!chainConfig) {
     return {
       success: false,
@@ -93,7 +114,9 @@ async function settleEvmPayment(
   const { authorization, signature } = payload;
 
   // Re-verify before settling (reference implementation does this)
-  const verifyResult = await verify(paymentPayload, paymentRequirement);
+  const verifyResult = chainMaps
+    ? await verifyWithChainMaps(paymentPayload, paymentRequirement, chainMaps)
+    : await verify(paymentPayload, paymentRequirement);
   if (!verifyResult.isValid) {
     return {
       success: false,

@@ -48,6 +48,11 @@ interface ChainJsonConfig {
   fast: Record<string, FastChainJsonConfig>;
 }
 
+export interface ChainMaps {
+  evmChains: Record<string, EvmChainConfig>;
+  fastRpcUrls: Record<string, string>;
+}
+
 // ---------------------------------------------------------------------------
 // Map chainId to viem chain objects
 // ---------------------------------------------------------------------------
@@ -98,7 +103,7 @@ function loadJsonConfig(path: string): ChainJsonConfig | null {
 /**
  * Load and merge chain configs with priority
  */
-function loadChainConfig(): ChainJsonConfig {
+function loadChainConfig(configPath?: string): ChainJsonConfig {
   // Start with bundled defaults
   const bundled: ChainJsonConfig = require("../data/chains.json");
   let result = { ...bundled };
@@ -114,8 +119,8 @@ function loadChainConfig(): ChainJsonConfig {
   }
 
   // Check for custom config path (highest priority)
-  if (customConfigPath) {
-    const customConfig = loadJsonConfig(customConfigPath);
+  if (configPath) {
+    const customConfig = loadJsonConfig(configPath);
     if (customConfig) {
       result = {
         evm: { ...result.evm, ...customConfig.evm },
@@ -130,10 +135,9 @@ function loadChainConfig(): ChainJsonConfig {
 /**
  * Build chain maps from config
  */
-function buildChainMaps(config: ChainJsonConfig): void {
-  // Clear existing
-  for (const key of Object.keys(EVM_CHAINS)) delete EVM_CHAINS[key];
-  for (const key of Object.keys(FAST_RPC_URLS)) delete FAST_RPC_URLS[key];
+function buildChainMaps(config: ChainJsonConfig): ChainMaps {
+  const evmChains: Record<string, EvmChainConfig> = {};
+  const fastRpcUrls: Record<string, string> = {};
 
   // Build EVM chains
   for (const [network, chainConfig] of Object.entries(config.evm)) {
@@ -143,7 +147,7 @@ function buildChainMaps(config: ChainJsonConfig): void {
       continue;
     }
 
-    EVM_CHAINS[network] = {
+    evmChains[network] = {
       chain: viemChain,
       rpcUrl: chainConfig.rpcUrl,
       usdcAddress: chainConfig.usdc.address as `0x${string}`,
@@ -154,8 +158,22 @@ function buildChainMaps(config: ChainJsonConfig): void {
 
   // Build Fast RPC URLs
   for (const [network, fastConfig] of Object.entries(config.fast)) {
-    FAST_RPC_URLS[network] = fastConfig.rpcUrl;
+    fastRpcUrls[network] = fastConfig.rpcUrl;
   }
+
+  return { evmChains, fastRpcUrls };
+}
+
+function applyChainMaps(chainMaps: ChainMaps): void {
+  for (const key of Object.keys(EVM_CHAINS)) delete EVM_CHAINS[key];
+  for (const key of Object.keys(FAST_RPC_URLS)) delete FAST_RPC_URLS[key];
+
+  Object.assign(EVM_CHAINS, chainMaps.evmChains);
+  Object.assign(FAST_RPC_URLS, chainMaps.fastRpcUrls);
+}
+
+export function loadChainMaps(configPath?: string): ChainMaps {
+  return buildChainMaps(loadChainConfig(configPath));
 }
 
 /**
@@ -163,8 +181,7 @@ function buildChainMaps(config: ChainJsonConfig): void {
  */
 export function initChainConfig(configPath?: string): void {
   customConfigPath = configPath;
-  const config = loadChainConfig();
-  buildChainMaps(config);
+  applyChainMaps(loadChainMaps(configPath));
   configInitialized = true;
 }
 
@@ -189,12 +206,20 @@ export function getEvmChainConfig(network: string): EvmChainConfig | null {
   return EVM_CHAINS[network] || null;
 }
 
+export function getEvmChainConfigFromMaps(chainMaps: ChainMaps, network: string): EvmChainConfig | null {
+  return chainMaps.evmChains[network] || null;
+}
+
 /**
  * Get Fast RPC URL
  */
 export function getFastRpcUrl(network: string): string {
   ensureInit();
   return FAST_RPC_URLS[network] || FAST_RPC_URLS["fast-testnet"];
+}
+
+export function getFastRpcUrlFromMaps(chainMaps: ChainMaps, network: string): string {
+  return chainMaps.fastRpcUrls[network] || chainMaps.fastRpcUrls["fast-testnet"];
 }
 
 /**
@@ -205,12 +230,20 @@ export function getSupportedEvmNetworks(): string[] {
   return Object.keys(EVM_CHAINS);
 }
 
+export function getSupportedEvmNetworksFromMaps(chainMaps: ChainMaps): string[] {
+  return Object.keys(chainMaps.evmChains);
+}
+
 /**
  * List of supported Fast networks
  */
 export function getSupportedFastNetworks(): string[] {
   ensureInit();
   return Object.keys(FAST_RPC_URLS);
+}
+
+export function getSupportedFastNetworksFromMaps(chainMaps: ChainMaps): string[] {
+  return Object.keys(chainMaps.fastRpcUrls);
 }
 
 // Legacy exports (for backwards compatibility)

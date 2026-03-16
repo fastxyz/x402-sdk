@@ -17,8 +17,8 @@ import type {
   EvmPayload,
   FastPayload,
 } from "./types.js";
-import { getNetworkType, getNetworkId } from "./types.js";
-import { getEvmChainConfig } from "./chains.js";
+import { getNetworkType } from "./types.js";
+import { type ChainMaps, getEvmChainConfig, getEvmChainConfigFromMaps } from "./chains.js";
 import { decodeEnvelope, getTransferDetails, bytesToHex } from "./fast-bcs.js";
 
 /**
@@ -49,11 +49,27 @@ export async function verify(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement
 ): Promise<VerifyResponse> {
+  return verifyInternal(paymentPayload, paymentRequirement);
+}
+
+export async function verifyWithChainMaps(
+  paymentPayload: PaymentPayload,
+  paymentRequirement: PaymentRequirement,
+  chainMaps: ChainMaps
+): Promise<VerifyResponse> {
+  return verifyInternal(paymentPayload, paymentRequirement, chainMaps);
+}
+
+async function verifyInternal(
+  paymentPayload: PaymentPayload,
+  paymentRequirement: PaymentRequirement,
+  chainMaps?: ChainMaps
+): Promise<VerifyResponse> {
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {
     case "evm":
-      return verifyEvmPayment(paymentPayload, paymentRequirement);
+      return verifyEvmPayment(paymentPayload, paymentRequirement, chainMaps);
     case "fast":
       return verifyFastPayment(paymentPayload, paymentRequirement);
     default:
@@ -71,9 +87,12 @@ export async function verify(
  */
 async function verifyEvmPayment(
   paymentPayload: PaymentPayload,
-  paymentRequirement: PaymentRequirement
+  paymentRequirement: PaymentRequirement,
+  chainMaps?: ChainMaps
 ): Promise<VerifyResponse> {
-  const chainConfig = getEvmChainConfig(paymentPayload.network);
+  const chainConfig = chainMaps
+    ? getEvmChainConfigFromMaps(chainMaps, paymentPayload.network)
+    : getEvmChainConfig(paymentPayload.network);
   if (!chainConfig) {
     return {
       isValid: false,
@@ -124,7 +143,7 @@ async function verifyEvmPayment(
   }
 
   // Get domain parameters
-  const chainId = getNetworkId(paymentPayload.network);
+  const chainId = chainConfig.chain.id;
   const name = paymentRequirement.extra?.name ?? chainConfig.usdcName ?? "USD Coin";
   const version = paymentRequirement.extra?.version ?? chainConfig.usdcVersion ?? "2";
   const erc20Address = paymentRequirement.asset as Address;
