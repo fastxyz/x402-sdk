@@ -4,6 +4,16 @@ Client SDK for the [x402 HTTP payment protocol](https://github.com/Pi-Squared-In
 
 Pay for 402-protected content with Fast or EVM wallets.
 
+## Dependencies
+
+```json
+{
+  "@fastxyz/sdk": "^0.1.5",
+  "@fastxyz/allset-sdk": "^0.1.2",
+  "viem": "^2.46.2"
+}
+```
+
 ## Install
 
 ```bash
@@ -165,6 +175,10 @@ if (res.status === 402) {
   });
 }
 ```
+
+## Documentation
+
+For detailed technical specifications, wallet configuration, and advanced usage, see [skills/client-skill.md](../../skills/client-skill.md).
 
 ## License
 
