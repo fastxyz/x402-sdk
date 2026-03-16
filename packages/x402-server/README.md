@@ -147,7 +147,6 @@ interface FacilitatorConfig {
 | `arbitrum-sepolia` | 421614 |
 | `arbitrum` | 42161 |
 | `ethereum-sepolia` | 11155111 |
-| `base` | 8453 |
 | `ethereum` | 1 |
 
 ## Response Headers
@@ -223,7 +222,11 @@ This package requires a facilitator service to verify and settle payments.
 }
 ```
 
-Use `x402-facilitator` to run your own facilitator service.
+Use `@fastxyz/x402-facilitator` to run your own facilitator service, or connect to an existing facilitator endpoint.
+
+## Documentation
+
+For detailed technical specifications, API reference, and advanced usage, see [skills/server-skill.md](../../skills/server-skill.md).
 
 ## License
 
