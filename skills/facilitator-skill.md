@@ -130,6 +130,61 @@ Create `~/.x402/chains.json`:
 
 The facilitator maps `chainId` to viem chain objects internally, so JSON configs only contain serializable data.
 
+## Framework Compatibility
+
+The middleware is designed for Express but works with any framework that supports Express-style middleware.
+
+### Express (Native)
+
+```typescript
+import express from 'express';
+const app = express();
+app.use(createFacilitatorServer(...));
+```
+
+### Fastify (with middie)
+
+```typescript
+import Fastify from 'fastify';
+import middie from '@fastify/middie';
+
+const app = Fastify();
+await app.register(middie);
+app.use(createFacilitatorServer(...));
+```
+
+### Koa (with koa-connect)
+
+```typescript
+import Koa from 'koa';
+import connect from 'koa-connect';
+
+const app = new Koa();
+app.use(connect(createFacilitatorServer(...)));
+```
+
+### Other Frameworks
+
+For frameworks with different APIs (Hono, Elysia, etc.), use the library functions directly instead of the middleware:
+
+```typescript
+import { verify, settle } from '@fastxyz/x402-facilitator';
+
+// In your route handler:
+// POST /verify → call verify(paymentPayload, paymentRequirement)
+// POST /settle → call settle(paymentPayload, paymentRequirement, config)
+```
+
+### Middleware Requirements
+
+The middleware expects Express-style request/response objects:
+
+| Object | Required Properties |
+|--------|---------------------|
+| `req` | `method`, `path`, `headers`, `body` |
+| `res` | `status()`, `json()` |
+| `next` | Function to call next middleware |
+
 ## API Endpoints
 
 ### POST /verify

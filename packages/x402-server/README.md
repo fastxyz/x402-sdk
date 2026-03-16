@@ -224,6 +224,36 @@ This package requires a facilitator service to verify and settle payments.
 
 Use `@fastxyz/x402-facilitator` to run your own facilitator service, or connect to an existing facilitator endpoint.
 
+## Framework Compatibility
+
+The middleware is designed for Express but works with any framework that supports Express-style middleware:
+
+```typescript
+// Express (native)
+import express from 'express';
+const app = express();
+app.use(paymentMiddleware(...));
+
+// Fastify (with middie)
+import Fastify from 'fastify';
+import middie from '@fastify/middie';
+const app = Fastify();
+await app.register(middie);
+app.use(paymentMiddleware(...));
+
+// Koa (with koa-connect)
+import Koa from 'koa';
+import connect from 'koa-connect';
+const app = new Koa();
+app.use(connect(paymentMiddleware(...)));
+```
+
+For frameworks with different APIs (Hono, Elysia), use the library functions directly:
+
+```typescript
+import { createPaymentRequired, verifyPayment, settlePayment } from '@fastxyz/x402-server';
+```
+
 ## Documentation
 
 For detailed technical specifications, API reference, and advanced usage, see [skills/server-skill.md](../../skills/server-skill.md).

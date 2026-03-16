@@ -113,6 +113,66 @@ import { initNetworkConfig } from '@fastxyz/x402-server';
 initNetworkConfig('./my-networks.json');
 ```
 
+## Framework Compatibility
+
+The middleware is designed for Express but works with any framework that supports Express-style middleware.
+
+### Express (Native)
+
+```typescript
+import express from 'express';
+const app = express();
+app.use(paymentMiddleware(...));
+```
+
+### Fastify (with middie)
+
+```typescript
+import Fastify from 'fastify';
+import middie from '@fastify/middie';
+
+const app = Fastify();
+await app.register(middie);
+app.use(paymentMiddleware(...));
+```
+
+### Koa (with koa-connect)
+
+```typescript
+import Koa from 'koa';
+import connect from 'koa-connect';
+
+const app = new Koa();
+app.use(connect(paymentMiddleware(...)));
+```
+
+### Other Frameworks
+
+For frameworks with different APIs (Hono, Elysia, etc.), use the library functions directly instead of the middleware:
+
+```typescript
+import { 
+  createPaymentRequired, 
+  verifyPayment, 
+  settlePayment 
+} from '@fastxyz/x402-server';
+
+// In your route handler:
+// 1. Check for X-PAYMENT header
+// 2. If missing, return createPaymentRequired(...)
+// 3. If present, call verifyPayment() then settlePayment()
+```
+
+### Middleware Requirements
+
+The middleware expects Express-style request/response objects:
+
+| Object | Required Properties |
+|--------|---------------------|
+| `req` | `method`, `path`, `headers`, `body` |
+| `res` | `status()`, `json()`, `setHeader()` |
+| `next` | Function to call next middleware |
+
 ## Middleware Configuration
 
 ### Single Payment Address

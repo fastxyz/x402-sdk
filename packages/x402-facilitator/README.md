@@ -210,6 +210,36 @@ interface FacilitatorConfig {
 | `insufficient_amount` | Transfer amount too low |
 | `token_mismatch` | Token doesn't match asset |
 
+## Framework Compatibility
+
+The middleware is designed for Express but works with any framework that supports Express-style middleware:
+
+```typescript
+// Express (native)
+import express from 'express';
+const app = express();
+app.use(createFacilitatorServer(...));
+
+// Fastify (with middie)
+import Fastify from 'fastify';
+import middie from '@fastify/middie';
+const app = Fastify();
+await app.register(middie);
+app.use(createFacilitatorServer(...));
+
+// Koa (with koa-connect)
+import Koa from 'koa';
+import connect from 'koa-connect';
+const app = new Koa();
+app.use(connect(createFacilitatorServer(...)));
+```
+
+For frameworks with different APIs (Hono, Elysia), use the library functions directly:
+
+```typescript
+import { verify, settle } from '@fastxyz/x402-facilitator';
+```
+
 ## Documentation
 
 For detailed technical specifications, chain configuration, and advanced usage, see [skills/facilitator-skill.md](../../skills/facilitator-skill.md).
