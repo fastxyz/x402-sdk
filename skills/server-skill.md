@@ -49,6 +49,70 @@ app.listen(3000);
 - `packages/x402-server/src/payment.ts` - Payment verification helpers
 - `packages/x402-server/src/types.ts` - Route config types
 
+## Network Configuration
+
+Network configs (asset addresses, decimals) are loaded from JSON files with hierarchical override.
+
+### Config Loading Priority
+
+1. **Custom path** (via `initNetworkConfig(path)`) — highest priority
+2. **User config**: `~/.x402/networks.json` — local overrides
+3. **Bundled defaults**: `data/networks.json` — fallback
+
+### Config File Format
+
+```json
+{
+  "arbitrum-sepolia": {
+    "asset": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+    "decimals": 6,
+    "extra": {
+      "name": "USD Coin",
+      "version": "2"
+    }
+  },
+  "fast-testnet": {
+    "asset": "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
+    "decimals": 6
+  }
+}
+```
+
+### Customizing Your Network Config
+
+To override or add networks locally, create `~/.x402/networks.json`:
+
+```bash
+mkdir -p ~/.x402
+cat > ~/.x402/networks.json << 'EOF'
+{
+  "arbitrum-sepolia": {
+    "asset": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+    "decimals": 6,
+    "extra": {
+      "name": "USD Coin",
+      "version": "2"
+    }
+  },
+  "my-custom-network": {
+    "asset": "0xMyTokenAddress...",
+    "decimals": 18
+  }
+}
+EOF
+```
+
+Your local config merges with bundled defaults — only specify networks you want to override or add.
+
+### Programmatic Config
+
+```typescript
+import { initNetworkConfig } from '@fastxyz/x402-server';
+
+// Load custom config file before using middleware
+initNetworkConfig('./my-networks.json');
+```
+
 ## Middleware Configuration
 
 ### Single Payment Address
@@ -117,44 +181,6 @@ const facilitatorConfig = {
   url: 'http://localhost:4020',  // Facilitator base URL
   timeout?: 30000,               // Request timeout (ms)
 };
-```
-
-## Network Configuration
-
-Network configs (asset addresses, decimals) are loaded from JSON files with hierarchical override.
-
-### Config Loading Priority
-
-1. **Custom path** (via `initNetworkConfig(path)`) — highest priority
-2. **User config**: `~/.x402/networks.json` — local overrides
-3. **Bundled defaults**: `data/networks.json` — fallback
-
-### Config File Format
-
-```json
-{
-  "arbitrum-sepolia": {
-    "asset": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
-    "decimals": 6,
-    "extra": {
-      "name": "USD Coin",
-      "version": "2"
-    }
-  },
-  "fast-testnet": {
-    "asset": "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
-    "decimals": 6
-  }
-}
-```
-
-### Custom Config Example
-
-```typescript
-import { initNetworkConfig } from '@fastxyz/x402-server';
-
-// Load custom network config before using middleware
-initNetworkConfig('./my-networks.json');
 ```
 
 ## 402 Response Format
