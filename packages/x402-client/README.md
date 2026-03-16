@@ -8,7 +8,7 @@ Pay for 402-protected content with Fast or EVM wallets.
 
 ```json
 {
-  "@fastxyz/sdk": "^0.1.5",
+  "@fastxyz/sdk": "^0.1.6",
   "@fastxyz/allset-sdk": "^0.1.2",
   "viem": "^2.46.2"
 }

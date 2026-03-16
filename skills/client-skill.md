@@ -17,7 +17,7 @@ Pay for 402-protected content with crypto. Handles EVM (EIP-3009) and Fast payme
 
 ```json
 {
-  "@fastxyz/sdk": "^0.1.5",
+  "@fastxyz/sdk": "^0.1.6",
   "@fastxyz/allset-sdk": "^0.1.2",
   "viem": "^2.46.2"
 }
