@@ -143,6 +143,7 @@ export async function handleEvmPayment(
   const requiredAmount = BigInt(evmReq.maxAmountRequired);
   let bridged = false;
   let bridgeTxHash: string | undefined;
+  const fastTokenSymbol = networkConfig.network === 'mainnet' ? 'fastUSDC' : 'testUSDC';
 
   // ─── Auto-Bridge Logic ──────────────────────────────────────────────────────
   log(`[EVM] Checking USDC balance...`);
@@ -156,7 +157,7 @@ export async function handleEvmPayment(
     if (!fastWallet) {
       throw new Error(
         `Insufficient USDC balance: have ${Number(currentBalance) / 1e6}, need ${Number(requiredAmount) / 1e6}. ` +
-        `Provide a Fast wallet with fastUSDC to enable auto-bridge.`
+        `Provide a Fast wallet with ${fastTokenSymbol} to enable auto-bridge.`
       );
     }
 
@@ -168,22 +169,22 @@ export async function handleEvmPayment(
       );
     }
 
-    // Check Fast fastUSDC balance
-    log(`[EVM] Checking Fast fastUSDC balance...`);
-    const fastBalance = await getFastBalance(fastWallet);
-    log(`  Fast fastUSDC balance: ${Number(fastBalance) / 1e6}`);
+    // Check Fast bridge-token balance on the matching Fast network
+    log(`[EVM] Checking Fast ${fastTokenSymbol} balance...`);
+    const fastBalance = await getFastBalance(fastWallet, networkConfig.network);
+    log(`  Fast ${fastTokenSymbol} balance: ${Number(fastBalance) / 1e6}`);
 
     const shortfall = requiredAmount - currentBalance;
     if (fastBalance < shortfall) {
       throw new Error(
         `Insufficient balance for payment. ` +
-        `EVM USDC: ${Number(currentBalance) / 1e6}, Fast fastUSDC: ${Number(fastBalance) / 1e6}, ` +
+        `EVM USDC: ${Number(currentBalance) / 1e6}, Fast ${fastTokenSymbol}: ${Number(fastBalance) / 1e6}, ` +
         `Need: ${Number(requiredAmount) / 1e6}`
       );
     }
 
     // Bridge the shortfall amount
-    log(`[EVM] Auto-bridging ${Number(shortfall) / 1e6} fastUSDC → USDC via AllSet...`);
+    log(`[EVM] Auto-bridging ${Number(shortfall) / 1e6} ${fastTokenSymbol} → USDC via AllSet...`);
     const bridgeStartTime = Date.now();
     
     const bridgeResult = await bridgeFastusdcToUsdc({

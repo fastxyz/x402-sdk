@@ -51,17 +51,25 @@ function mapEvmNetworkToChain(network: string): string {
  * Map x402 network to SDK network type
  */
 function mapToSdkNetwork(network: string): 'testnet' | 'mainnet' {
-  if (network.includes('mainnet')) return 'mainnet';
-  return 'testnet';
+  switch (network) {
+    case 'arbitrum-sepolia':
+    case 'ethereum-sepolia':
+    case 'fast-testnet':
+      return 'testnet';
+    case 'arbitrum':
+    case 'ethereum':
+    case 'fast-mainnet':
+      return 'mainnet';
+    default:
+      return network.endsWith('-sepolia') ? 'testnet' : 'mainnet';
+  }
 }
 
 /**
  * Get token symbol for bridging based on network
  */
 function getBridgeToken(network: string): string {
-  // On testnet, use testUSDC; on mainnet, use fastUSDC
-  if (network.includes('mainnet')) return 'fastUSDC';
-  return 'testUSDC';
+  return mapToSdkNetwork(network) === 'mainnet' ? 'fastUSDC' : 'testUSDC';
 }
 
 // ─── Bridge Config ────────────────────────────────────────────────────────────

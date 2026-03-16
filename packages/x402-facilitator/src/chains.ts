@@ -145,6 +145,7 @@ function buildChainMaps(config: ChainJsonConfig): void {
 
     EVM_CHAINS[network] = {
       chain: viemChain,
+      rpcUrl: chainConfig.rpcUrl,
       usdcAddress: chainConfig.usdc.address as `0x${string}`,
       usdcName: chainConfig.usdc.name,
       usdcVersion: chainConfig.usdc.version,

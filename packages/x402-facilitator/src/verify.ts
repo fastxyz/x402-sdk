@@ -132,7 +132,7 @@ async function verifyEvmPayment(
   // Create public client for verification
   const client = createPublicClient({
     chain: chainConfig.chain,
-    transport: http(),
+    transport: http(chainConfig.rpcUrl),
   });
 
   // Verify signature using viem's verifyTypedData
