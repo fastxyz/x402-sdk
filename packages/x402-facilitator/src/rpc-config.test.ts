@@ -41,6 +41,7 @@ describe("RPC config overrides", () => {
   const configPath = join("/tmp", `x402-facilitator-rpc-config-${process.pid}.json`);
   const customRpcUrl = "https://custom-rpc.example.com";
   const customChainId = 42161;
+  const defaultChainId = 421614;
   const requirement: PaymentRequirement = {
     scheme: "exact",
     network: "arbitrum-sepolia",
@@ -138,5 +139,33 @@ describe("RPC config overrides", () => {
 
     const [walletConfig] = vi.mocked(viem.createWalletClient).mock.calls[0];
     expect(walletConfig.transport).toEqual({ url: customRpcUrl });
+  });
+
+  it("merges partial overrides for existing networks", async () => {
+    writeFileSync(configPath, JSON.stringify({
+      evm: {
+        "arbitrum-sepolia": {
+          rpcUrl: customRpcUrl,
+        },
+      },
+    }));
+
+    initChainConfig(configPath);
+    viemMocks.http.mockClear();
+    viemMocks.createPublicClient.mockReset();
+    viemMocks.publicClient.verifyTypedData.mockReset();
+    viemMocks.publicClient.readContract.mockReset();
+    viemMocks.createPublicClient.mockReturnValue(viemMocks.publicClient);
+    viemMocks.publicClient.verifyTypedData.mockResolvedValue(true);
+    viemMocks.publicClient.readContract.mockResolvedValue(100000n);
+
+    const result = await verify(createPayload(), requirement);
+
+    expect(result.isValid).toBe(true);
+    expect(viemMocks.http).toHaveBeenCalledWith(customRpcUrl);
+
+    const [clientConfig] = vi.mocked(viem.createPublicClient).mock.calls[0];
+    expect(clientConfig.transport).toEqual({ url: customRpcUrl });
+    expect(clientConfig.chain?.id).toBe(defaultChainId);
   });
 });

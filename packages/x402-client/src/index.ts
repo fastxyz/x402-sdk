@@ -55,7 +55,7 @@ import type {
 import { isFastWallet, isEvmWallet } from './types.js';
 
 import { handleFastPayment, FAST_NETWORKS } from './fast.js';
-import { handleEvmPayment, EVM_NETWORKS } from './evm.js';
+import { handleEvmPayment, EVM_NETWORKS, canHandleEvmPayment } from './evm.js';
 
 export { FAST_NETWORKS, EVM_NETWORKS };
 
@@ -184,7 +184,7 @@ export async function x402Pay(params: X402PayParams): Promise<X402PayResult> {
   log(`  Available networks: ${availableNetworks.join(', ')}`);
 
   const fastReq = paymentRequired.accepts.find(r => FAST_NETWORKS.includes(r.network));
-  const evmReq = paymentRequired.accepts.find(r => EVM_NETWORKS.includes(r.network));
+  const evmReq = paymentRequired.accepts.find(canHandleEvmPayment);
 
   log(`  Fast match: ${fastReq?.network ?? 'none'}`);
   log(`  EVM match: ${evmReq?.network ?? 'none'}`);

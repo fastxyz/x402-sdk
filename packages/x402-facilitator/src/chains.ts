@@ -43,9 +43,20 @@ interface FastChainJsonConfig {
   rpcUrl: string;
 }
 
+type PartialEvmChainJsonConfig = Partial<Omit<EvmChainJsonConfig, "usdc">> & {
+  usdc?: Partial<EvmChainJsonConfig["usdc"]>;
+};
+
+type PartialFastChainJsonConfig = Partial<FastChainJsonConfig>;
+
 interface ChainJsonConfig {
   evm: Record<string, EvmChainJsonConfig>;
   fast: Record<string, FastChainJsonConfig>;
+}
+
+interface PartialChainJsonConfig {
+  evm?: Record<string, PartialEvmChainJsonConfig>;
+  fast?: Record<string, PartialFastChainJsonConfig>;
 }
 
 export interface ChainMaps {
@@ -88,7 +99,7 @@ export function getX402Dir(): string {
 /**
  * Load JSON config from a file path
  */
-function loadJsonConfig(path: string): ChainJsonConfig | null {
+function loadJsonConfig(path: string): PartialChainJsonConfig | null {
   if (!existsSync(path)) {
     return null;
   }
@@ -98,6 +109,36 @@ function loadJsonConfig(path: string): ChainJsonConfig | null {
     console.warn(`Failed to load config from ${path}:`, err);
     return null;
   }
+}
+
+function mergeChainConfig(
+  base: ChainJsonConfig,
+  override: PartialChainJsonConfig
+): ChainJsonConfig {
+  const evm: Record<string, EvmChainJsonConfig> = { ...base.evm };
+  const fast: Record<string, FastChainJsonConfig> = { ...base.fast };
+
+  for (const [network, chainConfig] of Object.entries(override.evm ?? {})) {
+    const existing = evm[network];
+    evm[network] = {
+      chainId: chainConfig.chainId ?? existing?.chainId ?? 0,
+      rpcUrl: chainConfig.rpcUrl ?? existing?.rpcUrl ?? "",
+      usdc: {
+        address: chainConfig.usdc?.address ?? existing?.usdc.address ?? "",
+        name: chainConfig.usdc?.name ?? existing?.usdc.name ?? "",
+        version: chainConfig.usdc?.version ?? existing?.usdc.version ?? "",
+        decimals: chainConfig.usdc?.decimals ?? existing?.usdc.decimals ?? 0,
+      },
+    };
+  }
+
+  for (const [network, fastConfig] of Object.entries(override.fast ?? {})) {
+    fast[network] = {
+      rpcUrl: fastConfig.rpcUrl ?? fast[network]?.rpcUrl ?? "",
+    };
+  }
+
+  return { evm, fast };
 }
 
 /**
@@ -112,20 +153,14 @@ function loadChainConfig(configPath?: string): ChainJsonConfig {
   const userConfigPath = join(getX402Dir(), "chains.json");
   const userConfig = loadJsonConfig(userConfigPath);
   if (userConfig) {
-    result = {
-      evm: { ...result.evm, ...userConfig.evm },
-      fast: { ...result.fast, ...userConfig.fast },
-    };
+    result = mergeChainConfig(result, userConfig);
   }
 
   // Check for custom config path (highest priority)
   if (configPath) {
     const customConfig = loadJsonConfig(configPath);
     if (customConfig) {
-      result = {
-        evm: { ...result.evm, ...customConfig.evm },
-        fast: { ...result.fast, ...customConfig.fast },
-      };
+      result = mergeChainConfig(result, customConfig);
     }
   }
 
@@ -141,6 +176,17 @@ function buildChainMaps(config: ChainJsonConfig): ChainMaps {
 
   // Build EVM chains
   for (const [network, chainConfig] of Object.entries(config.evm)) {
+    if (
+      !chainConfig.chainId ||
+      !chainConfig.rpcUrl ||
+      !chainConfig.usdc.address ||
+      !chainConfig.usdc.name ||
+      !chainConfig.usdc.version
+    ) {
+      console.warn(`Incomplete chain config for network ${network}`);
+      continue;
+    }
+
     const viemChain = VIEM_CHAINS[chainConfig.chainId];
     if (!viemChain) {
       console.warn(`Unknown chainId ${chainConfig.chainId} for network ${network}`);
@@ -158,6 +204,11 @@ function buildChainMaps(config: ChainJsonConfig): ChainMaps {
 
   // Build Fast RPC URLs
   for (const [network, fastConfig] of Object.entries(config.fast)) {
+    if (!fastConfig.rpcUrl) {
+      console.warn(`Incomplete Fast RPC config for network ${network}`);
+      continue;
+    }
+
     fastRpcUrls[network] = fastConfig.rpcUrl;
   }
 

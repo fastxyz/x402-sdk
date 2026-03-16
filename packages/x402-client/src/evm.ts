@@ -4,7 +4,7 @@
  * Includes auto-bridge from Fast when EVM USDC balance is insufficient.
  */
 
-import { createPublicClient, http, erc20Abi, type Chain } from 'viem';
+import { createPublicClient, defineChain, http, erc20Abi, type Chain } from 'viem';
 import { arbitrumSepolia, arbitrum, sepolia, mainnet } from 'viem/chains';
 import { privateKeyToAccount } from 'viem/accounts';
 import type { 
@@ -24,6 +24,7 @@ interface NetworkConfig {
   chain: Chain;
   network: 'testnet' | 'mainnet';
   chainId: number;
+  rpcUrl?: string;
 }
 
 const NETWORK_MAP: Record<string, NetworkConfig> = {
@@ -35,17 +36,60 @@ const NETWORK_MAP: Record<string, NetworkConfig> = {
 
 export const EVM_NETWORKS = Object.keys(NETWORK_MAP);
 
+function buildCustomNetworkConfig(requirement: PaymentRequirement): NetworkConfig | null {
+  const chainId = requirement.extra?.chainId;
+  const rpcUrl = requirement.extra?.rpcUrl;
+
+  if (
+    typeof chainId !== 'number' ||
+    !Number.isInteger(chainId) ||
+    typeof rpcUrl !== 'string' ||
+    rpcUrl.length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    chain: defineChain({
+      id: chainId,
+      name: requirement.network,
+      nativeCurrency: {
+        name: 'Ether',
+        symbol: 'ETH',
+        decimals: 18,
+      },
+      rpcUrls: {
+        default: {
+          http: [rpcUrl],
+        },
+      },
+    }),
+    network: requirement.network.endsWith('-sepolia') ? 'testnet' : 'mainnet',
+    chainId,
+    rpcUrl,
+  };
+}
+
+function getNetworkConfig(requirement: PaymentRequirement): NetworkConfig | null {
+  return NETWORK_MAP[requirement.network] ?? buildCustomNetworkConfig(requirement);
+}
+
+export function canHandleEvmPayment(requirement: PaymentRequirement): boolean {
+  return getNetworkConfig(requirement) !== null;
+}
+
 /**
  * Get EVM USDC balance
  */
 async function getEvmUsdcBalance(
   address: `0x${string}`,
   usdcAddress: `0x${string}`,
-  chain: Chain
+  chain: Chain,
+  rpcUrl?: string
 ): Promise<bigint> {
   const client = createPublicClient({
     chain,
-    transport: http(),
+    transport: http(rpcUrl),
   });
 
   try {
@@ -68,6 +112,7 @@ async function pollForBalance(
   address: `0x${string}`,
   usdcAddress: `0x${string}`,
   chain: Chain,
+  rpcUrl: string | undefined,
   targetAmount: bigint,
   maxWaitMs: number = 1200000,  // 20 minutes for slow chains like Ethereum
   pollIntervalMs: number = 1000,
@@ -80,7 +125,7 @@ async function pollForBalance(
     await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
     pollCount++;
     
-    const balance = await getEvmUsdcBalance(address, usdcAddress, chain);
+    const balance = await getEvmUsdcBalance(address, usdcAddress, chain, rpcUrl);
     log(`  [Poll ${pollCount}] Balance: ${Number(balance) / 1e6} USDC (need ${Number(targetAmount) / 1e6})`);
     
     if (balance >= targetAmount) {
@@ -124,9 +169,13 @@ export async function handleEvmPayment(
   log(`  Fast wallet available: ${fastWallet ? 'yes' : 'no'}`);
 
   // Get network config
-  const networkConfig = NETWORK_MAP[evmReq.network];
+  const networkConfig = getNetworkConfig(evmReq);
   if (!networkConfig) {
-    throw new Error(`Unsupported EVM network: ${evmReq.network}. Supported: ${EVM_NETWORKS.join(', ')}`);
+    throw new Error(
+      `Unsupported EVM network: ${evmReq.network}. ` +
+      `Built-in networks: ${EVM_NETWORKS.join(', ')}. ` +
+      `Custom networks require paymentRequirement.extra.chainId and paymentRequirement.extra.rpcUrl.`
+    );
   }
   log(`  Chain ID: ${networkConfig.chainId}`);
 
@@ -147,7 +196,12 @@ export async function handleEvmPayment(
 
   // ─── Auto-Bridge Logic ──────────────────────────────────────────────────────
   log(`[EVM] Checking USDC balance...`);
-  let currentBalance = await getEvmUsdcBalance(account.address, usdcAddress, networkConfig.chain);
+  let currentBalance = await getEvmUsdcBalance(
+    account.address,
+    usdcAddress,
+    networkConfig.chain,
+    networkConfig.rpcUrl
+  );
   log(`  Current balance: ${Number(currentBalance) / 1e6} USDC`);
   log(`  Required: ${Number(requiredAmount) / 1e6} USDC`);
 
@@ -210,6 +264,7 @@ export async function handleEvmPayment(
       account.address,
       usdcAddress,
       networkConfig.chain,
+      networkConfig.rpcUrl,
       requiredAmount,
       120000, // 2 minutes
       3000,   // 3 seconds
