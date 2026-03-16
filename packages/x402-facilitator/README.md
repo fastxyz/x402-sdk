@@ -10,6 +10,8 @@ Verify and settle x402 payments on-chain. Supports EVM (EIP-3009) and Fast netwo
 npm install @fastxyz/x402-facilitator
 ```
 
+> **Note:** This package depends on `@fastxyz/sdk` for BCS decoding of Fast transactions. It's installed automatically as a dependency.
+
 ## Quick Start
 
 ### As Express Middleware
