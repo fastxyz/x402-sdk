@@ -17,6 +17,7 @@ const EIP3009_USDC_METADATA: Record<string, { name: string; version: string }> =
   "arbitrum": { name: "USD Coin", version: "2" },
   "ethereum-sepolia": { name: "USD Coin", version: "2" },
   "ethereum": { name: "USD Coin", version: "2" },
+  "base": { name: "USD Coin", version: "2" },
 };
 
 // Fallback USDC addresses for networks not yet in allset-sdk
@@ -34,9 +35,12 @@ const NETWORK_TO_CHAIN: Record<string, string> = {
   "arbitrum": "arbitrum",
   "ethereum-sepolia": "ethereum",
   "ethereum": "ethereum",
+  "base": "base",
 };
 
 function getNetworkType(network: string): "testnet" | "mainnet" {
+  // Note: Base mainnet is currently under allset-sdk's "testnet" config (for bridge support)
+  if (network === "base") return "testnet";
   return network.includes("sepolia") || network.includes("testnet") ? "testnet" : "mainnet";
 }
 
@@ -46,6 +50,7 @@ const FALLBACK_RPC_URLS: Record<string, string> = {
   "arbitrum": "https://arb1.arbitrum.io/rpc",
   "ethereum-sepolia": "https://ethereum-sepolia-rpc.publicnode.com",
   "ethereum": "https://ethereum-rpc.publicnode.com",
+  "base": "https://mainnet.base.org",
 };
 
 // ---------------------------------------------------------------------------
@@ -78,7 +83,7 @@ export interface ChainJsonConfig {
 
 function buildEvmDefaults(): Record<string, EvmChainJsonConfig> {
   const result: Record<string, EvmChainJsonConfig> = {};
-  const networks = ["arbitrum-sepolia", "arbitrum", "ethereum-sepolia", "ethereum"];
+  const networks = ["arbitrum-sepolia", "arbitrum", "ethereum-sepolia", "ethereum", "base"];
 
   for (const network of networks) {
     const chain = NETWORK_TO_CHAIN[network];

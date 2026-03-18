@@ -15,6 +15,7 @@ import { homedir } from "os";
 import {
   arbitrum,
   arbitrumSepolia,
+  base,
   mainnet,
   sepolia,
   type Chain,
@@ -56,6 +57,7 @@ const VIEM_CHAINS: Record<number, Chain> = {
   42161: arbitrum,
   11155111: sepolia,
   1: mainnet,
+  8453: base,
 };
 
 // ---------------------------------------------------------------------------
