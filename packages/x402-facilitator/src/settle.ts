@@ -214,8 +214,9 @@ async function settleFastPayment(
   // Fast transactions are already settled on-chain
   // The wallet extension handles signing and broadcasting
   // Return success with a transaction identifier based on the certificate
-  const transactionId = payload.transactionCertificate.envelope
-    ? payload.transactionCertificate.envelope.substring(0, 66)
+  const envelope = payload.transactionCertificate.envelope;
+  const transactionId = typeof envelope === "string"
+    ? envelope.substring(0, 66)
     : "";
 
   return {

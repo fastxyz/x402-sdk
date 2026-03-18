@@ -4,7 +4,7 @@
 
 import { describe, it, expect, vi } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
-import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
+import { FAST_NETWORK_IDS, TransactionBcs, bytesToHex } from "./fast-bcs.js";
 
 // Mock Express request/response
 function createMockRequest(method: string, path: string, body?: unknown) {
@@ -113,18 +113,20 @@ describe("POST /verify", () => {
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     
     const transaction = {
+      network_id: FAST_NETWORK_IDS.TESTNET,
       sender: new Uint8Array(32).fill(0xaa),
-      recipient,
       nonce: 1,
       timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
       claim: {
         TokenTransfer: {
           token_id: tokenId,
+          recipient,
           amount: "1000000000000000000",
           user_data: null,
         },
       },
       archival: false,
+      fee_token: null,
     };
     
     const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
@@ -178,18 +180,20 @@ describe("POST /verify", () => {
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     
     const transaction = {
+      network_id: FAST_NETWORK_IDS.TESTNET,
       sender: new Uint8Array(32).fill(0xdd),
-      recipient,
       nonce: 2,
       timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
       claim: {
         TokenTransfer: {
           token_id: tokenId,
+          recipient,
           amount: "2000000000000000000",
           user_data: null,
         },
       },
       archival: false,
+      fee_token: null,
     };
     
     const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
@@ -273,18 +277,20 @@ describe("POST /settle", () => {
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     
     const transaction = {
+      network_id: FAST_NETWORK_IDS.TESTNET,
       sender: new Uint8Array(32).fill(0xff),
-      recipient,
       nonce: 3,
       timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
       claim: {
         TokenTransfer: {
           token_id: tokenId,
+          recipient,
           amount: "3000000000000000000",
           user_data: null,
         },
       },
       archival: false,
+      fee_token: null,
     };
     
     const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());

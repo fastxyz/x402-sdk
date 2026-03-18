@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  FAST_NETWORK_IDS,
   TransactionBcs,
   decodeEnvelope,
   getTransferDetails,
@@ -44,18 +45,20 @@ describe("Fast BCS utilities", () => {
       tokenId.set([0x1b, 0x48, 0x76, 0x61], 0); // fastUSDC prefix
 
       const transaction = {
+        network_id: FAST_NETWORK_IDS.TESTNET,
         sender,
-        recipient,
         nonce: 1,
         timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
         claim: {
           TokenTransfer: {
             token_id: tokenId,
+            recipient,
             amount: "1000000000000000000", // 1 token with 18 decimals
             user_data: null,
           },
         },
         archival: false,
+        fee_token: null,
       };
 
       // Serialize
@@ -65,7 +68,8 @@ describe("Fast BCS utilities", () => {
       // Deserialize
       const deserialized = TransactionBcs.parse(serialized);
       expect(deserialized.sender).toEqual(sender);
-      expect(deserialized.recipient).toEqual(recipient);
+      expect(deserialized.network_id).toBe(FAST_NETWORK_IDS.TESTNET);
+      expect(deserialized.claim.TokenTransfer?.recipient).toEqual(recipient);
       expect(Number(deserialized.nonce)).toBe(1);
       expect(deserialized.archival).toBe(false);
     });
@@ -80,18 +84,20 @@ describe("Fast BCS utilities", () => {
       tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
 
       const transaction = {
+        network_id: FAST_NETWORK_IDS.TESTNET,
         sender,
-        recipient,
         nonce: 42,
         timestamp_nanos: BigInt(1709712000000) * 1_000_000n,
         claim: {
           TokenTransfer: {
             token_id: tokenId,
+            recipient,
             amount: "5000000000000000000", // 5 tokens
             user_data: null,
           },
         },
         archival: false,
+        fee_token: null,
       };
 
       // Serialize to create envelope
@@ -102,7 +108,8 @@ describe("Fast BCS utilities", () => {
       const decoded = decodeEnvelope(envelopeHex);
 
       expect(decoded.sender).toEqual(sender);
-      expect(decoded.recipient).toEqual(recipient);
+      expect(decoded.network_id).toBe(FAST_NETWORK_IDS.TESTNET);
+      expect(decoded.claim.TokenTransfer?.recipient).toEqual(recipient);
       expect(decoded.nonce).toBe(42n);
       expect(decoded.archival).toBe(false);
       expect(decoded.claim.TokenTransfer).toBeDefined();
@@ -125,18 +132,20 @@ describe("Fast BCS utilities", () => {
       tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
 
       const transaction = {
+        network_id: FAST_NETWORK_IDS.TESTNET,
         sender,
-        recipient,
         nonce: 100,
         timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
         claim: {
           TokenTransfer: {
             token_id: tokenId,
+            recipient,
             amount: "10000000000000000000", // 10 tokens
             user_data: null,
           },
         },
         archival: false,
+        fee_token: null,
       };
 
       const envelope = TransactionBcs.serialize(transaction).toBytes();
@@ -153,17 +162,19 @@ describe("Fast BCS utilities", () => {
 
     it("returns null for non-TokenTransfer transactions", () => {
       const decoded = {
+        network_id: FAST_NETWORK_IDS.TESTNET,
         sender: new Uint8Array(32),
-        recipient: new Uint8Array(32),
         nonce: 0n,
         timestamp_nanos: 0n,
         claim: {
           Mint: {
             token_id: new Uint8Array(32),
+            recipient: new Uint8Array(32),
             amount: "1000",
           },
         },
         archival: false,
+        fee_token: null,
       };
 
       const details = getTransferDetails(decoded);

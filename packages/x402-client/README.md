@@ -37,6 +37,8 @@ if (result.success) {
 - `fast-testnet` - Fast testnet
 - `fast-mainnet` - Fast mainnet
 
+Fast payments are encoded and signed with the canonical [`@fastxyz/sdk`](https://www.npmjs.com/package/@fastxyz/sdk) transaction codec. Use the explicit x402 network names above; the ambiguous `fast` alias is not supported.
+
 ### EVM (EIP-3009)
 - `arbitrum-sepolia` - Arbitrum testnet
 - `arbitrum` - Arbitrum mainnet

@@ -67,9 +67,10 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
 
 1. **Verify**: Decode and validate transaction certificate
    - Check envelope and signatures exist
-   - Decode BCS envelope to extract transaction details
+   - Decode the canonical Fast envelope via `@fastxyz/sdk`
+   - Verify the transaction `network_id` matches the requested x402 network
    - Verify recipient matches `paymentRequirement.payTo`
-   - Verify amount ≥ `maxAmountRequired` (with 18→6 decimal normalization)
+   - Verify amount ≥ `maxAmountRequired` in raw asset units
    - Verify token matches `paymentRequirement.asset`
 
 2. **Settle**: No-op — Fast transactions are already on-chain
@@ -204,6 +205,8 @@ interface FacilitatorConfig {
 | `missing_signatures` | Certificate has no signatures |
 | `insufficient_signatures` | Not enough committee signatures |
 | `envelope_decode_failed` | Failed to decode BCS envelope |
+| `missing_network_id` | Transaction omitted the required Fast network id |
+| `network_id_mismatch` | Transaction was signed for a different Fast network |
 | `not_a_token_transfer` | Transaction is not a TokenTransfer |
 | `recipient_mismatch` | Recipient doesn't match payTo |
 | `insufficient_amount` | Transfer amount too low |

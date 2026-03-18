@@ -15,11 +15,10 @@ describe('Fast Payment Handler', () => {
       assert.ok(Array.isArray(FAST_NETWORKS));
       assert.ok(FAST_NETWORKS.includes('fast-testnet'));
       assert.ok(FAST_NETWORKS.includes('fast-mainnet'));
-      assert.ok(FAST_NETWORKS.includes('fast'));
     });
 
-    it('should have at least 3 networks', () => {
-      assert.ok(FAST_NETWORKS.length >= 3);
+    it('should only expose explicit Fast networks', () => {
+      assert.deepStrictEqual(FAST_NETWORKS, ['fast-testnet', 'fast-mainnet']);
     });
   });
 
