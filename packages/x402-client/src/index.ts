@@ -13,7 +13,7 @@
  * ```typescript
  * import { x402Pay } from '@fastxyz/x402-client';
  * import { FastWallet, FastProvider } from '@fastxyz/sdk';
- * import { createEvmWallet } from '@fastxyz/allset-sdk';
+ * import { createEvmWallet } from '@fastxyz/allset-sdk/node';
  * 
  * // Create wallets using SDKs
  * const fastProvider = new FastProvider({ network: 'testnet' });
@@ -81,7 +81,7 @@ export {
  * @example
  * ```typescript
  * import { FastWallet, FastProvider } from '@fastxyz/sdk';
- * import { createEvmWallet } from '@fastxyz/allset-sdk';
+ * import { createEvmWallet } from '@fastxyz/allset-sdk/node';
  * 
  * // Create wallets
  * const fastProvider = new FastProvider({ network: 'testnet' });

@@ -7,7 +7,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { AllSetProvider } from '@fastxyz/allset-sdk';
+import { AllSetProvider } from '@fastxyz/allset-sdk/node';
 import { 
   getBridgeConfig,
   getFastBalance,

@@ -7,12 +7,16 @@ import type { EvmWallet, PaymentRequired } from '../types.js';
 // ─── Mock Wallets ─────────────────────────────────────────────────────────────
 
 /**
- * Mock EVM wallet for testing (matches @fastxyz/allset-sdk EvmWallet)
+ * Mock EVM wallet for testing
+ * 
+ * Note: EvmAccount from @fastxyz/allset-sdk is viem's Account type with additional methods.
+ * For type guard tests, we only need the shape that isEvmWallet() checks.
+ * Cast through unknown to satisfy TypeScript.
  */
 export const mockEvmWallet: EvmWallet = {
   privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', // Hardhat account #0
   address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-};
+} as unknown as EvmWallet;
 
 /**
  * Mock Fast wallet data for testing

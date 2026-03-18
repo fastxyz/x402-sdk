@@ -17,8 +17,8 @@ Pay for 402-protected content with crypto. Handles EVM (EIP-3009) and Fast payme
 
 ```json
 {
-  "@fastxyz/sdk": "^0.1.6",
-  "@fastxyz/allset-sdk": "^0.1.2",
+  "@fastxyz/sdk": "^0.1.8",
+  "@fastxyz/allset-sdk": "^0.2.0",
   "viem": "^2.46.2"
 }
 ```
@@ -34,7 +34,7 @@ npm install @fastxyz/x402-client @fastxyz/sdk @fastxyz/allset-sdk
 ```typescript
 import { x402Pay } from '@fastxyz/x402-client';
 import { FastWallet, FastProvider } from '@fastxyz/sdk';
-import { createEvmWallet } from '@fastxyz/allset-sdk';
+import { createEvmWallet } from '@fastxyz/allset-sdk/node';
 
 // Create wallets using SDKs
 const fastProvider = new FastProvider({ network: 'testnet' });
@@ -54,7 +54,7 @@ console.log(result.body); // Paid content
 
 **Dependencies:**
 - `@fastxyz/sdk` - Fast wallet operations, transaction signing
-- `@fastxyz/allset-sdk` - Auto-bridge from Fast to EVM via AllSet
+- `@fastxyz/allset-sdk` - Auto-bridge from Fast to EVM via AllSet (use `/node` entrypoint)
 - `viem` - EVM wallet operations, EIP-3009 signing
 
 **Code structure:**
@@ -85,10 +85,10 @@ const wallet = await FastWallet.fromPrivateKey('hex-private-key', provider);
 const wallet = await FastWallet.generate(provider);
 ```
 
-### EvmWallet (from @fastxyz/allset-sdk)
+### EvmWallet (from @fastxyz/allset-sdk/node)
 
 ```typescript
-import { createEvmWallet } from '@fastxyz/allset-sdk';
+import { createEvmWallet } from '@fastxyz/allset-sdk/node';
 
 // From keyfile
 const wallet = createEvmWallet('~/.allset/.evm/keys/default.json');
@@ -216,7 +216,7 @@ if (isFastWallet(wallet)) {
 }
 
 if (isEvmWallet(wallet)) {
-  // wallet is EvmWallet from @fastxyz/allset-sdk
+  // wallet is EvmWallet (EvmAccount) from @fastxyz/allset-sdk/node
 }
 ```
 

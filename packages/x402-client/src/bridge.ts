@@ -5,7 +5,7 @@
  */
 
 import type { FastWallet } from '@fastxyz/sdk';
-import { AllSetProvider } from '@fastxyz/allset-sdk';
+import { AllSetProvider } from '@fastxyz/allset-sdk/node';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
