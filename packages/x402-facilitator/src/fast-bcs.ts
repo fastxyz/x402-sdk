@@ -11,6 +11,7 @@ export {
   getTransferDetails,
   bytesToHex,
   hexToBytes,
+  fastAddressToBytes,
 } from "@fastxyz/sdk";
 
 export type { DecodedTransaction as DecodedFastTransaction } from "@fastxyz/sdk";

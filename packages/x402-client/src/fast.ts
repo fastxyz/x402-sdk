@@ -4,7 +4,7 @@
  * Uses @fastxyz/sdk for Fast network operations.
  */
 
-import type { FastWallet } from '@fastxyz/sdk';
+import { hexToTokenId, FAST_TOKEN_ID, type FastWallet } from '@fastxyz/sdk';
 import type {
   PaymentRequired,
   PaymentRequirement,
@@ -12,19 +12,6 @@ import type {
 } from './types.js';
 
 export const FAST_NETWORKS = ['fast-testnet', 'fast-mainnet', 'fast'];
-
-/**
- * Convert hex token ID to Uint8Array
- */
-function hexToTokenId(hex: string): Uint8Array {
-  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const padded = clean.padStart(64, '0');
-  const bytes = new Uint8Array(32);
-  for (let i = 0; i < 32; i++) {
-    bytes[i] = parseInt(padded.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
 
 /**
  * Handle x402 payment on Fast network
@@ -61,9 +48,8 @@ export async function handleFastPayment(
     tokenId = hexToTokenId(fastReq.asset);
     log(`  Token from asset: ${fastReq.asset}`);
   } else {
-    // Default FAST token ID
-    tokenId = new Uint8Array(32);
-    tokenId.set([0xfa, 0x57, 0x5e, 0x70], 0);
+    // Default FAST token ID from @fastxyz/sdk
+    tokenId = FAST_TOKEN_ID;
     log(`  Using default FAST token`);
   }
 

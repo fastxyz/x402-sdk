@@ -42,7 +42,7 @@
   },
   "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
-    "@fastxyz/sdk": "^0.1.6",
+    "@fastxyz/sdk": "^0.1.8",
     "@fastxyz/allset-sdk": "^0.1.2",
     "viem": "^2.46.2"
   },

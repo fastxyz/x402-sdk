@@ -33,7 +33,7 @@
   },
   "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
-    "@fastxyz/sdk": "^0.1.6",
+    "@fastxyz/sdk": "^0.1.8",
     "viem": "^2.21.0"
   },
   "devDependencies": {

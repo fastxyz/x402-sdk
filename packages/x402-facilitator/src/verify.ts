@@ -19,7 +19,7 @@ import type {
 } from "./types.js";
 import { getNetworkType } from "./types.js";
 import { type ChainMaps, getEvmChainConfig, getEvmChainConfigFromMaps } from "./chains.js";
-import { decodeEnvelope, getTransferDetails, bytesToHex } from "./fast-bcs.js";
+import { decodeEnvelope, getTransferDetails, bytesToHex, fastAddressToBytes } from "./fast-bcs.js";
 
 /**
  * USDC ABI for balance check
@@ -260,10 +260,29 @@ async function verifyEvmPayment(
 
 /**
  * Normalize address for comparison
- * Handles both hex (0x...) and bech32m (set1...) formats
+ * Handles both hex (0x...) and bech32m (fast1.../set1...) formats
  */
 function normalizeAddress(addr: string): string {
   return addr.toLowerCase().replace(/^0x/, "");
+}
+
+/**
+ * Check if address is a Fast bech32m address (fast1... or set1...)
+ */
+function isFastAddress(addr: string): boolean {
+  return addr.startsWith("fast1") || addr.startsWith("set1");
+}
+
+/**
+ * Convert Fast bech32m address to hex using @fastxyz/sdk
+ */
+function fastAddressToHex(addr: string): string | null {
+  try {
+    const bytes = fastAddressToBytes(addr);
+    return bytesToHex(bytes).slice(2); // Remove 0x prefix for comparison
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -271,73 +290,30 @@ function normalizeAddress(addr: string): string {
  * Supports hex pubkeys and bech32m addresses (fast1... or set1...)
  */
 function addressesMatch(a: string, b: string): boolean {
-  // Helper to decode bech32m to hex
-  const bech32mToHex = (addr: string): string | null => {
-    try {
-      // Import bech32m dynamically would be better but for sync use:
-      // Simple implementation: extract the data part and decode
-      const sep = addr.indexOf("1");
-      if (sep === -1) return null;
-      
-      const data = addr.slice(sep + 1);
-      const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-      
-      // Decode each character to 5-bit value
-      const values: number[] = [];
-      for (const c of data) {
-        const idx = CHARSET.indexOf(c.toLowerCase());
-        if (idx === -1) return null;
-        values.push(idx);
-      }
-      
-      // Remove checksum (last 6 characters)
-      const dataValues = values.slice(0, -6);
-      
-      // Convert 5-bit to 8-bit
-      let acc = 0;
-      let bits = 0;
-      const result: number[] = [];
-      for (const v of dataValues) {
-        acc = (acc << 5) | v;
-        bits += 5;
-        while (bits >= 8) {
-          bits -= 8;
-          result.push((acc >> bits) & 0xff);
-        }
-      }
-      
-      return Buffer.from(result).toString("hex");
-    } catch {
-      return null;
-    }
-  };
-
-  // If both start with "fast1" or "set1", compare directly
-  if ((a.startsWith("fast1") || a.startsWith("set1")) && 
-      (b.startsWith("fast1") || b.startsWith("set1"))) {
+  // If both are Fast addresses, compare directly
+  if (isFastAddress(a) && isFastAddress(b)) {
     return a.toLowerCase() === b.toLowerCase();
   }
   
   // If both are hex, compare normalized
-  if ((a.startsWith("0x") || /^[0-9a-fA-F]+$/.test(a)) &&
-      (b.startsWith("0x") || /^[0-9a-fA-F]+$/.test(b))) {
+  if (!isFastAddress(a) && !isFastAddress(b)) {
     return normalizeAddress(a) === normalizeAddress(b);
   }
   
-  // Mixed format - decode bech32m to hex and compare
+  // Mixed format - decode Fast address to hex and compare
   let hexA = a;
   let hexB = b;
   
-  if (a.startsWith("fast1") || a.startsWith("set1")) {
-    const decoded = bech32mToHex(a);
+  if (isFastAddress(a)) {
+    const decoded = fastAddressToHex(a);
     if (!decoded) return false;
     hexA = decoded;
   } else {
     hexA = normalizeAddress(a);
   }
   
-  if (b.startsWith("fast1") || b.startsWith("set1")) {
-    const decoded = bech32mToHex(b);
+  if (isFastAddress(b)) {
+    const decoded = fastAddressToHex(b);
     if (!decoded) return false;
     hexB = decoded;
   } else {
