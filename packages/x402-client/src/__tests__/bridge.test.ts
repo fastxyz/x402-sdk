@@ -7,11 +7,13 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import { AllSetProvider } from '@fastxyz/allset-sdk';
 import { 
   getBridgeConfig,
   getFastBalance,
+  bridgeFastusdcToUsdc,
 } from '../bridge.js';
-import { mockFastWalletData } from './helpers.js';
+import { createMockFastWallet, mockFastWalletData } from './helpers.js';
 
 describe('AllSet Bridge', () => {
   describe('getBridgeConfig', () => {
@@ -83,6 +85,34 @@ describe('AllSet Bridge', () => {
       assert.strictEqual(balance, 1_000_000n);
       assert.strictEqual(requestedAddress, mockFastWalletData.address);
       assert.strictEqual(requestedToken, 'fastUSDC');
+    });
+  });
+
+  describe('bridgeFastusdcToUsdc', () => {
+    it('should return the AllSet order id under orderId', async () => {
+      const originalSendToExternal = AllSetProvider.prototype.sendToExternal;
+
+      AllSetProvider.prototype.sendToExternal = async () => ({
+        txHash: '0xbridgehash',
+        orderId: 'order-123',
+      });
+
+      try {
+        const result = await bridgeFastusdcToUsdc({
+          fastWallet: createMockFastWallet(),
+          evmReceiverAddress: '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372',
+          amount: 1_000_000n,
+          network: 'arbitrum-sepolia',
+        });
+
+        assert.deepStrictEqual(result, {
+          success: true,
+          txHash: '0xbridgehash',
+          orderId: 'order-123',
+        });
+      } finally {
+        AllSetProvider.prototype.sendToExternal = originalSendToExternal;
+      }
     });
   });
 

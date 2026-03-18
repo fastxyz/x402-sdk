@@ -108,6 +108,7 @@ export interface PaymentResponse {
 export interface NetworkConfig {
   asset: string;
   decimals: number;
+  /** For custom EVM networks, include at least chainId and rpcUrl. */
   extra?: Record<string, unknown>;
 }
 

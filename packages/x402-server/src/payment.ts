@@ -15,6 +15,41 @@ import type {
 } from "./types.js";
 import { parsePrice, getNetworkConfig, encodePayload, decodePayload } from "./utils.js";
 
+const BUILT_IN_EVM_NETWORKS = new Set([
+  "arbitrum-sepolia",
+  "arbitrum",
+  "ethereum-sepolia",
+  "ethereum",
+]);
+
+function isFastNetwork(network: string): boolean {
+  return network.startsWith("fast-") || network === "fast";
+}
+
+function assertClientPayableNetwork(
+  network: string,
+  networkConfig: ReturnType<typeof getNetworkConfig>
+): void {
+  if (isFastNetwork(network) || BUILT_IN_EVM_NETWORKS.has(network)) {
+    return;
+  }
+
+  const chainId = networkConfig.extra?.chainId;
+  const rpcUrl = networkConfig.extra?.rpcUrl;
+
+  if (
+    typeof chainId !== "number" ||
+    !Number.isInteger(chainId) ||
+    typeof rpcUrl !== "string" ||
+    rpcUrl.length === 0
+  ) {
+    throw new Error(
+      `Custom EVM network "${network}" requires config.extra.chainId and ` +
+      `config.extra.rpcUrl so x402 clients can construct the chain configuration.`
+    );
+  }
+}
+
 /**
  * Create a payment requirement for a resource
  */
@@ -24,6 +59,7 @@ export function createPaymentRequirement(
   resource: string
 ): PaymentRequirement {
   const networkConfig = getNetworkConfig(config.network);
+  assertClientPayableNetwork(config.network, networkConfig);
   const amount = parsePrice(config.price, networkConfig.decimals);
   
   return {

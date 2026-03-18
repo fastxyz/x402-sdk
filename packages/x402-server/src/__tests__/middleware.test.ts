@@ -229,6 +229,8 @@ describe('x402-server middleware', () => {
             extra: {
               name: 'USD Coin',
               version: '2',
+              chainId: 84532,
+              rpcUrl: 'https://base-sepolia.example/rpc',
             },
           },
         }));
@@ -249,11 +251,51 @@ describe('x402-server middleware', () => {
 
           assert.strictEqual(res.statusCode, 402);
           const body = res.body as {
-            accepts: Array<{ payTo: string; asset: string; network: string }>;
+            accepts: Array<{
+              payTo: string;
+              asset: string;
+              network: string;
+              extra?: { chainId?: number; rpcUrl?: string };
+            }>;
           };
           assert.strictEqual(body.accepts[0].payTo, '0xEvmAddress');
           assert.strictEqual(body.accepts[0].asset, '0x1234567890abcdef1234567890abcdef12345678');
           assert.strictEqual(body.accepts[0].network, 'my-custom-network');
+          assert.strictEqual(body.accepts[0].extra?.chainId, 84532);
+          assert.strictEqual(body.accepts[0].extra?.rpcUrl, 'https://base-sepolia.example/rpc');
+        } finally {
+          rmSync(tempDir, { recursive: true, force: true });
+        }
+      });
+
+      it('should return 500 for custom EVM networks missing chain metadata', async () => {
+        const tempDir = mkdtempSync(join(tmpdir(), 'x402-server-networks-'));
+        const configPath = join(tempDir, 'networks.json');
+
+        writeFileSync(configPath, JSON.stringify({
+          'my-custom-network': {
+            asset: '0x1234567890abcdef1234567890abcdef12345678',
+            decimals: 6,
+          },
+        }));
+
+        try {
+          initNetworkConfig(configPath);
+
+          const middleware = paymentMiddleware(
+            { evm: '0xEvmAddress', fast: 'fast1FastAddress' },
+            { '/api/custom': { price: '$0.10', network: 'my-custom-network' } },
+            { url: 'http://localhost:4020' }
+          );
+
+          const req = mockRequest('/api/custom');
+          const res = mockResponse();
+
+          await middleware(req, res, () => {});
+
+          assert.strictEqual(res.statusCode, 500);
+          const body = res.body as { error: string };
+          assert.ok(body.error.includes('config.extra.chainId'));
         } finally {
           rmSync(tempDir, { recursive: true, force: true });
         }

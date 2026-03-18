@@ -67,14 +67,13 @@ app.listen(3000);
 
 ```typescript
 import { x402Pay } from '@fastxyz/x402-client';
+import { createEvmWallet } from '@fastxyz/allset-sdk';
+
+const wallet = createEvmWallet('~/.allset/.evm/keys/default.json');
 
 const result = await x402Pay({
   url: 'https://api.example.com/api/premium/data',
-  wallet: {
-    type: 'evm',
-    privateKey: '0x...',
-    address: '0x...',
-  },
+  wallet,
 });
 
 console.log(result.body); // Your paid content
@@ -86,22 +85,16 @@ Provide both wallets to automatically bridge fastUSDC → USDC when paying for E
 
 ```typescript
 import { x402Pay } from '@fastxyz/x402-client';
+import { FastProvider, FastWallet } from '@fastxyz/sdk';
+import { createEvmWallet } from '@fastxyz/allset-sdk';
+
+const fastProvider = new FastProvider({ network: 'testnet' });
+const fastWallet = await FastWallet.fromKeyfile('~/.fast/keys/default.json', fastProvider);
+const evmWallet = createEvmWallet('~/.allset/.evm/keys/default.json');
 
 const result = await x402Pay({
   url: 'https://api.example.com/api/premium/data',  // EVM endpoint
-  wallet: [
-    {
-      type: 'fast',
-      privateKey: '...',      // 32-byte Ed25519 key (hex)
-      publicKey: '...',       // 32-byte pubkey (hex)
-      address: 'fast1...',    // bech32m address
-    },
-    {
-      type: 'evm',
-      privateKey: '0x...',
-      address: '0x...',
-    },
-  ],
+  wallet: [evmWallet, fastWallet],
   verbose: true,  // See bridge progress logs
 });
 

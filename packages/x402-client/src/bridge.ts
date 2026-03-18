@@ -11,8 +11,10 @@ import { AllSetProvider } from '@fastxyz/allset-sdk';
 
 export interface BridgeResult {
   success: boolean;
+  /** Fast transaction hash returned by AllSet. */
   txHash?: string;
-  evmTxHash?: string;
+  /** AllSet bridge order id for tracking the external transfer. */
+  orderId?: string;
   error?: string;
 }
 
@@ -173,7 +175,7 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
     return {
       success: true,
       txHash: result.txHash,
-      evmTxHash: result.orderId,
+      orderId: result.orderId,
     };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);

@@ -96,13 +96,20 @@ cat > ~/.x402/networks.json << 'EOF'
   },
   "my-custom-network": {
     "asset": "0xMyTokenAddress...",
-    "decimals": 18
+    "decimals": 18,
+    "extra": {
+      "name": "My Token",
+      "version": "1",
+      "chainId": 84532,
+      "rpcUrl": "https://base-sepolia.example/rpc"
+    }
   }
 }
 EOF
 ```
 
 Your local config merges with bundled defaults — only specify networks you want to override or add.
+For custom EVM networks, include `extra.chainId` and `extra.rpcUrl` so x402 clients can build the chain configuration from the 402 response.
 
 ### Programmatic Config
 

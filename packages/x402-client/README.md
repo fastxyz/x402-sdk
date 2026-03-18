@@ -107,7 +107,7 @@ const wallet = await FastWallet.fromKeyfile('~/.fast/keys/default.json', provide
 const wallet = await FastWallet.fromPrivateKey('your-hex-private-key', provider);
 
 // Generate new wallet
-const wallet = await FastWallet.create(provider);
+const wallet = await FastWallet.generate(provider);
 ```
 
 ### EvmWallet (from @fastxyz/allset-sdk)
