@@ -51,13 +51,13 @@ app.listen(3000);
 
 ## Network Configuration
 
-Network configs (asset addresses, decimals) are loaded from JSON files with hierarchical override.
+Network configs (asset addresses, decimals) are loaded with a hierarchical override system.
 
 ### Config Loading Priority
 
 1. **Custom path** (via `initNetworkConfig(path)`) — highest priority
 2. **User config**: `~/.x402/networks.json` — local overrides
-3. **Bundled defaults**: `data/networks.json` — fallback
+3. **Bundled defaults**: `src/default-networks.ts` — TypeScript defaults
 
 ### Config File Format
 

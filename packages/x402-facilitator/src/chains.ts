@@ -4,12 +4,11 @@
  * Config loading priority (first found wins, with merge):
  * 1. Custom path (if provided via initChainConfig)
  * 2. User config: ~/.x402/chains.json
- * 3. Bundled defaults: data/chains.json
+ * 3. Bundled defaults: default-chains.ts
  *
  * User/custom configs merge over bundled defaults.
  */
 
-import { createRequire } from "module";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
@@ -21,38 +20,22 @@ import {
   type Chain,
 } from "viem/chains";
 import type { EvmChainConfig } from "./types.js";
-
-const require = createRequire(import.meta.url);
+import {
+  DEFAULT_CHAINS_CONFIG,
+  type ChainJsonConfig,
+  type EvmChainJsonConfig,
+  type FastChainJsonConfig,
+} from "./default-chains.js";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-
-interface EvmChainJsonConfig {
-  chainId: number;
-  rpcUrl: string;
-  usdc: {
-    address: string;
-    name: string;
-    version: string;
-    decimals: number;
-  };
-}
-
-interface FastChainJsonConfig {
-  rpcUrl: string;
-}
 
 type PartialEvmChainJsonConfig = Partial<Omit<EvmChainJsonConfig, "usdc">> & {
   usdc?: Partial<EvmChainJsonConfig["usdc"]>;
 };
 
 type PartialFastChainJsonConfig = Partial<FastChainJsonConfig>;
-
-interface ChainJsonConfig {
-  evm: Record<string, EvmChainJsonConfig>;
-  fast: Record<string, FastChainJsonConfig>;
-}
 
 interface PartialChainJsonConfig {
   evm?: Record<string, PartialEvmChainJsonConfig>;
@@ -145,9 +128,8 @@ function mergeChainConfig(
  * Load and merge chain configs with priority
  */
 function loadChainConfig(configPath?: string): ChainJsonConfig {
-  // Start with bundled defaults
-  const bundled: ChainJsonConfig = require("../data/chains.json");
-  let result = { ...bundled };
+  // Start with bundled defaults from TypeScript config
+  let result: ChainJsonConfig = structuredClone(DEFAULT_CHAINS_CONFIG);
 
   // Check for user config (~/.x402/chains.json)
   const userConfigPath = join(getX402Dir(), "chains.json");

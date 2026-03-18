@@ -4,16 +4,14 @@
  * Config loading priority (first found wins, with merge):
  * 1. Custom path (if provided via initNetworkConfig)
  * 2. User config: ~/.x402/networks.json
- * 3. Bundled defaults: data/networks.json
+ * 3. Bundled defaults: default-networks.ts
  */
 
-import { createRequire } from "module";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import type { NetworkConfig } from "./types.js";
-
-const require = createRequire(import.meta.url);
+import { DEFAULT_NETWORKS_CONFIG } from "./default-networks.js";
 
 // ---------------------------------------------------------------------------
 // Config state
@@ -53,9 +51,8 @@ function loadJsonConfig(path: string): Record<string, NetworkConfig> | null {
  * Load and merge network configs with priority
  */
 function loadNetworkConfig(): Record<string, NetworkConfig> {
-  // Start with bundled defaults
-  const bundled: Record<string, NetworkConfig> = require("../data/networks.json");
-  let result = { ...bundled };
+  // Start with bundled defaults from TypeScript config
+  let result: Record<string, NetworkConfig> = { ...DEFAULT_NETWORKS_CONFIG };
 
   // Check for user config (~/.x402/networks.json)
   const userConfigPath = join(getX402Dir(), "networks.json");

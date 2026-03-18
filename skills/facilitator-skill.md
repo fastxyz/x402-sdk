@@ -68,13 +68,13 @@ const server = createFacilitatorServer({
 
 ### Chain Configuration
 
-Chain configs (RPC URLs, USDC addresses) are loaded from JSON files with a hierarchical override system.
+Chain configs (RPC URLs, USDC addresses) are loaded with a hierarchical override system.
 
 #### Config Loading Priority
 
 1. **Custom path** (via `configPath` option) — highest priority
 2. **User config**: `~/.x402/chains.json` — local overrides
-3. **Bundled defaults**: `data/chains.json` — fallback
+3. **Bundled defaults**: `src/default-chains.ts` — TypeScript defaults
 
 Each level merges over the previous, so you only need to specify values you want to override.
 
