@@ -66,7 +66,7 @@ export function mock402Response(network: string, amount: string = '100000'): Pay
         : 'fast19cjwajufyuqv883ydlvrp8xrhxejuvfe40pxq5dsrv675zgh89sqg9txs8',
       asset: isEvm 
         ? '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'
-        : 'b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5',
+        : '9c52fe9465f57bc526c11aa0c048fd8709aa46abc06d15c80cbed9263d4d4df8', // testUSDC
       extra: isEvm ? { name: 'USD Coin', version: '2' } : undefined,
     }],
   };

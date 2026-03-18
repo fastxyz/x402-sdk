@@ -137,13 +137,13 @@ async function buildFastNetworkDefaults(): Promise<Record<string, NetworkAssetCo
   // Fallback if SDK resolution failed
   if (!result["fast-testnet"]) {
     result["fast-testnet"] = {
-      asset: "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
+      asset: "0x9c52fe9465f57bc526c11aa0c048fd8709aa46abc06d15c80cbed9263d4d4df8", // testUSDC
       decimals: 6,
     };
   }
   if (!result["fast-mainnet"]) {
     result["fast-mainnet"] = {
-      asset: "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
+      asset: "0xb4fdab846372740f747eb4b64ac0c22eaa159113f2d35b075027065fba419365", // fastUSDC
       decimals: 6,
     };
   }
@@ -166,11 +166,11 @@ export function getDefaultNetworksConfig(): Record<string, NetworkAssetConfig> {
   // Fast defaults with fallback (async would complicate things)
   const fastDefaults: Record<string, NetworkAssetConfig> = {
     "fast-testnet": {
-      asset: "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
+      asset: "0x9c52fe9465f57bc526c11aa0c048fd8709aa46abc06d15c80cbed9263d4d4df8", // testUSDC
       decimals: 6,
     },
     "fast-mainnet": {
-      asset: "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
+      asset: "0xb4fdab846372740f747eb4b64ac0c22eaa159113f2d35b075027065fba419365", // fastUSDC
       decimals: 6,
     },
   };
