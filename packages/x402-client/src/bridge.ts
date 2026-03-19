@@ -4,11 +4,18 @@
  * Bridges fastUSDC from Fast to USDC on EVM chains when needed.
  */
 
-import { bcs } from '@mysten/bcs';
 import * as ed from '@noble/ed25519';
 import { sha512 } from '@noble/hashes/sha512';
-import { bech32m } from 'bech32';
 import { encodeAbiParameters, keccak256 } from 'viem';
+import {
+  FAST_NETWORK_IDS,
+  fastAddressToBytes,
+  getCertificateHash,
+  serializeVersionedTransaction,
+  type FastNetworkId,
+  type FastTransaction,
+  type FastTransactionCertificate,
+} from '@fastxyz/sdk/core';
 import type { FastWallet } from './types.js';
 
 // Configure ed25519
@@ -67,33 +74,44 @@ function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// ─── BCS Schema ───────────────────────────────────────────────────────────────
+function inferFastNetworkIdFromBridgeNetwork(network: string): FastNetworkId {
+  return network.includes('sepolia')
+    ? FAST_NETWORK_IDS.TESTNET
+    : FAST_NETWORK_IDS.MAINNET;
+}
 
-const Address = bcs.fixedArray(32, bcs.u8());
-const TokenId = bcs.fixedArray(32, bcs.u8());
+function serializeFastRpcJsonValue(value: unknown): string | undefined {
+  if (value === null) return 'null';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return JSON.stringify(value);
+  }
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  if (value instanceof Uint8Array) {
+    return serializeFastRpcJsonValue(Array.from(value));
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => serializeFastRpcJsonValue(item) ?? 'null').join(',')}]`;
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .flatMap(([key, entryValue]) => {
+        const serialized = serializeFastRpcJsonValue(entryValue);
+        return serialized === undefined ? [] : [`${JSON.stringify(key)}:${serialized}`];
+      });
+    return `{${entries.join(',')}}`;
+  }
+  return undefined;
+}
 
-const TokenTransfer = bcs.struct('TokenTransfer', {
-  from: Address,
-  to: Address,
-  token_id: TokenId,
-  amount: bcs.u64(),
-});
-
-const ExternalClaim = bcs.struct('ExternalClaim', {
-  external_address: Address,
-  payload: bcs.vector(bcs.u8()),
-});
-
-const ClaimType = bcs.enum('ClaimType', {
-  Transaction: TokenTransfer,
-  Mint: null,
-  Wrap: null,
-  Unwrap: null,
-  Burn: null,
-  ExternalMint: null,
-  ExternalUnwrap: null,
-  ExternalClaim: ExternalClaim,
-});
+function toFastRpcJson(data: unknown): string {
+  const serialized = serializeFastRpcJsonValue(data);
+  if (serialized === undefined) {
+    throw new TypeError('Fast RPC payload must be JSON-serializable');
+  }
+  return serialized;
+}
 
 // ─── Fast Operations ───────────────────────────────────────────────────────
 
@@ -196,26 +214,14 @@ export async function getFastBalance(
  */
 async function sendTokenTransfer(
   wallet: FastWallet,
+  fastNetworkId: FastNetworkId,
   recipientAddress: string,
   amount: bigint,
   tokenId: Uint8Array,
   rpcUrl: string = FAST_RPC_URL
 ): Promise<TransactionResult> {
   const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
-  const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
-
-  // Decode recipient address
-  const decoded = bech32m.decode(recipientAddress, 90);
-  const recipientPubKey = new Uint8Array(bech32m.fromWords(decoded.words));
-
-  // Custom JSON serializer for BigInt
-  function toJSON(data: unknown): string {
-    return JSON.stringify(data, (_k, v) => {
-      if (v instanceof Uint8Array) return Array.from(v);
-      if (typeof v === 'bigint') return Number(v);
-      return v;
-    });
-  }
+  const publicKeyBytes = new Uint8Array(Buffer.from(wallet.publicKey, 'hex'));
 
   // Get nonce
   const noncePayload = {
@@ -241,62 +247,26 @@ async function sendTokenTransfer(
   const hexAmount = amount.toString(16);
 
   // Build proper transaction structure
-  const transaction = {
-    sender: Array.from(publicKeyBytes),
-    recipient: Array.from(recipientPubKey),
+  const transaction: FastTransaction = {
+    network_id: fastNetworkId,
+    sender: publicKeyBytes,
     nonce,
     timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
     claim: {
       TokenTransfer: {
-        token_id: Array.from(tokenId),
+        token_id: tokenId,
+        recipient: fastAddressToBytes(recipientAddress),
         amount: hexAmount,
         user_data: null,
       },
     },
     archival: false,
+    fee_token: null,
   };
 
-  // Import BCS for proper transaction structure
-  const { bcs: bcsMod } = await import('@mysten/bcs');
-  const AmountBcs = bcsMod.u256().transform({
-    input: (val: string) => {
-      // Handle both with and without 0x prefix
-      const hexVal = val.startsWith('0x') ? val : `0x${val}`;
-      return BigInt(hexVal).toString();
-    },
-  });
-  const TokenTransferBcs = bcsMod.struct('TokenTransfer', {
-    token_id: bcsMod.bytes(32),
-    amount: AmountBcs,
-    user_data: bcsMod.option(bcsMod.bytes(32)),
-  });
-  const ClaimTypeBcs = bcsMod.enum('ClaimType', {
-    TokenTransfer: TokenTransferBcs,
-    TokenCreation: bcsMod.struct('TokenCreation', { dummy: bcsMod.u8() }),
-    TokenManagement: bcsMod.struct('TokenManagement', { dummy: bcsMod.u8() }),
-    Mint: bcsMod.struct('Mint', { dummy: bcsMod.u8() }),
-    Burn: bcsMod.struct('Burn', { dummy: bcsMod.u8() }),
-    StateInitialization: bcsMod.struct('StateInitialization', { dummy: bcsMod.u8() }),
-    StateUpdate: bcsMod.struct('StateUpdate', { dummy: bcsMod.u8() }),
-    ExternalClaim: bcsMod.struct('ExternalClaim', { dummy: bcsMod.u8() }),
-    StateReset: bcsMod.struct('StateReset', { dummy: bcsMod.u8() }),
-    JoinCommittee: bcsMod.struct('JoinCommittee', { dummy: bcsMod.u8() }),
-    LeaveCommittee: bcsMod.struct('LeaveCommittee', { dummy: bcsMod.u8() }),
-    ChangeCommittee: bcsMod.struct('ChangeCommittee', { dummy: bcsMod.u8() }),
-    Batch: bcsMod.struct('Batch', { dummy: bcsMod.u8() }),
-  });
-  const TransactionBcs = bcsMod.struct('Transaction', {
-    sender: bcsMod.bytes(32),
-    recipient: bcsMod.bytes(32),
-    nonce: bcsMod.u64(),
-    timestamp_nanos: bcsMod.u128(),
-    claim: ClaimTypeBcs,
-    archival: bcsMod.bool(),
-  });
-
-  // Sign: ed25519("Transaction::" + BCS(transaction))
-  const msgHead = new TextEncoder().encode('Transaction::');
-  const msgBody = TransactionBcs.serialize(transaction).toBytes();
+  // Sign: ed25519("VersionedTransaction::" + BCS(versioned_transaction))
+  const msgHead = new TextEncoder().encode('VersionedTransaction::');
+  const msgBody = serializeVersionedTransaction(transaction);
   const msg = new Uint8Array(msgHead.length + msgBody.length);
   msg.set(msgHead, 0);
   msg.set(msgBody, msgHead.length);
@@ -308,7 +278,9 @@ async function sendTokenTransfer(
     id: Date.now(),
     method: 'proxy_submitTransaction',
     params: {
-      transaction,
+      transaction: {
+        Release20260319: transaction,
+      },
       signature: { Signature: Array.from(signatureBytes) },
     },
   };
@@ -316,7 +288,7 @@ async function sendTokenTransfer(
   const response = await fetch(rpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: toJSON(payload),
+    body: toFastRpcJson(payload),
   });
 
   const result = await response.json() as {
@@ -334,43 +306,7 @@ async function sendTokenTransfer(
   if (!certificate) {
     throw new Error('No result from Fast RPC');
   }
-
-  // Hash the transaction from the returned certificate (not our local copy)
-  // This matches how AllSetPortal computes transferClaimId using hashTransaction()
-  const { keccak_256 } = await import('@noble/hashes/sha3');
-  const cert = certificate as { envelope?: { transaction?: unknown } };
-  
-  let txHash: string;
-  if (cert.envelope?.transaction) {
-    // Clone and normalize the transaction for hashing - MUST match AllSetPortal format exactly
-    const certTx = JSON.parse(JSON.stringify(cert.envelope.transaction));
-    
-    // Amount: AllSetPortal just does "0x" + amount (the amount is already hex without prefix)
-    // The Fast network returns amount as a hex string WITHOUT 0x prefix
-    if (certTx.claim?.TokenTransfer?.amount !== undefined) {
-      const amt = certTx.claim.TokenTransfer.amount;
-      if (typeof amt === 'string' && !amt.startsWith('0x')) {
-        // String without 0x - this IS a hex string, just add prefix
-        certTx.claim.TokenTransfer.amount = '0x' + amt;
-      } else if (typeof amt === 'number') {
-        // Number - convert to hex
-        certTx.claim.TokenTransfer.amount = '0x' + BigInt(amt).toString(16);
-      }
-      // If already has 0x prefix, keep as is
-    }
-    
-    // timestamp_nanos: AllSetPortal does toHex(BigInt(timestamp_nanos)) - hex string with 0x prefix
-    if (certTx.timestamp_nanos !== undefined) {
-      const ts = BigInt(certTx.timestamp_nanos.toString());
-      certTx.timestamp_nanos = '0x' + ts.toString(16);
-    }
-    
-    const certTxBytes = TransactionBcs.serialize(certTx).toBytes();
-    txHash = '0x' + Buffer.from(keccak_256(certTxBytes)).toString('hex');
-  } else {
-    // Fallback to hashing our local transaction
-    txHash = '0x' + Buffer.from(keccak_256(msgBody)).toString('hex');
-  }
+  const txHash = getCertificateHash(certificate as FastTransactionCertificate);
 
   return {
     txHash,
@@ -390,36 +326,12 @@ async function sendTokenTransfer(
  */
 async function submitExternalClaim(
   wallet: FastWallet,
-  externalAddress: string,
+  fastNetworkId: FastNetworkId,
   intentPayload: Uint8Array,
   rpcUrl: string = FAST_RPC_URL
 ): Promise<TransactionResult> {
   const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
-  const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
-
-  // Custom JSON serializer for BigInt
-  function toJSON(data: unknown): string {
-    return JSON.stringify(data, (_k, v) => {
-      if (v instanceof Uint8Array) return Array.from(v);
-      if (typeof v === 'bigint') return Number(v);
-      return v;
-    });
-  }
-
-  // Decode recipient address - handle both Fast (bech32m) and EVM (hex) formats
-  let recipientPubKey: Uint8Array;
-  if (externalAddress.startsWith('fast1') || externalAddress.startsWith('set1')) {
-    // Decode bech32m Fast address to pubkey bytes
-    const { bech32m: scureBech32m } = await import('@scure/base');
-    const decoded = scureBech32m.decode(externalAddress as `${string}1${string}`);
-    recipientPubKey = new Uint8Array(scureBech32m.fromWords(decoded.words));
-  } else {
-    // EVM address - pad to 32 bytes (right-aligned)
-    const cleanAddr = externalAddress.startsWith('0x') ? externalAddress.slice(2) : externalAddress;
-    recipientPubKey = new Uint8Array(32);
-    const addrBytes = hexToBytes(cleanAddr);
-    recipientPubKey.set(addrBytes, 32 - addrBytes.length);
-  }
+  const publicKeyBytes = new Uint8Array(Buffer.from(wallet.publicKey, 'hex'));
 
   // Get nonce
   const noncePayload = {
@@ -441,60 +353,6 @@ async function submitExternalClaim(
   const nonceResult = await nonceResponse.json() as { result?: { next_nonce: number } };
   const nonce = nonceResult.result?.next_nonce ?? 0;
 
-  // Import BCS for proper transaction structure
-  const { bcs: bcsMod } = await import('@mysten/bcs');
-  
-  // ExternalClaim BCS definition
-  const ExternalClaimBodyBcs = bcsMod.struct('ExternalClaimBody', {
-    verifier_committee: bcsMod.vector(bcsMod.bytes(32)),
-    verifier_quorum: bcsMod.u64(),
-    claim_data: bcsMod.vector(bcsMod.u8()),
-  });
-
-  const ExternalClaimFullBcs = bcsMod.struct('ExternalClaimFull', {
-    claim: ExternalClaimBodyBcs,
-    signatures: bcsMod.vector(bcsMod.tuple([bcsMod.bytes(32), bcsMod.bytes(64)])),
-  });
-
-  // ClaimType enum with ExternalClaim at correct position
-  const AmountBcs = bcsMod.u256().transform({
-    input: (val: string) => {
-      // Handle both with and without 0x prefix
-      const hexVal = val.startsWith('0x') ? val : `0x${val}`;
-      return BigInt(hexVal).toString();
-    },
-  });
-  const TokenTransferBcs = bcsMod.struct('TokenTransfer', {
-    token_id: bcsMod.bytes(32),
-    amount: AmountBcs,
-    user_data: bcsMod.option(bcsMod.bytes(32)),
-  });
-
-  const ClaimTypeBcs = bcsMod.enum('ClaimType', {
-    TokenTransfer: TokenTransferBcs,
-    TokenCreation: bcsMod.struct('TokenCreation', { dummy: bcsMod.u8() }),
-    TokenManagement: bcsMod.struct('TokenManagement', { dummy: bcsMod.u8() }),
-    Mint: bcsMod.struct('Mint', { dummy: bcsMod.u8() }),
-    Burn: bcsMod.struct('Burn', { dummy: bcsMod.u8() }),
-    StateInitialization: bcsMod.struct('StateInitialization', { dummy: bcsMod.u8() }),
-    StateUpdate: bcsMod.struct('StateUpdate', { dummy: bcsMod.u8() }),
-    ExternalClaim: ExternalClaimFullBcs,  // Index 7
-    StateReset: bcsMod.struct('StateReset', { dummy: bcsMod.u8() }),
-    JoinCommittee: bcsMod.struct('JoinCommittee', { dummy: bcsMod.u8() }),
-    LeaveCommittee: bcsMod.struct('LeaveCommittee', { dummy: bcsMod.u8() }),
-    ChangeCommittee: bcsMod.struct('ChangeCommittee', { dummy: bcsMod.u8() }),
-    Batch: bcsMod.struct('Batch', { dummy: bcsMod.u8() }),
-  });
-
-  const TransactionBcs = bcsMod.struct('Transaction', {
-    sender: bcsMod.bytes(32),
-    recipient: bcsMod.bytes(32),
-    nonce: bcsMod.u64(),
-    timestamp_nanos: bcsMod.u128(),
-    claim: ClaimTypeBcs,
-    archival: bcsMod.bool(),
-  });
-
   // Build ExternalClaim structure
   // For bridging, we create a minimal ExternalClaim with the intent payload
   const externalClaimData = {
@@ -507,20 +365,21 @@ async function submitExternalClaim(
   };
 
   // Build proper transaction structure
-  const transaction = {
-    sender: Array.from(publicKeyBytes),
-    recipient: Array.from(recipientPubKey),
+  const transaction: FastTransaction = {
+    network_id: fastNetworkId,
+    sender: publicKeyBytes,
     nonce,
     timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
     claim: {
       ExternalClaim: externalClaimData,
     },
     archival: false,
+    fee_token: null,
   };
 
-  // Sign: ed25519("Transaction::" + BCS(transaction))
-  const msgHead = new TextEncoder().encode('Transaction::');
-  const msgBody = TransactionBcs.serialize(transaction).toBytes();
+  // Sign: ed25519("VersionedTransaction::" + BCS(versioned_transaction))
+  const msgHead = new TextEncoder().encode('VersionedTransaction::');
+  const msgBody = serializeVersionedTransaction(transaction);
   const msg = new Uint8Array(msgHead.length + msgBody.length);
   msg.set(msgHead, 0);
   msg.set(msgBody, msgHead.length);
@@ -532,7 +391,9 @@ async function submitExternalClaim(
     id: Date.now(),
     method: 'proxy_submitTransaction',
     params: {
-      transaction,
+      transaction: {
+        Release20260319: transaction,
+      },
       signature: { Signature: Array.from(signatureBytes) },
     },
   };
@@ -540,7 +401,7 @@ async function submitExternalClaim(
   const response = await fetch(rpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: toJSON(payload),
+    body: toFastRpcJson(payload),
   });
 
   const result = await response.json() as {
@@ -558,23 +419,7 @@ async function submitExternalClaim(
   if (!certificate) {
     throw new Error('No result from Fast ExternalClaim');
   }
-
-  // Hash the transaction from the returned certificate
-  const { keccak_256 } = await import('@noble/hashes/sha3');
-  const cert = certificate as { envelope?: { transaction?: unknown } };
-  
-  let txHash: string;
-  if (cert.envelope?.transaction) {
-    const certTx = JSON.parse(JSON.stringify(cert.envelope.transaction));
-    // Convert timestamp_nanos to hex string (AllSetPortal format)
-    if (certTx.timestamp_nanos !== undefined) {
-      certTx.timestamp_nanos = '0x' + BigInt(certTx.timestamp_nanos).toString(16);
-    }
-    const certTxBytes = TransactionBcs.serialize(certTx).toBytes();
-    txHash = '0x' + Buffer.from(keccak_256(certTxBytes)).toString('hex');
-  } else {
-    txHash = '0x' + Buffer.from(keccak_256(msgBody)).toString('hex');
-  }
+  const txHash = getCertificateHash(certificate as FastTransactionCertificate);
 
   return {
     txHash,
@@ -672,6 +517,7 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
     log(`[Step 1] Transferring fastUSDC to Fast bridge...`);
     const transferResult = await sendTokenTransfer(
       fastWallet,
+      inferFastNetworkIdFromBridgeNetwork(network),
       bridgeConfig.fastBridgeAddress,
       amount,
       fastUSDC_TOKEN_ID,
@@ -736,11 +582,11 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
     const intentBytes = hexToBytes(intentClaimEncoded);
     log(`  ✓ IntentClaim built (${intentBytes.length} bytes)`);
 
-    // Step 4: Submit ExternalClaim on Fast (recipient = sender's own Fast address)
+    // Step 4: Submit ExternalClaim on Fast
     log(`[Step 4] Submitting ExternalClaim...`);
     const intentResult = await submitExternalClaim(
       fastWallet,
-      fastWallet.address,  // Must be sender's own address, not EVM receiver
+      inferFastNetworkIdFromBridgeNetwork(network),
       intentBytes,
       rpcUrl
     );

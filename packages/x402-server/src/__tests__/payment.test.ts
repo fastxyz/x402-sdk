@@ -51,6 +51,17 @@ describe('x402-server payment', () => {
       assert.strictEqual(req.extra, undefined);
     });
 
+    it('should reject the deprecated Fast network alias', () => {
+      assert.throws(
+        () => createPaymentRequirement(
+          'fast1abc123xyz',
+          { price: '$0.01', network: 'fast' },
+          '/api/fast-data'
+        ),
+        /Unsupported Fast network alias "fast"/
+      );
+    });
+
     it('should use custom description', () => {
       const req = createPaymentRequirement(
         '0x123',

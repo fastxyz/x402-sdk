@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { verify } from "./verify.js";
-import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
+import { FAST_NETWORK_IDS, TransactionBcs, bytesToHex } from "./fast-bcs.js";
 import type { PaymentPayload, PaymentRequirement } from "./types.js";
 
 describe("verify", () => {
@@ -13,22 +13,25 @@ describe("verify", () => {
     function createFastCertificate(
       recipient: Uint8Array,
       amountHex: string,
-      tokenId: Uint8Array
+      tokenId: Uint8Array,
+      networkId: string = FAST_NETWORK_IDS.TESTNET,
     ) {
       const sender = new Uint8Array(32).fill(0xaa);
       const transaction = {
+        network_id: networkId,
         sender,
-        recipient,
         nonce: 1,
         timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
         claim: {
           TokenTransfer: {
             token_id: tokenId,
+            recipient,
             amount: amountHex,
             user_data: null,
           },
         },
         archival: false,
+        fee_token: null,
       };
       
       const envelope = TransactionBcs.serialize(transaction).toBytes();
@@ -45,24 +48,29 @@ describe("verify", () => {
     function createFastObjectCertificate(
       recipient: Uint8Array,
       amountHex: string,
-      tokenId: Uint8Array
+      tokenId: Uint8Array,
+      networkId: string = FAST_NETWORK_IDS.TESTNET,
     ) {
       const sender = new Uint8Array(32).fill(0xaa);
       return {
         envelope: {
           transaction: {
-            sender: Array.from(sender),
-            recipient: Array.from(recipient),
-            nonce: 1,
-            timestamp_nanos: Date.now(),
-            claim: {
-              TokenTransfer: {
-                token_id: Array.from(tokenId),
-                amount: amountHex,
-                user_data: null,
+            Release20260319: {
+              network_id: networkId,
+              sender: Array.from(sender),
+              nonce: 1,
+              timestamp_nanos: Date.now(),
+              claim: {
+                TokenTransfer: {
+                  token_id: Array.from(tokenId),
+                  recipient: Array.from(recipient),
+                  amount: amountHex,
+                  user_data: null,
+                },
               },
+              archival: false,
+              fee_token: null,
             },
-            archival: false,
           },
           signature: {
             Signature: [],
@@ -332,6 +340,68 @@ describe("verify", () => {
       const result = await verify(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_network");
+    });
+
+    it("rejects the deprecated Fast network alias", async () => {
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast",
+        payload: {
+          transactionCertificate: {
+            envelope: "0x00",
+            signatures: [{ committee_member: 0, signature: "0x" + "aa".repeat(64) }],
+          },
+        },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("invalid_network");
+    });
+
+    it("rejects certificate network_id mismatches", async () => {
+      const certificate = createFastCertificate(
+        recipient,
+        oneUsdcHex,
+        tokenId,
+        FAST_NETWORK_IDS.MAINNET,
+      );
+
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: { transactionCertificate: certificate },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toContain("network_id_mismatch");
     });
 
     it("rejects BCS envelopes that underpay after decoding", async () => {
