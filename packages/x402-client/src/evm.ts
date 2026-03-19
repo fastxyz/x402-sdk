@@ -28,12 +28,27 @@ interface NetworkConfig {
 }
 
 const NETWORK_MAP: Record<string, NetworkConfig> = {
-  'arbitrum-sepolia': { chain: arbitrumSepolia, network: 'testnet', chainId: 421614 },
+  'arbitrum-sepolia': { 
+    chain: arbitrumSepolia, 
+    network: 'testnet', 
+    chainId: 421614,
+    rpcUrl: 'https://arbitrum-sepolia-rpc.publicnode.com',
+  },
   'arbitrum': { chain: arbitrum, network: 'mainnet', chainId: 42161 },
-  'ethereum-sepolia': { chain: sepolia, network: 'testnet', chainId: 11155111 },
+  'ethereum-sepolia': { 
+    chain: sepolia, 
+    network: 'testnet', 
+    chainId: 11155111,
+    rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
+  },
   'ethereum': { chain: mainnet, network: 'mainnet', chainId: 1 },
   // Note: Base mainnet uses allset-sdk 'testnet' config (for bridge support)
-  'base': { chain: base, network: 'testnet', chainId: 8453 },
+  'base': { 
+    chain: base, 
+    network: 'testnet', 
+    chainId: 8453,
+    rpcUrl: 'https://base-rpc.publicnode.com',
+  },
 };
 
 export const EVM_NETWORKS = Object.keys(NETWORK_MAP);

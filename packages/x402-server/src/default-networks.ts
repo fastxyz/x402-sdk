@@ -12,10 +12,12 @@ import { resolveKnownFastToken } from "@fastxyz/sdk";
 // x402-specific EIP-3009 metadata (not in SDKs)
 // ---------------------------------------------------------------------------
 
+// EIP-3009 metadata varies by contract deployment!
+// Verified by querying name() on each chain's USDC contract.
 const EIP3009_USDC_METADATA: Record<string, { name: string; version: string }> = {
   "arbitrum-sepolia": { name: "USD Coin", version: "2" },
   "arbitrum": { name: "USD Coin", version: "2" },
-  "ethereum-sepolia": { name: "USD Coin", version: "2" },
+  "ethereum-sepolia": { name: "USDC", version: "2" },  // Different from other chains!
   "ethereum": { name: "USD Coin", version: "2" },
   "base": { name: "USD Coin", version: "2" },
 };
