@@ -42,6 +42,8 @@ export { getNetworkType } from "./types.js";
 
 // Chains
 export {
+  initChainConfig,
+  getX402Dir,
   EVM_CHAINS,
   FAST_RPC_URLS,
   SUPPORTED_EVM_NETWORKS,
@@ -57,11 +59,11 @@ export { settle } from "./settle.js";
 // Fast BCS utilities
 export {
   TransactionBcs,
+  VersionedTransactionBcs,
   decodeEnvelope,
   getTransferDetails,
   bytesToHex,
   hexToBytes,
-  pubkeyToAddress,
   type DecodedFastTransaction,
 } from "./fast-bcs.js";
 

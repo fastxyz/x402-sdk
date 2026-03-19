@@ -4,18 +4,23 @@
 
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   createPaymentRequirement,
   createPaymentRequired,
   parsePaymentHeader,
   encodePaymentResponse,
 } from '../payment.js';
+import { initNetworkConfig } from '../utils.js';
 
 const originalFetch = globalThis.fetch;
 
 describe('x402-server payment', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
+    initNetworkConfig();
   });
 
   describe('createPaymentRequirement', () => {
@@ -78,6 +83,70 @@ describe('x402-server payment', () => {
       );
 
       assert.strictEqual(req.asset, customAsset);
+    });
+
+    it('should include client-required metadata for custom EVM networks', () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'x402-server-payment-'));
+      const configPath = join(tempDir, 'networks.json');
+
+      writeFileSync(configPath, JSON.stringify({
+        'my-custom-network': {
+          asset: '0x1234567890abcdef1234567890abcdef12345678',
+          decimals: 6,
+          extra: {
+            name: 'My USDC',
+            version: '1',
+            chainId: 84532,
+            rpcUrl: 'https://base-sepolia.example/rpc',
+          },
+        },
+      }));
+
+      try {
+        initNetworkConfig(configPath);
+
+        const req = createPaymentRequirement(
+          '0x1234567890abcdef1234567890abcdef12345678',
+          { price: '$0.10', network: 'my-custom-network' },
+          '/api/custom'
+        );
+
+        assert.deepStrictEqual(req.extra, {
+          name: 'My USDC',
+          version: '1',
+          chainId: 84532,
+          rpcUrl: 'https://base-sepolia.example/rpc',
+        });
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
+    });
+
+    it('should reject custom EVM networks without chain metadata', () => {
+      const tempDir = mkdtempSync(join(tmpdir(), 'x402-server-payment-'));
+      const configPath = join(tempDir, 'networks.json');
+
+      writeFileSync(configPath, JSON.stringify({
+        'my-custom-network': {
+          asset: '0x1234567890abcdef1234567890abcdef12345678',
+          decimals: 6,
+        },
+      }));
+
+      try {
+        initNetworkConfig(configPath);
+
+        assert.throws(
+          () => createPaymentRequirement(
+            '0x1234567890abcdef1234567890abcdef12345678',
+            { price: '$0.10', network: 'my-custom-network' },
+            '/api/custom'
+          ),
+          /requires config\.extra\.chainId and config\.extra\.rpcUrl/
+        );
+      } finally {
+        rmSync(tempDir, { recursive: true, force: true });
+      }
     });
   });
 

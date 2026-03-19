@@ -3,6 +3,7 @@
  */
 
 import { x402Pay } from '@fastxyz/x402-client';
+import { FastProvider, FastWallet } from '@fastxyz/sdk';
 
 const SERVER_URL = 'http://localhost:3000';
 const ENDPOINT = '/api/fast-weather';
@@ -16,25 +17,10 @@ async function main() {
   console.log('═══════════════════════════════════════════════════════════════');
   console.log();
 
-  // Build Fast wallet object
-  const { bech32m } = await import('@scure/base');
-  const ed = await import('@noble/ed25519');
-  const { sha512 } = await import('@noble/hashes/sha512');
-  ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m));
-  
-  const privKeyBytes = Buffer.from(BUYER_FAST_PRIVATE, 'hex');
-  const pubKeyBytes = await ed.getPublicKeyAsync(privKeyBytes);
-  const publicKey = Buffer.from(pubKeyBytes).toString('hex');
-  const fastAddress = bech32m.encode('fast', bech32m.toWords(pubKeyBytes));
-  
-  const fastWallet = {
-    type: 'fast',
-    privateKey: BUYER_FAST_PRIVATE,
-    publicKey: publicKey,
-    address: fastAddress,
-  };
+  const fastProvider = new FastProvider({ network: 'testnet' });
+  const fastWallet = await FastWallet.fromPrivateKey(BUYER_FAST_PRIVATE, fastProvider);
 
-  console.log('Buyer Fast Address:', fastAddress);
+  console.log('Buyer Fast Address:', fastWallet.address);
   console.log();
   console.log('Requesting:', SERVER_URL + ENDPOINT);
   console.log();
@@ -71,28 +57,27 @@ async function main() {
     console.log();
     console.log('Success:', result.success);
     console.log('Time:', elapsed, 'ms');
+    console.log('Note:', result.note);
     console.log();
     
-    if (result.paymentDetails) {
+    if (result.payment) {
       console.log('Payment Details:');
-      console.log('  Network:', result.paymentDetails.network);
-      console.log('  Amount:', result.paymentDetails.amount);
-      console.log('  To:', result.paymentDetails.payTo);
+      console.log('  Network:', result.payment.network);
+      console.log('  Amount:', result.payment.amount);
+      console.log('  To:', result.payment.recipient);
     }
     console.log();
 
     if (result.body) {
       console.log('Response Body:');
       console.log(JSON.stringify(result.body, null, 2));
-    } else if (result.error) {
-      console.log('Error:', result.error);
     }
     
     console.log();
     console.log('═══════════════════════════════════════════════════════════════');
 
   } catch (err) {
-    console.error('Fatal error:', err);
+    console.error('Fatal error:', err instanceof Error ? err.message : err);
   }
 }
 

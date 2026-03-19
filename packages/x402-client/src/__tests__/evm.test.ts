@@ -5,7 +5,7 @@
 import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { handleEvmPayment, EVM_NETWORKS } from '../evm.js';
-import { mockEvmWallet, mockFastWallet, mock402Response, createMockFetch } from './helpers.js';
+import { mockEvmWallet, mock402Response, createMockFetch } from './helpers.js';
 
 const originalFetch = globalThis.fetch;
 
@@ -17,12 +17,12 @@ describe('EVM Payment Handler', () => {
   describe('EVM_NETWORKS', () => {
     it('should include testnet networks', () => {
       assert.ok(EVM_NETWORKS.includes('arbitrum-sepolia'));
-      assert.ok(EVM_NETWORKS.includes('base-sepolia'));
+      assert.ok(EVM_NETWORKS.includes('ethereum-sepolia'));
     });
 
     it('should include mainnet networks', () => {
       assert.ok(EVM_NETWORKS.includes('arbitrum'));
-      assert.ok(EVM_NETWORKS.includes('base'));
+      assert.ok(EVM_NETWORKS.includes('ethereum'));
     });
   });
 
@@ -43,6 +43,110 @@ describe('EVM Payment Handler', () => {
           []
         ),
         /Unsupported EVM network/
+      );
+    });
+
+    it('should support custom networks when chain metadata is provided', async () => {
+      const customRpcUrl = 'https://custom-rpc.example.com';
+      const paymentRequired = {
+        x402Version: 1,
+        accepts: [{
+          scheme: 'exact',
+          network: 'my-custom-network',
+          maxAmountRequired: '100000',
+          payTo: '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372',
+          asset: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+          extra: {
+            name: 'USD Coin',
+            version: '2',
+            chainId: 84532,
+            rpcUrl: customRpcUrl,
+          },
+        }],
+      };
+      const rpcCalls: string[] = [];
+
+      globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const body = init?.body ? JSON.parse(init.body as string) : null;
+
+        if (body?.method === 'eth_call') {
+          rpcCalls.push(url);
+          return new Response(JSON.stringify({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: '0x00000000000000000000000000000000000000000000000000000000000186a0',
+          }), { status: 200 });
+        }
+
+        if (init?.headers && (init.headers as Record<string, string>)['X-PAYMENT']) {
+          return new Response(JSON.stringify({ success: true }), { status: 200 });
+        }
+
+        return new Response('{}', { status: 200 });
+      };
+
+      const result = await handleEvmPayment(
+        'https://api.example.com/data',
+        'GET',
+        {},
+        undefined,
+        paymentRequired,
+        paymentRequired.accepts[0],
+        mockEvmWallet,
+        false,
+        []
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(new URL(rpcCalls[0]).origin, new URL(customRpcUrl).origin);
+    });
+
+    it('should classify base-sepolia style custom chains as testnet', async () => {
+      const paymentRequired = {
+        x402Version: 1,
+        accepts: [{
+          scheme: 'exact',
+          network: 'my-custom-network',
+          maxAmountRequired: '100000',
+          payTo: '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372',
+          asset: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+          extra: {
+            name: 'USD Coin',
+            version: '2',
+            chainId: 84532,
+            rpcUrl: 'https://custom-rpc.example.com',
+          },
+        }],
+      };
+
+      globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(init.body as string) : null;
+
+        if (body?.method === 'eth_call') {
+          return new Response(JSON.stringify({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: '0x0',
+          }), { status: 200 });
+        }
+
+        return new Response('{}', { status: 200 });
+      };
+
+      await assert.rejects(
+        () => handleEvmPayment(
+          'https://api.example.com/data',
+          'GET',
+          {},
+          undefined,
+          paymentRequired,
+          paymentRequired.accepts[0],
+          mockEvmWallet,
+          false,
+          []
+        ),
+        /Provide a Fast wallet with testUSDC/
       );
     });
 

@@ -10,6 +10,8 @@ Verify and settle x402 payments on-chain. Supports EVM (EIP-3009) and Fast netwo
 npm install @fastxyz/x402-facilitator
 ```
 
+> **Note:** This package depends on `@fastxyz/sdk` for BCS decoding of Fast transactions. It's installed automatically as a dependency.
+
 ## Quick Start
 
 ### As Express Middleware
@@ -170,8 +172,7 @@ interface FacilitatorConfig {
 |---------|----------|--------------|
 | `arbitrum-sepolia` | 421614 | `0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d` |
 | `arbitrum` | 42161 | `0xaf88d065e77c8cC2239327C5EDb3A432268e5831` |
-| `base-sepolia` | 84532 | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
-| `base` | 8453 | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| `ethereum-sepolia` | 11155111 | `0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238` |
 | `ethereum` | 1 | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` |
 
 ### Fast
@@ -208,6 +209,40 @@ interface FacilitatorConfig {
 | `recipient_mismatch` | Recipient doesn't match payTo |
 | `insufficient_amount` | Transfer amount too low |
 | `token_mismatch` | Token doesn't match asset |
+
+## Framework Compatibility
+
+The middleware is designed for Express but works with any framework that supports Express-style middleware:
+
+```typescript
+// Express (native)
+import express from 'express';
+const app = express();
+app.use(createFacilitatorServer(...));
+
+// Fastify (with middie)
+import Fastify from 'fastify';
+import middie from '@fastify/middie';
+const app = Fastify();
+await app.register(middie);
+app.use(createFacilitatorServer(...));
+
+// Koa (with koa-connect)
+import Koa from 'koa';
+import connect from 'koa-connect';
+const app = new Koa();
+app.use(connect(createFacilitatorServer(...)));
+```
+
+For frameworks with different APIs (Hono, Elysia), use the library functions directly:
+
+```typescript
+import { verify, settle } from '@fastxyz/x402-facilitator';
+```
+
+## Documentation
+
+For detailed technical specifications, chain configuration, and advanced usage, see [skills/facilitator-skill.md](../../skills/facilitator-skill.md).
 
 ## License
 

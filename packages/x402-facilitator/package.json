@@ -32,8 +32,9 @@
   },
   "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
-    "viem": "^2.21.0",
-    "@mysten/bcs": "^1.2.0"
+    "@fastxyz/allset-sdk": "^0.1.4",
+    "@fastxyz/sdk": "^0.1.9",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
@@ -41,7 +42,7 @@
     "vitest": "^1.6.0"
   },
   "peerDependencies": {
-    "express": "^4.18.0"
+    "express": "^4.22.1"
   },
   "peerDependenciesMeta": {
     "express": {

@@ -49,6 +49,137 @@ app.listen(3000);
 - `packages/x402-server/src/payment.ts` - Payment verification helpers
 - `packages/x402-server/src/types.ts` - Route config types
 
+## Network Configuration
+
+Network configs (asset addresses, decimals) are loaded with a hierarchical override system.
+
+### Config Loading Priority
+
+1. **Custom path** (via `initNetworkConfig(path)`) — highest priority
+2. **User config**: `~/.x402/networks.json` — local overrides
+3. **Bundled defaults**: `src/default-networks.ts` — TypeScript defaults
+
+### Config File Format
+
+```json
+{
+  "arbitrum-sepolia": {
+    "asset": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+    "decimals": 6,
+    "extra": {
+      "name": "USD Coin",
+      "version": "2"
+    }
+  },
+  "fast-testnet": {
+    "asset": "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5",
+    "decimals": 6
+  }
+}
+```
+
+### Customizing Your Network Config
+
+To override or add networks locally, create `~/.x402/networks.json`:
+
+```bash
+mkdir -p ~/.x402
+cat > ~/.x402/networks.json << 'EOF'
+{
+  "arbitrum-sepolia": {
+    "asset": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+    "decimals": 6,
+    "extra": {
+      "name": "USD Coin",
+      "version": "2"
+    }
+  },
+  "my-custom-network": {
+    "asset": "0xMyTokenAddress...",
+    "decimals": 18,
+    "extra": {
+      "name": "My Token",
+      "version": "1",
+      "chainId": 84532,
+      "rpcUrl": "https://base-sepolia.example/rpc"
+    }
+  }
+}
+EOF
+```
+
+Your local config merges with bundled defaults — only specify networks you want to override or add.
+For custom EVM networks, include `extra.chainId` and `extra.rpcUrl` so x402 clients can build the chain configuration from the 402 response.
+
+### Programmatic Config
+
+```typescript
+import { initNetworkConfig } from '@fastxyz/x402-server';
+
+// Load custom config file before using middleware
+initNetworkConfig('./my-networks.json');
+```
+
+## Framework Compatibility
+
+The middleware is designed for Express but works with any framework that supports Express-style middleware.
+
+### Express (Native)
+
+```typescript
+import express from 'express';
+const app = express();
+app.use(paymentMiddleware(...));
+```
+
+### Fastify (with middie)
+
+```typescript
+import Fastify from 'fastify';
+import middie from '@fastify/middie';
+
+const app = Fastify();
+await app.register(middie);
+app.use(paymentMiddleware(...));
+```
+
+### Koa (with koa-connect)
+
+```typescript
+import Koa from 'koa';
+import connect from 'koa-connect';
+
+const app = new Koa();
+app.use(connect(paymentMiddleware(...)));
+```
+
+### Other Frameworks
+
+For frameworks with different APIs (Hono, Elysia, etc.), use the library functions directly instead of the middleware:
+
+```typescript
+import { 
+  createPaymentRequired, 
+  verifyPayment, 
+  settlePayment 
+} from '@fastxyz/x402-server';
+
+// In your route handler:
+// 1. Check for X-PAYMENT header
+// 2. If missing, return createPaymentRequired(...)
+// 3. If present, call verifyPayment() then settlePayment()
+```
+
+### Middleware Requirements
+
+The middleware expects Express-style request/response objects:
+
+| Object | Required Properties |
+|--------|---------------------|
+| `req` | `method`, `path`, `headers`, `body` |
+| `res` | `status()`, `json()`, `setHeader()` |
+| `next` | Function to call next middleware |
+
 ## Middleware Configuration
 
 ### Single Payment Address
@@ -193,8 +324,7 @@ if (verification.isValid) {
 | `fast-mainnet` | Fast | fastUSDC |
 | `arbitrum-sepolia` | EVM | USDC |
 | `arbitrum` | EVM | USDC |
-| `base-sepolia` | EVM | USDC |
-| `base` | EVM | USDC |
+| `ethereum-sepolia` | EVM | USDC |
 | `ethereum` | EVM | USDC |
 
 ## Troubleshooting

@@ -12,7 +12,7 @@ import {
   FAST_NETWORKS,
   EVM_NETWORKS,
 } from '../index.js';
-import { mockEvmWallet, mockFastWallet, mock402Response, createMockFetch } from './helpers.js';
+import { mockEvmWallet, createMockFastWallet, mock402Response, createMockFetch } from './helpers.js';
 
 // Store original fetch
 const originalFetch = globalThis.fetch;
@@ -33,7 +33,7 @@ describe('x402-client', () => {
     it('should export EVM_NETWORKS', () => {
       assert.ok(Array.isArray(EVM_NETWORKS));
       assert.ok(EVM_NETWORKS.includes('arbitrum-sepolia'));
-      assert.ok(EVM_NETWORKS.includes('base-sepolia'));
+      assert.ok(EVM_NETWORKS.includes('ethereum-sepolia'));
     });
   });
 
@@ -128,7 +128,7 @@ describe('x402-client', () => {
       await assert.rejects(
         () => x402Pay({
           url: 'https://api.example.com/paid',
-          wallet: mockFastWallet, // Only Fast wallet, but server wants EVM
+          wallet: createMockFastWallet(), // Only Fast wallet, but server wants EVM
         }),
         /No matching wallet/
       );
@@ -143,10 +143,61 @@ describe('x402-client', () => {
 
       const result = await x402Pay({
         url: 'https://api.example.com/data',
-        wallet: [mockEvmWallet, mockFastWallet],
+        wallet: [mockEvmWallet, createMockFastWallet()],
       });
 
       assert.strictEqual(result.success, true);
+    });
+
+    it('should pay for custom EVM networks when chain metadata is provided', async () => {
+      const customRpcUrl = 'https://custom-rpc.example.com';
+      let rpcUrlUsed: string | undefined;
+      let paymentHeaderSent = false;
+
+      globalThis.fetch = async (input, init) => {
+        const url = typeof input === 'string' ? input : input.toString();
+        const body = init?.body ? JSON.parse(init.body as string) : null;
+
+        if (body?.method === 'eth_call') {
+          rpcUrlUsed = url;
+          return new Response(JSON.stringify({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: '0x00000000000000000000000000000000000000000000000000000000000186a0',
+          }), { status: 200 });
+        }
+
+        if ((init?.headers as Record<string, string> | undefined)?.['X-PAYMENT']) {
+          paymentHeaderSent = true;
+          return new Response(JSON.stringify({ success: true, data: 'paid' }), { status: 200 });
+        }
+
+        return new Response(JSON.stringify({
+          x402Version: 1,
+          accepts: [{
+            scheme: 'exact',
+            network: 'my-custom-network',
+            maxAmountRequired: '100000',
+            payTo: '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372',
+            asset: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+            extra: {
+              name: 'USD Coin',
+              version: '2',
+              chainId: 84532,
+              rpcUrl: customRpcUrl,
+            },
+          }],
+        }), { status: 402 });
+      };
+
+      const result = await x402Pay({
+        url: 'https://api.example.com/data',
+        wallet: mockEvmWallet,
+      });
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(new URL(rpcUrlUsed!).origin, new URL(customRpcUrl).origin);
+      assert.ok(paymentHeaderSent);
     });
 
     it('should include logs when verbose=true', async () => {

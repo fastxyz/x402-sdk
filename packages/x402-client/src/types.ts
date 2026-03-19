@@ -2,6 +2,11 @@
  * x402 Client Types
  */
 
+import type { FastWallet as FastWalletClass } from '@fastxyz/sdk';
+import type { EvmWallet as AllSetEvmWallet } from '@fastxyz/allset-sdk';
+
+// ─── Payment Types ────────────────────────────────────────────────────────────
+
 /**
  * Payment requirement from 402 response
  */
@@ -26,30 +31,57 @@ export interface PaymentRequired {
   accepts?: PaymentRequirement[];
 }
 
-/**
- * Fast wallet configuration
- */
-export interface FastWallet {
-  type: 'fast';
-  privateKey: string;  // Hex-encoded Ed25519 private key
-  publicKey: string;   // Hex-encoded Ed25519 public key
-  address: string;     // bech32m address (fast1...)
-  rpcUrl?: string;     // Fast RPC endpoint
-}
+// ─── Wallet Types ─────────────────────────────────────────────────────────────
 
 /**
- * EVM wallet configuration
+ * Fast wallet from @fastxyz/sdk
  */
-export interface EvmWallet {
-  type: 'evm';
-  privateKey: `0x${string}`;  // Hex-encoded secp256k1 private key
-  address: `0x${string}`;     // Ethereum address
-}
+export type FastWallet = FastWalletClass;
+
+/**
+ * EVM wallet from @fastxyz/allset-sdk
+ * 
+ * Create with: `createEvmWallet()` from @fastxyz/allset-sdk
+ */
+export type EvmWallet = AllSetEvmWallet;
 
 /**
  * Combined wallet type
  */
 export type Wallet = FastWallet | EvmWallet;
+
+// ─── Type Guards ──────────────────────────────────────────────────────────────
+
+/**
+ * Check if wallet is a FastWallet from @fastxyz/sdk
+ */
+export function isFastWallet(wallet: unknown): wallet is FastWallet {
+  return (
+    wallet !== null &&
+    typeof wallet === 'object' &&
+    'submit' in wallet &&
+    typeof (wallet as FastWallet).submit === 'function'
+  );
+}
+
+/**
+ * Check if wallet is an EvmWallet from @fastxyz/allset-sdk
+ */
+export function isEvmWallet(wallet: unknown): wallet is EvmWallet {
+  if (wallet === null || typeof wallet !== 'object') return false;
+  const w = wallet as Record<string, unknown>;
+  
+  // EvmWallet has privateKey (0x...) and address (0x...), no 'submit' method
+  return (
+    typeof w.privateKey === 'string' &&
+    w.privateKey.startsWith('0x') &&
+    typeof w.address === 'string' &&
+    w.address.startsWith('0x') &&
+    !('submit' in w)
+  );
+}
+
+// ─── API Types ────────────────────────────────────────────────────────────────
 
 /**
  * x402Pay parameters
@@ -100,6 +132,8 @@ export interface X402PayResult {
   /** Debug logs (if verbose: true) */
   logs?: string[];
 }
+
+// ─── EIP-3009 Types ───────────────────────────────────────────────────────────
 
 /**
  * EIP-3009 authorization parameters

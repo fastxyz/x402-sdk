@@ -19,6 +19,8 @@ Verify payment signatures and settle EVM payments on-chain. Required infrastruct
 npm install @fastxyz/x402-facilitator
 ```
 
+> **Note:** This package depends on `@fastxyz/sdk` for BCS decoding of Fast transactions. It's installed automatically as a dependency.
+
 ## Quick Start
 
 ```typescript
@@ -29,7 +31,7 @@ const app = express();
 app.use(express.json());
 
 app.use(createFacilitatorServer({
-  evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
+  evmPrivateKey: '0xFacilitatorEVMPrivateKey...',
 }));
 
 app.listen(4020, () => console.log('Facilitator on :4020'));
@@ -42,22 +44,146 @@ app.listen(4020, () => console.log('Facilitator on :4020'));
 - `packages/x402-facilitator/src/verify.ts` - Signature verification
 - `packages/x402-facilitator/src/settle.ts` - On-chain settlement
 - `packages/x402-facilitator/src/chains.ts` - Chain configurations
+- `packages/x402-facilitator/src/fast-bcs.ts` - BCS decoding for Fast transactions
 
 ## Configuration
+
+`createFacilitatorServer()` accepts a `FacilitatorConfig` object:
 
 ```typescript
 interface FacilitatorConfig {
   // Required: Private key for settling EVM payments (pays gas)
   evmPrivateKey: `0x${string}`;
   
-  // Optional: Custom RPC URLs
-  rpcUrls?: {
-    'arbitrum-sepolia'?: string;
-    'base-sepolia'?: string;
-    // ...
-  };
+  // Optional: Path to custom chains.json config file
+  configPath?: string;
+}
+
+// Usage
+const server = createFacilitatorServer({
+  evmPrivateKey: '0x...',
+  configPath: './my-chains.json',  // Optional: custom config
+});
+```
+
+### Chain Configuration
+
+Chain configs (RPC URLs, USDC addresses) are loaded with a hierarchical override system.
+
+#### Config Loading Priority
+
+1. **Custom path** (via `configPath` option) — highest priority
+2. **User config**: `~/.x402/chains.json` — local overrides
+3. **Bundled defaults**: `src/default-chains.ts` — TypeScript defaults
+
+Each level merges over the previous, so you only need to specify values you want to override.
+
+#### Config File Format
+
+```json
+{
+  "evm": {
+    "arbitrum-sepolia": {
+      "chainId": 421614,
+      "rpcUrl": "https://sepolia-rollup.arbitrum.io/rpc",
+      "usdc": {
+        "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+        "name": "USD Coin",
+        "version": "2",
+        "decimals": 6
+      }
+    }
+  },
+  "fast": {
+    "fast-testnet": {
+      "rpcUrl": "https://testnet.api.fast.xyz/proxy"
+    }
+  }
 }
 ```
+
+#### Example: Override RPC URL Locally
+
+Create `~/.x402/chains.json`:
+```json
+{
+  "evm": {
+    "arbitrum-sepolia": {
+      "chainId": 421614,
+      "rpcUrl": "https://my-private-rpc.example.com",
+      "usdc": {
+        "address": "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
+        "name": "USD Coin",
+        "version": "2",
+        "decimals": 6
+      }
+    }
+  }
+}
+```
+
+#### How Config Is Used
+
+- **verify.ts**: Loads chain config to verify EIP-712 signatures (needs chainId, USDC address)
+- **settle.ts**: Loads chain config to submit on-chain transactions (needs RPC URL, USDC address)
+- **server.ts**: Lists supported networks from loaded config
+
+The facilitator maps `chainId` to viem chain objects internally, so JSON configs only contain serializable data.
+
+## Framework Compatibility
+
+The middleware is designed for Express but works with any framework that supports Express-style middleware.
+
+### Express (Native)
+
+```typescript
+import express from 'express';
+const app = express();
+app.use(createFacilitatorServer(...));
+```
+
+### Fastify (with middie)
+
+```typescript
+import Fastify from 'fastify';
+import middie from '@fastify/middie';
+
+const app = Fastify();
+await app.register(middie);
+app.use(createFacilitatorServer(...));
+```
+
+### Koa (with koa-connect)
+
+```typescript
+import Koa from 'koa';
+import connect from 'koa-connect';
+
+const app = new Koa();
+app.use(connect(createFacilitatorServer(...)));
+```
+
+### Other Frameworks
+
+For frameworks with different APIs (Hono, Elysia, etc.), use the library functions directly instead of the middleware:
+
+```typescript
+import { verify, settle } from '@fastxyz/x402-facilitator';
+
+// In your route handler:
+// POST /verify → call verify(paymentPayload, paymentRequirement)
+// POST /settle → call settle(paymentPayload, paymentRequirement, config)
+```
+
+### Middleware Requirements
+
+The middleware expects Express-style request/response objects:
+
+| Object | Required Properties |
+|--------|---------------------|
+| `req` | `method`, `path`, `headers`, `body` |
+| `res` | `status()`, `json()` |
+| `next` | Function to call next middleware |
 
 ## API Endpoints
 
@@ -65,19 +191,34 @@ interface FacilitatorConfig {
 
 Verify a payment signature or certificate.
 
-**Request:**
+**Request (Fast payment):**
 ```json
 {
-  "paymentPayload": { ... },
+  "paymentPayload": {
+    "x402Version": 1,
+    "scheme": "exact",
+    "network": "fast-testnet",
+    "payload": {
+      "transactionCertificate": {
+        "envelope": "0x...",
+        "signatures": [
+          ["0xcommitteePubKey1...", "0xsignature1..."],
+          ["0xcommitteePubKey2...", "0xsignature2..."]
+        ]
+      }
+    }
+  },
   "paymentRequirement": {
     "scheme": "exact",
-    "network": "arbitrum-sepolia",
+    "network": "fast-testnet",
     "maxAmountRequired": "100000",
-    "payTo": "0x1234...",
+    "payTo": "fast1abc123...",
     "maxTimeoutSeconds": 60
   }
 }
 ```
+
+> **Note:** The `network` can be any supported network: `fast-testnet`, `fast-mainnet`, `arbitrum-sepolia`, `arbitrum`, `ethereum-sepolia`, or `ethereum`.
 
 **Response (valid):**
 ```json
@@ -96,13 +237,36 @@ Verify a payment signature or certificate.
 
 ### POST /settle
 
-Settle an EVM payment on-chain. Not needed for Fast payments.
+Settle an EVM payment on-chain. Not needed for Fast payments (they're already on-chain).
 
 **Request:**
 ```json
 {
-  "paymentPayload": { ... },
-  "paymentRequirement": { ... }
+  "paymentPayload": {
+    "x402Version": 1,
+    "scheme": "exact",
+    "network": "arbitrum-sepolia",
+    "payload": {
+      "signature": "0x...",
+      "authorization": {
+        "from": "0xBuyerAddress...",
+        "to": "0xMerchantAddress...",
+        "value": "100000",
+        "validAfter": "0",
+        "validBefore": "1741859999",
+        "nonce": "0x1234567890abcdef..."
+      }
+    }
+  },
+  "paymentRequirement": {
+    "scheme": "exact",
+    "network": "arbitrum-sepolia",
+    "maxAmountRequired": "100000",
+    "payTo": "0xMerchantAddress...",
+    "maxTimeoutSeconds": 60,
+    "asset": "0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d",
+    "extra": {}
+  }
 }
 ```
 
@@ -110,7 +274,7 @@ Settle an EVM payment on-chain. Not needed for Fast payments.
 ```json
 {
   "success": true,
-  "txHash": "0x...",
+  "txHash": "0xabc123...",
   "network": "arbitrum-sepolia"
 }
 ```
@@ -135,8 +299,7 @@ List supported networks.
     "fast-mainnet", 
     "arbitrum-sepolia",
     "arbitrum",
-    "base-sepolia",
-    "base",
+    "ethereum-sepolia",
     "ethereum"
   ]
 }
@@ -156,10 +319,17 @@ List supported networks.
 
 ### Fast Payments
 
-1. Check certificate structure (envelope + signatures)
-2. Validate scheme matches (`fast`)
-3. Validate network matches (`fast-testnet` or `fast-mainnet`)
-4. *(Future: Query Fast RPC for on-chain verification)*
+1. Decode transaction envelope (supports both versioned and legacy formats)
+2. Check certificate structure (envelope + committee signatures)
+3. Validate scheme matches (`fast`)
+4. Validate network matches (`fast-testnet` or `fast-mainnet`)
+5. Validate recipient matches `paymentRequirement.payTo`
+6. Validate amount >= `paymentRequirement.maxAmountRequired`
+
+**Versioned Transaction Support (Release20260303):**
+The facilitator automatically detects and decodes both formats:
+- Legacy: Raw BCS-encoded transaction
+- Versioned: `{ Release20260303: transaction }` envelope
 
 ## Settlement Logic
 
@@ -193,21 +363,6 @@ const settleResult = await settle(
   evmPrivateKey,
 );
 console.log('Settled:', settleResult.txHash);
-```
-
-## Chain Configuration
-
-Default RPC URLs and USDC contract addresses are configured in `src/chains.ts`.
-
-```typescript
-const EVM_CHAINS = {
-  'arbitrum-sepolia': {
-    chainId: 421614,
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-    usdc: '0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d',
-  },
-  // ...
-};
 ```
 
 ## Troubleshooting

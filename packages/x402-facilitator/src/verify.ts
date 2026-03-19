@@ -17,9 +17,9 @@ import type {
   EvmPayload,
   FastPayload,
 } from "./types.js";
-import { getNetworkType, getNetworkId } from "./types.js";
-import { getEvmChainConfig } from "./chains.js";
-import { decodeEnvelope, getTransferDetails, bytesToHex } from "./fast-bcs.js";
+import { getNetworkType } from "./types.js";
+import { type ChainMaps, getEvmChainConfig, getEvmChainConfigFromMaps } from "./chains.js";
+import { decodeEnvelope, getTransferDetails, bytesToHex, fastAddressToBytes } from "./fast-bcs.js";
 
 /**
  * USDC ABI for balance check
@@ -49,11 +49,27 @@ export async function verify(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement
 ): Promise<VerifyResponse> {
+  return verifyInternal(paymentPayload, paymentRequirement);
+}
+
+export async function verifyWithChainMaps(
+  paymentPayload: PaymentPayload,
+  paymentRequirement: PaymentRequirement,
+  chainMaps: ChainMaps
+): Promise<VerifyResponse> {
+  return verifyInternal(paymentPayload, paymentRequirement, chainMaps);
+}
+
+async function verifyInternal(
+  paymentPayload: PaymentPayload,
+  paymentRequirement: PaymentRequirement,
+  chainMaps?: ChainMaps
+): Promise<VerifyResponse> {
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {
     case "evm":
-      return verifyEvmPayment(paymentPayload, paymentRequirement);
+      return verifyEvmPayment(paymentPayload, paymentRequirement, chainMaps);
     case "fast":
       return verifyFastPayment(paymentPayload, paymentRequirement);
     default:
@@ -71,9 +87,12 @@ export async function verify(
  */
 async function verifyEvmPayment(
   paymentPayload: PaymentPayload,
-  paymentRequirement: PaymentRequirement
+  paymentRequirement: PaymentRequirement,
+  chainMaps?: ChainMaps
 ): Promise<VerifyResponse> {
-  const chainConfig = getEvmChainConfig(paymentPayload.network);
+  const chainConfig = chainMaps
+    ? getEvmChainConfigFromMaps(chainMaps, paymentPayload.network)
+    : getEvmChainConfig(paymentPayload.network);
   if (!chainConfig) {
     return {
       isValid: false,
@@ -124,7 +143,7 @@ async function verifyEvmPayment(
   }
 
   // Get domain parameters
-  const chainId = getNetworkId(paymentPayload.network);
+  const chainId = chainConfig.chain.id;
   const name = paymentRequirement.extra?.name ?? chainConfig.usdcName ?? "USD Coin";
   const version = paymentRequirement.extra?.version ?? chainConfig.usdcVersion ?? "2";
   const erc20Address = paymentRequirement.asset as Address;
@@ -132,7 +151,7 @@ async function verifyEvmPayment(
   // Create public client for verification
   const client = createPublicClient({
     chain: chainConfig.chain,
-    transport: http(),
+    transport: http(chainConfig.rpcUrl),
   });
 
   // Verify signature using viem's verifyTypedData
@@ -241,10 +260,29 @@ async function verifyEvmPayment(
 
 /**
  * Normalize address for comparison
- * Handles both hex (0x...) and bech32m (set1...) formats
+ * Handles both hex (0x...) and bech32m (fast1.../set1...) formats
  */
 function normalizeAddress(addr: string): string {
   return addr.toLowerCase().replace(/^0x/, "");
+}
+
+/**
+ * Check if address is a Fast bech32m address (fast1... or set1...)
+ */
+function isFastAddress(addr: string): boolean {
+  return addr.startsWith("fast1") || addr.startsWith("set1");
+}
+
+/**
+ * Convert Fast bech32m address to hex using @fastxyz/sdk
+ */
+function fastAddressToHex(addr: string): string | null {
+  try {
+    const bytes = fastAddressToBytes(addr);
+    return bytesToHex(bytes).slice(2); // Remove 0x prefix for comparison
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -252,73 +290,30 @@ function normalizeAddress(addr: string): string {
  * Supports hex pubkeys and bech32m addresses (fast1... or set1...)
  */
 function addressesMatch(a: string, b: string): boolean {
-  // Helper to decode bech32m to hex
-  const bech32mToHex = (addr: string): string | null => {
-    try {
-      // Import bech32m dynamically would be better but for sync use:
-      // Simple implementation: extract the data part and decode
-      const sep = addr.indexOf("1");
-      if (sep === -1) return null;
-      
-      const data = addr.slice(sep + 1);
-      const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-      
-      // Decode each character to 5-bit value
-      const values: number[] = [];
-      for (const c of data) {
-        const idx = CHARSET.indexOf(c.toLowerCase());
-        if (idx === -1) return null;
-        values.push(idx);
-      }
-      
-      // Remove checksum (last 6 characters)
-      const dataValues = values.slice(0, -6);
-      
-      // Convert 5-bit to 8-bit
-      let acc = 0;
-      let bits = 0;
-      const result: number[] = [];
-      for (const v of dataValues) {
-        acc = (acc << 5) | v;
-        bits += 5;
-        while (bits >= 8) {
-          bits -= 8;
-          result.push((acc >> bits) & 0xff);
-        }
-      }
-      
-      return Buffer.from(result).toString("hex");
-    } catch {
-      return null;
-    }
-  };
-
-  // If both start with "fast1" or "set1", compare directly
-  if ((a.startsWith("fast1") || a.startsWith("set1")) && 
-      (b.startsWith("fast1") || b.startsWith("set1"))) {
+  // If both are Fast addresses, compare directly
+  if (isFastAddress(a) && isFastAddress(b)) {
     return a.toLowerCase() === b.toLowerCase();
   }
   
   // If both are hex, compare normalized
-  if ((a.startsWith("0x") || /^[0-9a-fA-F]+$/.test(a)) &&
-      (b.startsWith("0x") || /^[0-9a-fA-F]+$/.test(b))) {
+  if (!isFastAddress(a) && !isFastAddress(b)) {
     return normalizeAddress(a) === normalizeAddress(b);
   }
   
-  // Mixed format - decode bech32m to hex and compare
+  // Mixed format - decode Fast address to hex and compare
   let hexA = a;
   let hexB = b;
   
-  if (a.startsWith("fast1") || a.startsWith("set1")) {
-    const decoded = bech32mToHex(a);
+  if (isFastAddress(a)) {
+    const decoded = fastAddressToHex(a);
     if (!decoded) return false;
     hexA = decoded;
   } else {
     hexA = normalizeAddress(a);
   }
   
-  if (b.startsWith("fast1") || b.startsWith("set1")) {
-    const decoded = bech32mToHex(b);
+  if (isFastAddress(b)) {
+    const decoded = fastAddressToHex(b);
     if (!decoded) return false;
     hexB = decoded;
   } else {
@@ -474,7 +469,8 @@ async function verifyFastPayment(
     }
   } else {
     // Object format from RPC
-    const tx = envelope.transaction;
+    // Handle both versioned (Release20260303) and legacy formats
+    let tx = envelope.transaction as Record<string, unknown>;
     if (!tx) {
       return {
         isValid: false,
@@ -483,8 +479,14 @@ async function verifyFastPayment(
       };
     }
     
+    // Unwrap versioned transaction if present
+    if (tx.Release20260303) {
+      tx = tx.Release20260303 as Record<string, unknown>;
+    }
+    
     // Verify it's a TokenTransfer
-    if (!tx.claim.TokenTransfer) {
+    const claim = tx.claim as Record<string, unknown> | undefined;
+    if (!claim?.TokenTransfer) {
       return {
         isValid: false,
         invalidReason: "not_a_token_transfer",
@@ -492,11 +494,15 @@ async function verifyFastPayment(
       };
     }
 
-    const transfer = tx.claim.TokenTransfer;
+    const transfer = claim.TokenTransfer as {
+      token_id: number[];
+      amount: string;
+      user_data: number[] | null;
+    };
     
     // Convert byte arrays to hex for comparison
-    senderHex = "0x" + Buffer.from(tx.sender).toString("hex");
-    recipientHex = "0x" + Buffer.from(tx.recipient).toString("hex");
+    senderHex = "0x" + Buffer.from(tx.sender as number[]).toString("hex");
+    recipientHex = "0x" + Buffer.from(tx.recipient as number[]).toString("hex");
     tokenIdHex = "0x" + Buffer.from(transfer.token_id).toString("hex");
     
     try {

@@ -17,6 +17,7 @@ import {
   settlePayment,
   encodePaymentResponse,
 } from "./payment.js";
+import { getSupportedNetworks } from "./utils.js";
 
 // Express types (minimal to avoid hard dependency)
 interface Request {
@@ -89,11 +90,10 @@ function isFastNetwork(network: string): boolean {
  * Check if network is EVM-based
  */
 function isEvmNetwork(network: string): boolean {
-  const evmNetworks = [
-    "ethereum", "arbitrum", "arbitrum-sepolia", 
-    "base", "base-sepolia", "optimism", "polygon"
-  ];
-  return evmNetworks.includes(network) || network.endsWith("-sepolia");
+  return !isFastNetwork(network) && (
+    getSupportedNetworks().includes(network) ||
+    network.endsWith("-sepolia")
+  );
 }
 
 /**
@@ -177,7 +177,7 @@ export function paymentMiddleware(
   ) {
     // Find matching route
     const routeConfig = findRouteConfig(routes, req.method, req.path);
-    
+
     // No matching protected route - pass through
     if (!routeConfig) {
       return next();
@@ -197,22 +197,35 @@ export function paymentMiddleware(
     }
     
     if (!paymentHeader) {
-      // Return 402 Payment Required
-      const paymentRequired = createPaymentRequired(
+      try {
+        // Return 402 Payment Required
+        const paymentRequired = createPaymentRequired(
+          resolvedPayTo,
+          routeConfig,
+          req.path
+        );
+        res.status(402);
+        return res.json(paymentRequired);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        res.status(500);
+        return res.json({ error: errorMessage });
+      }
+    }
+
+    // Create payment requirement for verification
+    let paymentRequirement: PaymentRequirement;
+    try {
+      paymentRequirement = createPaymentRequirement(
         resolvedPayTo,
         routeConfig,
         req.path
       );
-      res.status(402);
-      return res.json(paymentRequired);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      res.status(500);
+      return res.json({ error: errorMessage });
     }
-    
-    // Create payment requirement for verification
-    const paymentRequirement = createPaymentRequirement(
-      resolvedPayTo,
-      routeConfig,
-      req.path
-    );
     
     const isFast = isFastNetwork(routeConfig.network);
     

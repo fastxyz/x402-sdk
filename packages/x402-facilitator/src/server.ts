@@ -10,9 +10,14 @@ import type {
   PaymentPayload,
   SupportedPaymentKind,
 } from "./types.js";
-import { verify } from "./verify.js";
-import { settle } from "./settle.js";
-import { EVM_CHAINS, SUPPORTED_EVM_NETWORKS, SUPPORTED_FAST_NETWORKS } from "./chains.js";
+import { verifyWithChainMaps } from "./verify.js";
+import { settleWithChainMaps } from "./settle.js";
+import {
+  loadChainMaps,
+  getEvmChainConfigFromMaps,
+  getSupportedEvmNetworksFromMaps,
+  getSupportedFastNetworksFromMaps,
+} from "./chains.js";
 
 /**
  * Create facilitator Express routes
@@ -26,6 +31,8 @@ import { EVM_CHAINS, SUPPORTED_EVM_NETWORKS, SUPPORTED_FAST_NETWORKS } from "./c
  * @returns Express router with facilitator endpoints
  */
 export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
+  const chainMaps = loadChainMaps(config.configPath);
+
   const routes: Array<{
     method: "get" | "post";
     path: string;
@@ -64,7 +71,7 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
           decoded = paymentPayload;
         }
 
-        const result = await verify(decoded, paymentRequirements);
+        const result = await verifyWithChainMaps(decoded, paymentRequirements, chainMaps);
         res.json(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -108,7 +115,7 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
           decoded = paymentPayload;
         }
 
-        const result = await settle(decoded, paymentRequirements, config);
+        const result = await settleWithChainMaps(decoded, paymentRequirements, config, chainMaps);
         res.json(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -128,8 +135,9 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
       const paymentKinds: SupportedPaymentKind[] = [];
 
       // Add EVM networks
-      for (const network of SUPPORTED_EVM_NETWORKS) {
-        const chainConfig = EVM_CHAINS[network];
+      for (const network of getSupportedEvmNetworksFromMaps(chainMaps)) {
+        const chainConfig = getEvmChainConfigFromMaps(chainMaps, network);
+        if (!chainConfig) continue;
         paymentKinds.push({
           x402Version: 1,
           scheme: "exact",
@@ -143,7 +151,7 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
       }
 
       // Add Fast networks
-      for (const network of SUPPORTED_FAST_NETWORKS) {
+      for (const network of getSupportedFastNetworksFromMaps(chainMaps)) {
         paymentKinds.push({
           x402Version: 1,
           scheme: "exact",

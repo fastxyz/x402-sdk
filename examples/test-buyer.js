@@ -2,25 +2,14 @@
  * Test Buyer - Request paid content using x402-client
  */
 import { x402Pay } from '@fastxyz/x402-client';
-import { bech32m } from '@scure/base';
+import { FastProvider, FastWallet } from '@fastxyz/sdk';
 
 // Buyer Fast wallet (has SETUSDC balance)
 const FAST_PRIVATE_KEY = 'a7d4fa67fcf408d1154e22c4c83c6e1f8d4420b6dfb5a3c2f0417c509bd069b3';
-const FAST_PUBLIC_KEY = 'a60102d0078ab3a8f5440e33f670596791431d6f662b66901ce6dcdbb1cf259b';
-
-// Derive Fast address from public key
-function deriveFastAddress(pubKeyHex) {
-  const pubKeyBytes = Buffer.from(pubKeyHex, 'hex');
-  return bech32m.encode('fast', bech32m.toWords(pubKeyBytes));
-}
-
-const FAST_ADDRESS = deriveFastAddress(FAST_PUBLIC_KEY);
 
 console.log('═══════════════════════════════════════════════════════════════');
 console.log('  x402 Buyer Test - Fast Network');
 console.log('═══════════════════════════════════════════════════════════════');
-console.log('');
-console.log(`Buyer Address: ${FAST_ADDRESS}`);
 console.log('');
 
 const url = 'http://23.88.118.41:3000/api/fast-weather';
@@ -31,14 +20,15 @@ console.log('━━━━━━━━━━━━━━━━━━━━━━�
 console.log('');
 
 try {
+  const fastProvider = new FastProvider({ network: 'testnet' });
+  const fastWallet = await FastWallet.fromPrivateKey(FAST_PRIVATE_KEY, fastProvider);
+
+  console.log(`Buyer Address: ${fastWallet.address}`);
+  console.log('');
+
   const result = await x402Pay({
     url,
-    wallet: {
-      type: 'fast',
-      privateKey: FAST_PRIVATE_KEY,
-      publicKey: FAST_PUBLIC_KEY,
-      address: FAST_ADDRESS,
-    },
+    wallet: fastWallet,
     verbose: true,
   });
 
@@ -72,9 +62,9 @@ try {
   }
 } catch (err) {
   console.error('');
-  console.error('ERROR:', err.message);
+  console.error('ERROR:', err instanceof Error ? err.message : err);
   console.error('');
-  if (err.stack) {
+  if (err instanceof Error && err.stack) {
     console.error(err.stack);
   }
 }

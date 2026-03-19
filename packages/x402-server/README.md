@@ -23,7 +23,7 @@ app.use(paymentMiddleware(
   "0x1234567890abcdef...",  // Your payment address
   {
     "GET /api/premium/*": { price: "$0.10", network: "arbitrum-sepolia" },
-    "POST /api/generate": { price: "$0.50", network: "base-sepolia" },
+    "POST /api/generate": { price: "$0.50", network: "ethereum-sepolia" },
   },
   { url: "http://localhost:4020" }  // Facilitator URL
 ));
@@ -146,8 +146,7 @@ interface FacilitatorConfig {
 |---------|----------|
 | `arbitrum-sepolia` | 421614 |
 | `arbitrum` | 42161 |
-| `base-sepolia` | 84532 |
-| `base` | 8453 |
+| `ethereum-sepolia` | 11155111 |
 | `ethereum` | 1 |
 
 ## Response Headers
@@ -223,7 +222,41 @@ This package requires a facilitator service to verify and settle payments.
 }
 ```
 
-Use `x402-facilitator` to run your own facilitator service.
+Use `@fastxyz/x402-facilitator` to run your own facilitator service, or connect to an existing facilitator endpoint.
+
+## Framework Compatibility
+
+The middleware is designed for Express but works with any framework that supports Express-style middleware:
+
+```typescript
+// Express (native)
+import express from 'express';
+const app = express();
+app.use(paymentMiddleware(...));
+
+// Fastify (with middie)
+import Fastify from 'fastify';
+import middie from '@fastify/middie';
+const app = Fastify();
+await app.register(middie);
+app.use(paymentMiddleware(...));
+
+// Koa (with koa-connect)
+import Koa from 'koa';
+import connect from 'koa-connect';
+const app = new Koa();
+app.use(connect(paymentMiddleware(...)));
+```
+
+For frameworks with different APIs (Hono, Elysia), use the library functions directly:
+
+```typescript
+import { createPaymentRequired, verifyPayment, settlePayment } from '@fastxyz/x402-server';
+```
+
+## Documentation
+
+For detailed technical specifications, API reference, and advanced usage, see [skills/server-skill.md](../../skills/server-skill.md).
 
 ## License
 

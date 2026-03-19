@@ -41,11 +41,11 @@ export interface PaymentPayload {
  */
 export interface FastPayload {
   transactionCertificate: {
-    envelope: string;
-    signatures: Array<{
-      committee_member: number;
-      signature: string;
-    }>;
+    envelope: string | {
+      transaction: Record<string, unknown>;
+      signature?: unknown;
+    };
+    signatures: unknown[];
   };
 }
 
@@ -106,6 +106,8 @@ export interface FacilitatorConfig {
   fastRpcUrl?: string;
   /** Custom chain configs */
   chains?: Record<string, Chain>;
+  /** Custom path to chains.json config file */
+  configPath?: string;
 }
 
 /**
@@ -148,10 +150,6 @@ export function getNetworkId(network: string): number {
     "ethereum-sepolia": 11155111,
     "arbitrum": 42161,
     "arbitrum-sepolia": 421614,
-    "base": 8453,
-    "base-sepolia": 84532,
-    "optimism": 10,
-    "polygon": 137,
   };
   return networkIds[network] || 0;
 }

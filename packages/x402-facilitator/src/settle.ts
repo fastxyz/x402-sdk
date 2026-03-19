@@ -11,6 +11,7 @@ import {
   parseAbi,
   parseSignature,
 } from "viem";
+import { hashTransaction } from "@fastxyz/sdk";
 import { privateKeyToAccount } from "viem/accounts";
 import type {
   PaymentPayload,
@@ -21,8 +22,8 @@ import type {
   FacilitatorConfig,
 } from "./types.js";
 import { getNetworkType } from "./types.js";
-import { getEvmChainConfig } from "./chains.js";
-import { verify } from "./verify.js";
+import { type ChainMaps, getEvmChainConfig, getEvmChainConfigFromMaps } from "./chains.js";
+import { verify, verifyWithChainMaps } from "./verify.js";
 
 /**
  * USDC ABI for transferWithAuthorization
@@ -40,11 +41,29 @@ export async function settle(
   paymentRequirement: PaymentRequirement,
   config: FacilitatorConfig
 ): Promise<SettleResponse> {
+  return settleInternal(paymentPayload, paymentRequirement, config);
+}
+
+export async function settleWithChainMaps(
+  paymentPayload: PaymentPayload,
+  paymentRequirement: PaymentRequirement,
+  config: FacilitatorConfig,
+  chainMaps: ChainMaps
+): Promise<SettleResponse> {
+  return settleInternal(paymentPayload, paymentRequirement, config, chainMaps);
+}
+
+async function settleInternal(
+  paymentPayload: PaymentPayload,
+  paymentRequirement: PaymentRequirement,
+  config: FacilitatorConfig,
+  chainMaps?: ChainMaps
+): Promise<SettleResponse> {
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {
     case "evm":
-      return settleEvmPayment(paymentPayload, paymentRequirement, config);
+      return settleEvmPayment(paymentPayload, paymentRequirement, config, chainMaps);
     case "fast":
       return settleFastPayment(paymentPayload, paymentRequirement);
     default:
@@ -62,7 +81,8 @@ export async function settle(
 async function settleEvmPayment(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement,
-  config: FacilitatorConfig
+  config: FacilitatorConfig,
+  chainMaps?: ChainMaps
 ): Promise<SettleResponse> {
   if (!config.evmPrivateKey) {
     return {
@@ -72,7 +92,9 @@ async function settleEvmPayment(
     };
   }
 
-  const chainConfig = getEvmChainConfig(paymentPayload.network);
+  const chainConfig = chainMaps
+    ? getEvmChainConfigFromMaps(chainMaps, paymentPayload.network)
+    : getEvmChainConfig(paymentPayload.network);
   if (!chainConfig) {
     return {
       success: false,
@@ -93,7 +115,9 @@ async function settleEvmPayment(
   const { authorization, signature } = payload;
 
   // Re-verify before settling (reference implementation does this)
-  const verifyResult = await verify(paymentPayload, paymentRequirement);
+  const verifyResult = chainMaps
+    ? await verifyWithChainMaps(paymentPayload, paymentRequirement, chainMaps)
+    : await verify(paymentPayload, paymentRequirement);
   if (!verifyResult.isValid) {
     return {
       success: false,
@@ -109,13 +133,13 @@ async function settleEvmPayment(
     const walletClient = createWalletClient({
       account,
       chain: chainConfig.chain,
-      transport: http(),
+      transport: http(chainConfig.rpcUrl),
     });
 
     // Create public client for waiting
     const publicClient = createPublicClient({
       chain: chainConfig.chain,
-      transport: http(),
+      transport: http(chainConfig.rpcUrl),
     });
 
     // Check if authorization was already used
@@ -214,9 +238,27 @@ async function settleFastPayment(
   // Fast transactions are already settled on-chain
   // The wallet extension handles signing and broadcasting
   // Return success with a transaction identifier based on the certificate
-  const transactionId = payload.transactionCertificate.envelope
-    ? payload.transactionCertificate.envelope.substring(0, 66)
-    : "";
+  let transactionId = "";
+  const envelope = payload.transactionCertificate.envelope;
+
+  if (typeof envelope === "string") {
+    transactionId = envelope.substring(0, 66);
+  } else if (envelope && typeof envelope === "object") {
+    const transactionWrapper = (envelope as { transaction?: Record<string, unknown> }).transaction;
+    const transaction = transactionWrapper && typeof transactionWrapper === "object" && "Release20260303" in transactionWrapper
+      ? transactionWrapper.Release20260303
+      : transactionWrapper;
+
+    if (transaction && typeof transaction === "object") {
+      try {
+        transactionId = hashTransaction(
+          transaction as Parameters<typeof hashTransaction>[0]
+        );
+      } catch {
+        transactionId = "";
+      }
+    }
+  }
 
   return {
     success: true,

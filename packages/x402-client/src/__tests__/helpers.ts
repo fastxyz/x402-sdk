@@ -2,29 +2,57 @@
  * Test helpers and mocks
  */
 
-import type { FastWallet, EvmWallet, PaymentRequired } from '../types.js';
+import type { EvmWallet, PaymentRequired } from '../types.js';
 
 // ─── Mock Wallets ─────────────────────────────────────────────────────────────
 
+/**
+ * Mock EVM wallet for testing
+ * 
+ * Note: EvmAccount from @fastxyz/allset-sdk is viem's Account type with additional methods.
+ * For type guard tests, we only need the shape that isEvmWallet() checks.
+ * Cast through unknown to satisfy TypeScript.
+ */
 export const mockEvmWallet: EvmWallet = {
-  type: 'evm',
   privateKey: '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', // Hardhat account #0
   address: '0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266',
-};
+} as unknown as EvmWallet;
 
-export const mockFastWallet: FastWallet = {
-  type: 'fast',
-  // Valid Ed25519 key pair for testing
+/**
+ * Mock Fast wallet data for testing
+ * Note: FastWallet class from @fastxyz/sdk should be mocked in actual tests
+ */
+export const mockFastWalletData = {
   privateKey: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-  publicKey: 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789',
-  // Valid bech32m address (same as bridge address for testing)
   address: 'fast1x0g58phuf0pf32e9uvp3mv6hak4z37ytpqyfzjzhfsehua9kmegqwzv0td',
 };
+
+import type { FastWallet } from '@fastxyz/sdk';
+
+/**
+ * Create a mock FastWallet-like object for type guard tests
+ * This mimics the FastWallet class interface with enough to pass type guards
+ */
+export function createMockFastWallet(address: string = mockFastWalletData.address): FastWallet {
+  // Cast through unknown to satisfy TypeScript while providing mock implementation
+  return {
+    address,
+    submit: async () => ({
+      txHash: '0x' + '1'.repeat(64),
+      certificate: { envelope: {}, signatures: [] },
+    }),
+    send: async () => ({
+      txHash: '0x' + '2'.repeat(64),
+      certificate: { envelope: {}, signatures: [] },
+      explorerUrl: null,
+    }),
+  } as unknown as FastWallet;
+}
 
 // ─── Mock 402 Responses ───────────────────────────────────────────────────────
 
 export function mock402Response(network: string, amount: string = '100000'): PaymentRequired {
-  const isEvm = ['arbitrum-sepolia', 'base-sepolia', 'arbitrum', 'base'].includes(network);
+  const isEvm = ['arbitrum-sepolia', 'ethereum-sepolia', 'arbitrum', 'ethereum'].includes(network);
   
   return {
     x402Version: 1,
@@ -38,7 +66,7 @@ export function mock402Response(network: string, amount: string = '100000'): Pay
         : 'fast19cjwajufyuqv883ydlvrp8xrhxejuvfe40pxq5dsrv675zgh89sqg9txs8',
       asset: isEvm 
         ? '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d'
-        : 'b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5',
+        : '9c52fe9465f57bc526c11aa0c048fd8709aa46abc06d15c80cbed9263d4d4df8', // testUSDC
       extra: isEvm ? { name: 'USD Coin', version: '2' } : undefined,
     }],
   };

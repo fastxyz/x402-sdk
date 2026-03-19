@@ -2,7 +2,8 @@
  * Test Buyer - Request paid content using x402-client (EVM with auto-bridge)
  */
 import { x402Pay } from '@fastxyz/x402-client';
-import { bech32m } from '@scure/base';
+import { createEvmWallet } from '@fastxyz/allset-sdk';
+import { FastProvider, FastWallet } from '@fastxyz/sdk';
 
 // Buyer EVM wallet
 const EVM_PRIVATE_KEY = '0xb88b23e5b66a8739d8a4446d503c33f9817f53930f439a0394d9acc02d51be00';
@@ -10,21 +11,12 @@ const EVM_ADDRESS = '0x4e94048ab8fD1A0f5D81ff458CA566198ce4C650';
 
 // Buyer Fast wallet (for auto-bridge)
 const FAST_PRIVATE_KEY = 'a7d4fa67fcf408d1154e22c4c83c6e1f8d4420b6dfb5a3c2f0417c509bd069b3';
-const FAST_PUBLIC_KEY = 'a60102d0078ab3a8f5440e33f670596791431d6f662b66901ce6dcdbb1cf259b';
-
-// Derive Fast address
-function deriveFastAddress(pubKeyHex) {
-  const pubKeyBytes = Buffer.from(pubKeyHex, 'hex');
-  return bech32m.encode('fast', bech32m.toWords(pubKeyBytes));
-}
-const FAST_ADDRESS = deriveFastAddress(FAST_PUBLIC_KEY);
 
 console.log('═══════════════════════════════════════════════════════════════');
 console.log('  x402 Buyer Test - EVM (Arbitrum Sepolia) with Auto-Bridge');
 console.log('═══════════════════════════════════════════════════════════════');
 console.log('');
 console.log(`Buyer EVM Address: ${EVM_ADDRESS}`);
-console.log(`Buyer Fast Address: ${FAST_ADDRESS}`);
 console.log('');
 
 const url = 'http://localhost:3000/api/weather';
@@ -35,21 +27,16 @@ console.log('━━━━━━━━━━━━━━━━━━━━━━�
 console.log('');
 
 try {
+  const fastProvider = new FastProvider({ network: 'testnet' });
+  const fastWallet = await FastWallet.fromPrivateKey(FAST_PRIVATE_KEY, fastProvider);
+  const evmWallet = createEvmWallet(EVM_PRIVATE_KEY);
+
+  console.log(`Buyer Fast Address: ${fastWallet.address}`);
+  console.log('');
+
   const result = await x402Pay({
     url,
-    wallet: [
-      {
-        type: 'evm',
-        privateKey: EVM_PRIVATE_KEY,
-        address: EVM_ADDRESS,
-      },
-      {
-        type: 'fast',
-        privateKey: FAST_PRIVATE_KEY,
-        publicKey: FAST_PUBLIC_KEY,
-        address: FAST_ADDRESS,
-      },
-    ],
+    wallet: [evmWallet, fastWallet],
     verbose: true,
   });
 
@@ -68,7 +55,7 @@ try {
     console.log(`  Amount: ${result.payment.amount}`);
     console.log(`  To: ${result.payment.recipient}`);
     if (result.payment.bridged) {
-      console.log(`  Bridged: ${result.payment.bridgeAmount} fastUSDC → USDC`);
+      console.log(`  Bridge Tx: ${result.payment.bridgeTxHash}`);
     }
   }
   
@@ -86,9 +73,9 @@ try {
   }
 } catch (err) {
   console.error('');
-  console.error('ERROR:', err.message);
+  console.error('ERROR:', err instanceof Error ? err.message : err);
   console.error('');
-  if (err.stack) {
+  if (err instanceof Error && err.stack) {
     console.error(err.stack);
   }
 }

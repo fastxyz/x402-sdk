@@ -2,6 +2,8 @@
  * Tests for facilitator server endpoints
  */
 
+import { rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, it, expect, vi } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
 import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
@@ -79,11 +81,81 @@ describe("GET /supported", () => {
     
     // Check for EVM networks
     expect(networks).toContain("arbitrum-sepolia");
-    expect(networks).toContain("base-sepolia");
+    expect(networks).toContain("ethereum-sepolia");
     
     // Check for Fast networks
     expect(networks).toContain("fast-testnet");
     expect(networks).toContain("fast-mainnet");
+  });
+
+  it("keeps custom config isolated per route instance", async () => {
+    const configAPath = join("/tmp", `x402-fac-config-a-${process.pid}.json`);
+    const configBPath = join("/tmp", `x402-fac-config-b-${process.pid}.json`);
+
+    writeFileSync(configAPath, JSON.stringify({
+      evm: {
+        "arbitrum-sepolia": {
+          chainId: 421614,
+          rpcUrl: "https://a.example/rpc",
+          usdc: {
+            address: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            name: "USD Coin A",
+            version: "2",
+            decimals: 6,
+          },
+        },
+      },
+      fast: {
+        "fast-testnet": {
+          rpcUrl: "https://fast-a.example/rpc",
+        },
+      },
+    }));
+
+    writeFileSync(configBPath, JSON.stringify({
+      evm: {
+        "arbitrum-sepolia": {
+          chainId: 421614,
+          rpcUrl: "https://b.example/rpc",
+          usdc: {
+            address: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            name: "USD Coin B",
+            version: "2",
+            decimals: 6,
+          },
+        },
+      },
+      fast: {
+        "fast-testnet": {
+          rpcUrl: "https://fast-b.example/rpc",
+        },
+      },
+    }));
+
+    try {
+      const routesA = createFacilitatorRoutes({ configPath: configAPath });
+      const routesB = createFacilitatorRoutes({ configPath: configBPath });
+      const supportedRouteA = routesA.find(r => r.path === "/supported");
+      const supportedRouteB = routesB.find(r => r.path === "/supported");
+
+      const req = createMockRequest("get", "/supported");
+      const resA = createMockResponse();
+      const resB = createMockResponse();
+
+      await supportedRouteA!.handler(req as any, resA as any);
+      await supportedRouteB!.handler(req as any, resB as any);
+
+      const paymentKindsA = (resA.getJson() as { paymentKinds: Array<{ network: string; extra?: { asset?: string } }> }).paymentKinds;
+      const paymentKindsB = (resB.getJson() as { paymentKinds: Array<{ network: string; extra?: { asset?: string } }> }).paymentKinds;
+
+      expect(paymentKindsA.find(kind => kind.network === "arbitrum-sepolia")?.extra?.asset)
+        .toBe("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+      expect(paymentKindsB.find(kind => kind.network === "arbitrum-sepolia")?.extra?.asset)
+        .toBe("0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb");
+    } finally {
+      rmSync(configAPath, { force: true });
+      rmSync(configBPath, { force: true });
+    }
   });
 });
 
@@ -322,6 +394,71 @@ describe("POST /settle", () => {
     const body = res.getJson() as { success: boolean; transaction?: string };
     expect(body.success).toBe(true);
     expect(body.transaction).toBeDefined();
+  });
+
+  it("succeeds for Fast object-envelope certificates", async () => {
+    const routes = createFacilitatorRoutes();
+    const settleRoute = routes.find(r => r.path === "/settle");
+
+    const recipient = new Uint8Array(32).fill(0xab);
+    const tokenId = new Uint8Array(32);
+    tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
+
+    const transaction = {
+      sender: new Uint8Array(32).fill(0xcd),
+      recipient,
+      nonce: 4,
+      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
+      claim: {
+        TokenTransfer: {
+          token_id: tokenId,
+          amount: "4000000000000000000",
+          user_data: null,
+        },
+      },
+      archival: false,
+    };
+
+    const req = createMockRequest("post", "/settle", {
+      paymentPayload: {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: {
+          transactionCertificate: {
+            envelope: {
+              transaction: {
+                Release20260303: transaction,
+              },
+              signature: {
+                Signature: Array(64).fill(0xaa),
+              },
+            },
+            signatures: [
+              { committee_member: 0, signature: "0x" + "aa".repeat(64) },
+            ],
+          },
+        },
+      },
+      paymentRequirements: {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: "1000000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: bytesToHex(recipient),
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      },
+    });
+    const res = createMockResponse();
+
+    await settleRoute!.handler(req as any, res as any);
+
+    const body = res.getJson() as { success: boolean; transaction?: string };
+    expect(body.success).toBe(true);
+    expect(body.transaction).toMatch(/^0x/);
   });
 
   it("fails for EVM without private key configured", async () => {
