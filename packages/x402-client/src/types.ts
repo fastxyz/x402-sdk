@@ -3,7 +3,7 @@
  */
 
 import type { FastWallet as FastWalletClass } from '@fastxyz/sdk';
-import type { EvmAccount } from '@fastxyz/allset-sdk/node';
+import type { EvmWallet as AllSetEvmWallet } from '@fastxyz/allset-sdk';
 
 // ─── Payment Types ────────────────────────────────────────────────────────────
 
@@ -41,9 +41,9 @@ export type FastWallet = FastWalletClass;
 /**
  * EVM wallet from @fastxyz/allset-sdk
  * 
- * Create with: `createEvmWallet()` from @fastxyz/allset-sdk/node
+ * Create with: `createEvmWallet()` from @fastxyz/allset-sdk
  */
-export type EvmWallet = EvmAccount;
+export type EvmWallet = AllSetEvmWallet;
 
 /**
  * Combined wallet type

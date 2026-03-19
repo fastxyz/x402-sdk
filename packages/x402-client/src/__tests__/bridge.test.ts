@@ -7,7 +7,7 @@
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { AllSetProvider } from '@fastxyz/allset-sdk/node';
+import { AllSetProvider } from '@fastxyz/allset-sdk';
 import { 
   getBridgeConfig,
   getFastBalance,
@@ -120,7 +120,9 @@ describe('AllSet Bridge', () => {
       let providerNetwork = '';
       let requestedToken = '';
 
-      AllSetProvider.prototype.sendToExternal = async function(params) {
+      AllSetProvider.prototype.sendToExternal = async function(params: {
+        token: string;
+      }) {
         providerNetwork = this.network;
         requestedToken = params.token;
         return {

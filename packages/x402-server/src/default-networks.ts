@@ -5,8 +5,7 @@
  * Only x402-specific EIP-3009 metadata is defined locally.
  */
 
-import { AllSetProvider } from "@fastxyz/allset-sdk/node";
-import { resolveKnownFastToken } from "@fastxyz/sdk";
+import { AllSetProvider } from "@fastxyz/allset-sdk";
 
 // ---------------------------------------------------------------------------
 // x402-specific EIP-3009 metadata (not in SDKs)
@@ -118,40 +117,6 @@ function buildEvmNetworkDefaults(): Record<string, NetworkAssetConfig> {
         };
       }
     }
-  }
-
-  return result;
-}
-
-async function buildFastNetworkDefaults(): Promise<Record<string, NetworkAssetConfig>> {
-  const result: Record<string, NetworkAssetConfig> = {};
-
-  for (const network of ["testnet", "mainnet"] as const) {
-    try {
-      const token = await resolveKnownFastToken(network === "testnet" ? "testUSDC" : "fastUSDC", network);
-      if (token) {
-        result[`fast-${network}`] = {
-          asset: "0x" + token.tokenId,
-          decimals: token.decimals,
-        };
-      }
-    } catch {
-      // Fallback
-    }
-  }
-
-  // Fallback if SDK resolution failed
-  if (!result["fast-testnet"]) {
-    result["fast-testnet"] = {
-      asset: "0x9c52fe9465f57bc526c11aa0c048fd8709aa46abc06d15c80cbed9263d4d4df8", // testUSDC
-      decimals: 6,
-    };
-  }
-  if (!result["fast-mainnet"]) {
-    result["fast-mainnet"] = {
-      asset: "0xb4fdab846372740f747eb4b64ac0c22eaa159113f2d35b075027065fba419365", // fastUSDC
-      decimals: 6,
-    };
   }
 
   return result;

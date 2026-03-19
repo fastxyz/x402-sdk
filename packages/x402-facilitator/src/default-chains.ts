@@ -5,7 +5,7 @@
  * Only x402-specific EIP-3009 metadata is defined locally.
  */
 
-import { AllSetProvider } from "@fastxyz/allset-sdk/node";
+import { AllSetProvider } from "@fastxyz/allset-sdk";
 import { getDefaultRpcUrl } from "@fastxyz/sdk";
 
 // ---------------------------------------------------------------------------
