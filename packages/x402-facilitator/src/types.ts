@@ -127,7 +127,7 @@ export type NetworkType = "evm" | "fast" | "svm";
  * Determine network type
  */
 export function getNetworkType(network: string): NetworkType {
-  if (network.startsWith("fast-") || network === "fast") {
+  if (network.startsWith("fast-")) {
     return "fast";
   }
   if (network.startsWith("solana")) {

@@ -55,6 +55,14 @@ export async function verify(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement
 ): Promise<VerifyResponse> {
+  if (paymentPayload.network === "fast" || paymentRequirement.network === "fast") {
+    return {
+      isValid: false,
+      invalidReason: "invalid_network",
+      network: paymentPayload.network,
+    };
+  }
+
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {

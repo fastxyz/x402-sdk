@@ -13,7 +13,13 @@ import type {
   XPaymentPayload,
   RouteConfig,
 } from "./types.js";
-import { parsePrice, getNetworkConfig, encodePayload, decodePayload } from "./utils.js";
+import {
+  assertSupportedPaymentNetwork,
+  parsePrice,
+  getNetworkConfig,
+  encodePayload,
+  decodePayload,
+} from "./utils.js";
 
 /**
  * Create a payment requirement for a resource
@@ -23,6 +29,7 @@ export function createPaymentRequirement(
   config: RouteConfig,
   resource: string
 ): PaymentRequirement {
+  assertSupportedPaymentNetwork(config.network);
   const networkConfig = getNetworkConfig(config.network);
   const amount = parsePrice(config.price, networkConfig.decimals);
   

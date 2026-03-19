@@ -61,6 +61,17 @@ export const NETWORK_CONFIGS: Record<string, NetworkConfig> = {
 };
 
 /**
+ * Reject deprecated network aliases that no longer map to a valid payment flow.
+ */
+export function assertSupportedPaymentNetwork(network: string): void {
+  if (network === "fast") {
+    throw new Error(
+      'Unsupported Fast network alias "fast". Use "fast-testnet" or "fast-mainnet".'
+    );
+  }
+}
+
+/**
  * Parse price string to amount in base units
  * Supports formats: "$0.10", "0.1 USDC", "100000" (raw)
  */

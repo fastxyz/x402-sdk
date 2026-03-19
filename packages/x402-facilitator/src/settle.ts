@@ -12,6 +12,13 @@ import {
   parseSignature,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import {
+  decodeTransactionEnvelope,
+  getCertificateHash,
+  hashTransaction,
+  type FastTransaction,
+  type FastTransactionCertificate,
+} from "@fastxyz/sdk/core";
 import type {
   PaymentPayload,
   PaymentRequirement,
@@ -40,6 +47,14 @@ export async function settle(
   paymentRequirement: PaymentRequirement,
   config: FacilitatorConfig
 ): Promise<SettleResponse> {
+  if (paymentPayload.network === "fast" || paymentRequirement.network === "fast") {
+    return {
+      success: false,
+      errorReason: "invalid_network",
+      network: paymentPayload.network,
+    };
+  }
+
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {
@@ -54,6 +69,28 @@ export async function settle(
         network: paymentPayload.network,
       };
   }
+}
+
+function getFastTransactionId(certificate: FastPayload["transactionCertificate"]): string {
+  if (typeof certificate.envelope === "string") {
+    try {
+      return hashTransaction(
+        decodeTransactionEnvelope(certificate.envelope) as FastTransaction
+      );
+    } catch {
+      return certificate.envelope.substring(0, 66);
+    }
+  }
+
+  if (certificate.envelope && typeof certificate.envelope === "object") {
+    try {
+      return getCertificateHash(certificate as FastTransactionCertificate);
+    } catch {
+      return "";
+    }
+  }
+
+  return "";
 }
 
 /**
@@ -214,10 +251,7 @@ async function settleFastPayment(
   // Fast transactions are already settled on-chain
   // The wallet extension handles signing and broadcasting
   // Return success with a transaction identifier based on the certificate
-  const envelope = payload.transactionCertificate.envelope;
-  const transactionId = typeof envelope === "string"
-    ? envelope.substring(0, 66)
-    : "";
+  const transactionId = getFastTransactionId(payload.transactionCertificate);
 
   return {
     success: true,

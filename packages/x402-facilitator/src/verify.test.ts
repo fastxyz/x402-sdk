@@ -342,6 +342,36 @@ describe("verify", () => {
       expect(result.invalidReason).toBe("invalid_network");
     });
 
+    it("rejects the deprecated Fast network alias", async () => {
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast",
+        payload: {
+          transactionCertificate: {
+            envelope: "0x00",
+            signatures: [{ committee_member: 0, signature: "0x" + "aa".repeat(64) }],
+          },
+        },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("invalid_network");
+    });
+
     it("rejects certificate network_id mismatches", async () => {
       const certificate = createFastCertificate(
         recipient,

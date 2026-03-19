@@ -17,6 +17,7 @@ import {
   settlePayment,
   encodePaymentResponse,
 } from "./payment.js";
+import { assertSupportedPaymentNetwork } from "./utils.js";
 
 // Express types (minimal to avoid hard dependency)
 interface Request {
@@ -82,7 +83,7 @@ function findRouteConfig(
  * Fast payments are already on-chain, so no settlement needed
  */
 function isFastNetwork(network: string): boolean {
-  return network.startsWith("fast-") || network === "fast";
+  return network.startsWith("fast-");
 }
 
 /**
@@ -100,6 +101,8 @@ function isEvmNetwork(network: string): boolean {
  * Resolve payment address based on network type
  */
 function resolvePayTo(payTo: PayToConfig, network: string): string {
+  assertSupportedPaymentNetwork(network);
+
   // If string, use as-is
   if (typeof payTo === "string") {
     return payTo;
@@ -198,13 +201,19 @@ export function paymentMiddleware(
     
     if (!paymentHeader) {
       // Return 402 Payment Required
-      const paymentRequired = createPaymentRequired(
-        resolvedPayTo,
-        routeConfig,
-        req.path
-      );
-      res.status(402);
-      return res.json(paymentRequired);
+      try {
+        const paymentRequired = createPaymentRequired(
+          resolvedPayTo,
+          routeConfig,
+          req.path
+        );
+        res.status(402);
+        return res.json(paymentRequired);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        res.status(500);
+        return res.json({ error: errorMessage });
+      }
     }
     
     // Create payment requirement for verification
