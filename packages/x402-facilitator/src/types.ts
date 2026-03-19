@@ -41,11 +41,11 @@ export interface PaymentPayload {
  */
 export interface FastPayload {
   transactionCertificate: {
-    envelope: string;
-    signatures: Array<{
-      committee_member: number;
-      signature: string;
-    }>;
+    envelope: string | {
+      transaction: Record<string, unknown>;
+      signature?: unknown;
+    };
+    signatures: unknown[];
   };
 }
 

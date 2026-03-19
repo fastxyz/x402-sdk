@@ -12,6 +12,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { defineChain } from "viem";
 import {
   arbitrum,
   arbitrumSepolia,
@@ -171,11 +172,20 @@ function buildChainMaps(config: ChainJsonConfig): ChainMaps {
       continue;
     }
 
-    const viemChain = VIEM_CHAINS[chainConfig.chainId];
-    if (!viemChain) {
-      console.warn(`Unknown chainId ${chainConfig.chainId} for network ${network}`);
-      continue;
-    }
+    const viemChain = VIEM_CHAINS[chainConfig.chainId] ?? defineChain({
+      id: chainConfig.chainId,
+      name: network,
+      nativeCurrency: {
+        name: "Ether",
+        symbol: "ETH",
+        decimals: 18,
+      },
+      rpcUrls: {
+        default: {
+          http: [chainConfig.rpcUrl],
+        },
+      },
+    });
 
     evmChains[network] = {
       chain: viemChain,

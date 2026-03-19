@@ -53,6 +53,24 @@ const NETWORK_MAP: Record<string, NetworkConfig> = {
 
 export const EVM_NETWORKS = Object.keys(NETWORK_MAP);
 
+const TESTNET_CHAIN_IDS = new Set([1337, 31337, 84532, 421614, 11155111]);
+const MAINNET_CHAIN_IDS = new Set([1, 8453, 42161]);
+
+function inferNetworkEnvironment(chainId: number, networkName: string): 'testnet' | 'mainnet' {
+  if (TESTNET_CHAIN_IDS.has(chainId)) return 'testnet';
+  if (MAINNET_CHAIN_IDS.has(chainId)) return 'mainnet';
+
+  const normalized = networkName.toLowerCase();
+  if (normalized.includes('sepolia') || normalized.includes('testnet')) {
+    return 'testnet';
+  }
+  if (normalized.includes('mainnet')) {
+    return 'mainnet';
+  }
+
+  return 'mainnet';
+}
+
 function buildCustomNetworkConfig(requirement: PaymentRequirement): NetworkConfig | null {
   const chainId = requirement.extra?.chainId;
   const rpcUrl = requirement.extra?.rpcUrl;
@@ -81,7 +99,7 @@ function buildCustomNetworkConfig(requirement: PaymentRequirement): NetworkConfi
         },
       },
     }),
-    network: requirement.network.endsWith('-sepolia') ? 'testnet' : 'mainnet',
+    network: inferNetworkEnvironment(chainId, requirement.network),
     chainId,
     rpcUrl,
   };
@@ -233,7 +251,7 @@ export async function handleEvmPayment(
     }
 
     // Check if this network supports bridging
-    const bridgeConfig = getBridgeConfig(evmReq.network);
+    const bridgeConfig = getBridgeConfig(evmReq.network, networkConfig.network);
     if (!bridgeConfig) {
       throw new Error(
         `Insufficient USDC balance and auto-bridge not supported for ${evmReq.network}`
@@ -263,6 +281,7 @@ export async function handleEvmPayment(
       evmReceiverAddress: account.address,
       amount: shortfall,
       network: evmReq.network,
+      sdkNetwork: networkConfig.network,
       verbose,
       logs,
     });

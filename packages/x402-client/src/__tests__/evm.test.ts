@@ -102,6 +102,54 @@ describe('EVM Payment Handler', () => {
       assert.strictEqual(new URL(rpcCalls[0]).origin, new URL(customRpcUrl).origin);
     });
 
+    it('should classify base-sepolia style custom chains as testnet', async () => {
+      const paymentRequired = {
+        x402Version: 1,
+        accepts: [{
+          scheme: 'exact',
+          network: 'my-custom-network',
+          maxAmountRequired: '100000',
+          payTo: '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372',
+          asset: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
+          extra: {
+            name: 'USD Coin',
+            version: '2',
+            chainId: 84532,
+            rpcUrl: 'https://custom-rpc.example.com',
+          },
+        }],
+      };
+
+      globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(init.body as string) : null;
+
+        if (body?.method === 'eth_call') {
+          return new Response(JSON.stringify({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: '0x0',
+          }), { status: 200 });
+        }
+
+        return new Response('{}', { status: 200 });
+      };
+
+      await assert.rejects(
+        () => handleEvmPayment(
+          'https://api.example.com/data',
+          'GET',
+          {},
+          undefined,
+          paymentRequired,
+          paymentRequired.accepts[0],
+          mockEvmWallet,
+          false,
+          []
+        ),
+        /Provide a Fast wallet with testUSDC/
+      );
+    });
+
     it('should throw if no USDC asset in requirements', async () => {
       const paymentRequired = mock402Response('arbitrum-sepolia');
       paymentRequired.accepts![0].asset = undefined;

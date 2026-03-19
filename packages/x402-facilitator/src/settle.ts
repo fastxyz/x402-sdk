@@ -11,6 +11,7 @@ import {
   parseAbi,
   parseSignature,
 } from "viem";
+import { hashTransaction } from "@fastxyz/sdk";
 import { privateKeyToAccount } from "viem/accounts";
 import type {
   PaymentPayload,
@@ -237,9 +238,27 @@ async function settleFastPayment(
   // Fast transactions are already settled on-chain
   // The wallet extension handles signing and broadcasting
   // Return success with a transaction identifier based on the certificate
-  const transactionId = payload.transactionCertificate.envelope
-    ? payload.transactionCertificate.envelope.substring(0, 66)
-    : "";
+  let transactionId = "";
+  const envelope = payload.transactionCertificate.envelope;
+
+  if (typeof envelope === "string") {
+    transactionId = envelope.substring(0, 66);
+  } else if (envelope && typeof envelope === "object") {
+    const transactionWrapper = (envelope as { transaction?: Record<string, unknown> }).transaction;
+    const transaction = transactionWrapper && typeof transactionWrapper === "object" && "Release20260303" in transactionWrapper
+      ? transactionWrapper.Release20260303
+      : transactionWrapper;
+
+    if (transaction && typeof transaction === "object") {
+      try {
+        transactionId = hashTransaction(
+          transaction as Parameters<typeof hashTransaction>[0]
+        );
+      } catch {
+        transactionId = "";
+      }
+    }
+  }
 
   return {
     success: true,

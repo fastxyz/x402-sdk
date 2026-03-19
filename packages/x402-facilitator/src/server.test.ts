@@ -396,6 +396,71 @@ describe("POST /settle", () => {
     expect(body.transaction).toBeDefined();
   });
 
+  it("succeeds for Fast object-envelope certificates", async () => {
+    const routes = createFacilitatorRoutes();
+    const settleRoute = routes.find(r => r.path === "/settle");
+
+    const recipient = new Uint8Array(32).fill(0xab);
+    const tokenId = new Uint8Array(32);
+    tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
+
+    const transaction = {
+      sender: new Uint8Array(32).fill(0xcd),
+      recipient,
+      nonce: 4,
+      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
+      claim: {
+        TokenTransfer: {
+          token_id: tokenId,
+          amount: "4000000000000000000",
+          user_data: null,
+        },
+      },
+      archival: false,
+    };
+
+    const req = createMockRequest("post", "/settle", {
+      paymentPayload: {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: {
+          transactionCertificate: {
+            envelope: {
+              transaction: {
+                Release20260303: transaction,
+              },
+              signature: {
+                Signature: Array(64).fill(0xaa),
+              },
+            },
+            signatures: [
+              { committee_member: 0, signature: "0x" + "aa".repeat(64) },
+            ],
+          },
+        },
+      },
+      paymentRequirements: {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: "1000000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: bytesToHex(recipient),
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      },
+    });
+    const res = createMockResponse();
+
+    await settleRoute!.handler(req as any, res as any);
+
+    const body = res.getJson() as { success: boolean; transaction?: string };
+    expect(body.success).toBe(true);
+    expect(body.transaction).toMatch(/^0x/);
+  });
+
   it("fails for EVM without private key configured", async () => {
     const routes = createFacilitatorRoutes(); // No evmPrivateKey
     const settleRoute = routes.find(r => r.path === "/settle");

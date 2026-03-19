@@ -114,6 +114,37 @@ describe('AllSet Bridge', () => {
         AllSetProvider.prototype.sendToExternal = originalSendToExternal;
       }
     });
+
+    it('should honor explicit sdkNetwork overrides for bridge token selection', async () => {
+      const originalSendToExternal = AllSetProvider.prototype.sendToExternal;
+      let providerNetwork = '';
+      let requestedToken = '';
+
+      AllSetProvider.prototype.sendToExternal = async function(params) {
+        providerNetwork = this.network;
+        requestedToken = params.token;
+        return {
+          txHash: '0xbridgehash',
+          orderId: 'order-override',
+        };
+      };
+
+      try {
+        const result = await bridgeFastusdcToUsdc({
+          fastWallet: createMockFastWallet(),
+          evmReceiverAddress: '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372',
+          amount: 1_000_000n,
+          network: 'arbitrum',
+          sdkNetwork: 'testnet',
+        });
+
+        assert.strictEqual(result.success, true);
+        assert.strictEqual(providerNetwork, 'testnet');
+        assert.strictEqual(requestedToken, 'testUSDC');
+      } finally {
+        AllSetProvider.prototype.sendToExternal = originalSendToExternal;
+      }
+    });
   });
 
   // Note: Full bridge flow tests (bridgeFastusdcToUsdc, getFastBalance) require:

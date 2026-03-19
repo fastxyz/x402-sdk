@@ -23,6 +23,7 @@ export interface BridgeParams {
   evmReceiverAddress: string;
   amount: bigint;
   network: string;
+  sdkNetwork?: 'testnet' | 'mainnet';
   verbose?: boolean;
   logs?: string[];
 }
@@ -66,11 +67,18 @@ function mapToSdkNetwork(network: string): 'testnet' | 'mainnet' {
   }
 }
 
+function resolveSdkNetwork(
+  network: string,
+  sdkNetwork?: 'testnet' | 'mainnet'
+): 'testnet' | 'mainnet' {
+  return sdkNetwork ?? mapToSdkNetwork(network);
+}
+
 /**
  * Get token symbol for bridging based on network
  */
-function getBridgeToken(network: string): string {
-  return mapToSdkNetwork(network) === 'mainnet' ? 'fastUSDC' : 'testUSDC';
+function getBridgeToken(network: string, sdkNetwork?: 'testnet' | 'mainnet'): string {
+  return resolveSdkNetwork(network, sdkNetwork) === 'mainnet' ? 'fastUSDC' : 'testUSDC';
 }
 
 // ─── Bridge Config ────────────────────────────────────────────────────────────
@@ -78,12 +86,15 @@ function getBridgeToken(network: string): string {
 /**
  * Get bridge configuration for a network using AllSetProvider
  */
-export function getBridgeConfig(network: string): BridgeConfig | null {
+export function getBridgeConfig(
+  network: string,
+  sdkNetwork?: 'testnet' | 'mainnet'
+): BridgeConfig | null {
   const chain = mapEvmNetworkToChain(network);
-  const sdkNetwork = mapToSdkNetwork(network);
+  const resolvedSdkNetwork = resolveSdkNetwork(network, sdkNetwork);
 
   try {
-    const allset = new AllSetProvider({ network: sdkNetwork });
+    const allset = new AllSetProvider({ network: resolvedSdkNetwork });
     const chainConfig = allset.getChainConfig(chain);
     if (!chainConfig) return null;
 
@@ -131,7 +142,7 @@ export async function getFastBalance(wallet: FastWallet, network: 'testnet' | 'm
  * @returns Bridge result
  */
 export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
-  const { fastWallet, evmReceiverAddress, amount, network, verbose = false, logs = [] } = params;
+  const { fastWallet, evmReceiverAddress, amount, network, sdkNetwork, verbose = false, logs = [] } = params;
 
   const log = (msg: string) => {
     if (verbose) {
@@ -141,8 +152,8 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
   };
 
   const chain = mapEvmNetworkToChain(network);
-  const sdkNetwork = mapToSdkNetwork(network);
-  const token = getBridgeToken(network);
+  const resolvedSdkNetwork = resolveSdkNetwork(network, sdkNetwork);
+  const token = getBridgeToken(network, resolvedSdkNetwork);
 
   log(`━━━ AllSet Bridge START ━━━`);
   log(`  Amount: ${Number(amount) / 1e6} ${token}`);
@@ -151,7 +162,7 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
   log(`  Using @fastxyz/allset-sdk`);
 
   try {
-    const allset = new AllSetProvider({ network: sdkNetwork });
+    const allset = new AllSetProvider({ network: resolvedSdkNetwork });
 
     log(`[Bridge] Executing sendToExternal via AllSet...`);
     const startTime = Date.now();
