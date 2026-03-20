@@ -69,6 +69,7 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
    - Require the Fast RPC object certificate shape
    - Verify the sender Ed25519 signature against the serialized transaction
    - Verify each committee Ed25519 signature against the serialized transaction
+   - Cross-check the submitted certificate against the network certificate returned by `proxy_getAccountInfo` for the sender nonce
    - Decode the canonical transaction bytes to extract transfer details
    - Verify recipient matches `paymentRequirement.payTo`
    - Verify amount ≥ `maxAmountRequired`
@@ -209,6 +210,10 @@ interface FacilitatorConfig {
 | `unsupported_fast_certificate_format` | Certificate is not in the supported Fast RPC object format |
 | `unsupported_fast_transaction_multisig` | MultiSig transaction envelopes are not supported |
 | `invalid_transaction` | Transaction payload could not be serialized canonically |
+| `fast_certificate_lookup_failed` | Fast proxy lookup failed |
+| `fast_certificate_not_found` | No settled Fast certificate was found for the sender nonce |
+| `fast_certificate_mismatch` | Submitted certificate does not match the network certificate |
+| `invalid_network_fast_certificate` | Fast proxy returned an invalid certificate |
 | `invalid_fast_transaction_signature` | Sender signature verification failed |
 | `invalid_fast_committee_signature` | Committee signature verification failed |
 | `duplicate_committee_signature` | The same committee public key appeared more than once |

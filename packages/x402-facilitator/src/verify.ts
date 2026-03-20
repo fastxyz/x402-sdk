@@ -21,7 +21,7 @@ import type {
   FastTransactionCertificate,
 } from "./types.js";
 import { getNetworkType, getNetworkId } from "./types.js";
-import { getEvmChainConfig } from "./chains.js";
+import { getEvmChainConfig, getFastRpcUrl } from "./chains.js";
 import {
   decodeEnvelope,
   getTransferDetails,
@@ -409,6 +409,63 @@ function parseCommitteeSignature(
   return { publicKey, signature };
 }
 
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  return Buffer.from(a).equals(Buffer.from(b));
+}
+
+function signatureKey(publicKey: Uint8Array, signature: Uint8Array): string {
+  return `${Buffer.from(publicKey).toString("hex")}:${Buffer.from(signature).toString("hex")}`;
+}
+
+interface FastRpcAccountInfoResponse {
+  requested_certificates: FastTransactionCertificate[] | null;
+}
+
+async function fetchFastCertificateByNonce(
+  network: string,
+  senderPublicKey: Uint8Array,
+  nonce: bigint
+): Promise<FastTransactionCertificate | null> {
+  if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("nonce_out_of_range");
+  }
+
+  const response = await fetch(getFastRpcUrl(network), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method: "proxy_getAccountInfo",
+      params: {
+        address: Array.from(senderPublicKey),
+        token_balances_filter: [],
+        certificate_by_nonce: {
+          start: Number(nonce),
+          limit: 1,
+        },
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`http_${response.status}`);
+  }
+
+  const json = await response.json() as {
+    result?: FastRpcAccountInfoResponse;
+    error?: { message?: string };
+  };
+
+  if (json.error) {
+    throw new Error(json.error.message || "unknown_rpc_error");
+  }
+
+  return json.result?.requested_certificates?.[0] ?? null;
+}
+
 /**
  * Verify Fast payment by validating the transaction certificate
  * 
@@ -591,6 +648,102 @@ async function verifyFastPayment(
       return {
         isValid: false,
         invalidReason: "invalid_fast_committee_signature",
+        payer: senderHex,
+        network: paymentPayload.network,
+      };
+    }
+  }
+
+  let networkCertificate: FastTransactionCertificate | null;
+  try {
+    networkCertificate = await fetchFastCertificateByNonce(
+      paymentPayload.network,
+      senderPublicKey,
+      decoded.nonce
+    );
+  } catch (error) {
+    return {
+      isValid: false,
+      invalidReason: `fast_certificate_lookup_failed: ${error instanceof Error ? error.message : String(error)}`,
+      payer: senderHex,
+      network: paymentPayload.network,
+    };
+  }
+
+  if (!networkCertificate) {
+    return {
+      isValid: false,
+      invalidReason: "fast_certificate_not_found",
+      payer: senderHex,
+      network: paymentPayload.network,
+    };
+  }
+
+  let networkTransactionBytes: Uint8Array;
+  try {
+    networkTransactionBytes = serializeFastTransaction(networkCertificate.envelope.transaction);
+  } catch (error) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_network_fast_certificate",
+      payer: senderHex,
+      network: paymentPayload.network,
+    };
+  }
+
+  if (!bytesEqual(transactionBytes, networkTransactionBytes)) {
+    return {
+      isValid: false,
+      invalidReason: "fast_certificate_mismatch",
+      payer: senderHex,
+      network: paymentPayload.network,
+    };
+  }
+
+  const networkSenderSignature = toByteArray(networkCertificate.envelope.signature?.Signature);
+  if (!networkSenderSignature || !bytesEqual(senderSignature, networkSenderSignature)) {
+    return {
+      isValid: false,
+      invalidReason: "fast_certificate_mismatch",
+      payer: senderHex,
+      network: paymentPayload.network,
+    };
+  }
+
+  const networkCommitteeSignatureKeys = new Set<string>();
+  for (const signatureEntry of networkCertificate.signatures) {
+    const parsedSignature = parseCommitteeSignature(signatureEntry);
+    if (!parsedSignature) {
+      return {
+        isValid: false,
+        invalidReason: "invalid_network_fast_certificate",
+        payer: senderHex,
+        network: paymentPayload.network,
+      };
+    }
+
+    networkCommitteeSignatureKeys.add(
+      signatureKey(parsedSignature.publicKey, parsedSignature.signature)
+    );
+  }
+
+  for (const signatureEntry of signatures) {
+    const parsedSignature = parseCommitteeSignature(signatureEntry);
+    if (!parsedSignature) {
+      return {
+        isValid: false,
+        invalidReason: "unsupported_fast_certificate_format",
+        payer: senderHex,
+        network: paymentPayload.network,
+      };
+    }
+
+    if (!networkCommitteeSignatureKeys.has(
+      signatureKey(parsedSignature.publicKey, parsedSignature.signature)
+    )) {
+      return {
+        isValid: false,
+        invalidReason: "fast_certificate_mismatch",
         payer: senderHex,
         network: paymentPayload.network,
       };

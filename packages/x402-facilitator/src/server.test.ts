@@ -3,9 +3,10 @@
  */
 
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
 import { bytesToHex, serializeFastTransaction } from "./fast-bcs.js";
+import type { FastTransactionCertificate } from "./types.js";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
@@ -16,6 +17,15 @@ function rawPublicKey(key: KeyObject): Uint8Array {
   }
 
   return new Uint8Array(Buffer.from(spki).subarray(ED25519_SPKI_PREFIX.length));
+}
+
+function certificateLookupKey(certificate: FastTransactionCertificate): string {
+  const sender = Buffer.from(certificate.envelope.transaction.sender).toString("hex");
+  return `${sender}:${certificate.envelope.transaction.nonce.toString()}`;
+}
+
+function cloneCertificate(certificate: FastTransactionCertificate): FastTransactionCertificate {
+  return JSON.parse(JSON.stringify(certificate)) as FastTransactionCertificate;
 }
 
 // Mock Express request/response
@@ -44,11 +54,13 @@ function createMockResponse() {
   };
 }
 
+const proxyCertificates = new Map<string, FastTransactionCertificate>();
+
 function createFastCertificate(
   recipient: Uint8Array,
   amountHex: string,
   tokenId: Uint8Array
-) {
+) : FastTransactionCertificate {
   const { publicKey: senderPublicKey, privateKey: senderPrivateKey } = generateKeyPairSync("ed25519");
   const sender = rawPublicKey(senderPublicKey);
   const transaction = {
@@ -78,7 +90,7 @@ function createFastCertificate(
     ]);
   }
 
-  return {
+const certificate: FastTransactionCertificate = {
     envelope: {
       transaction,
       signature: {
@@ -87,9 +99,51 @@ function createFastCertificate(
     },
     signatures,
   };
+  proxyCertificates.set(certificateLookupKey(certificate), cloneCertificate(certificate));
+  return certificate;
 }
 
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: { body?: unknown }) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as {
+      id?: number;
+      method?: string;
+      params?: {
+        address?: number[];
+        certificate_by_nonce?: { start?: number; limit?: number };
+      };
+    };
+
+    if (body.method !== "proxy_getAccountInfo") {
+      throw new Error(`unexpected_method:${body.method}`);
+    }
+
+    const sender = Buffer.from(body.params?.address ?? []).toString("hex");
+    const nonce = body.params?.certificate_by_nonce?.start?.toString() ?? "";
+    const certificate = proxyCertificates.get(`${sender}:${nonce}`);
+
+    return new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id: body.id ?? 1,
+      result: {
+        requested_certificates: certificate ? [certificate] : [],
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  }));
+});
+
+afterEach(() => {
+  proxyCertificates.clear();
+  vi.unstubAllGlobals();
+});
+
 describe("createFacilitatorRoutes", () => {
+
   it("creates routes for /verify, /settle, /supported", () => {
     const routes = createFacilitatorRoutes();
     

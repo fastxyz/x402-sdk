@@ -3,10 +3,10 @@
  */
 
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { verify } from "./verify.js";
 import { bytesToHex, serializeFastTransaction } from "./fast-bcs.js";
-import type { PaymentPayload, PaymentRequirement } from "./types.js";
+import type { PaymentPayload, PaymentRequirement, FastTransactionCertificate } from "./types.js";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
@@ -19,8 +19,58 @@ function rawPublicKey(key: KeyObject): Uint8Array {
   return new Uint8Array(Buffer.from(spki).subarray(ED25519_SPKI_PREFIX.length));
 }
 
+function certificateLookupKey(certificate: FastTransactionCertificate): string {
+  const sender = Buffer.from(certificate.envelope.transaction.sender).toString("hex");
+  return `${sender}:${certificate.envelope.transaction.nonce.toString()}`;
+}
+
+function cloneCertificate(certificate: FastTransactionCertificate): FastTransactionCertificate {
+  return JSON.parse(JSON.stringify(certificate)) as FastTransactionCertificate;
+}
+
 describe("verify", () => {
   describe("Fast payments", () => {
+    const proxyCertificates = new Map<string, FastTransactionCertificate>();
+
+    beforeEach(() => {
+      vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: { body?: unknown }) => {
+        const body = JSON.parse(String(init?.body ?? "{}")) as {
+          id?: number;
+          method?: string;
+          params?: {
+            address?: number[];
+            certificate_by_nonce?: { start?: number; limit?: number };
+          };
+        };
+
+        if (body.method !== "proxy_getAccountInfo") {
+          throw new Error(`unexpected_method:${body.method}`);
+        }
+
+        const sender = Buffer.from(body.params?.address ?? []).toString("hex");
+        const nonce = body.params?.certificate_by_nonce?.start?.toString() ?? "";
+        const certificate = proxyCertificates.get(`${sender}:${nonce}`);
+
+        return new Response(JSON.stringify({
+          jsonrpc: "2.0",
+          id: body.id ?? 1,
+          result: {
+            requested_certificates: certificate ? [certificate] : [],
+          },
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+      }));
+    });
+
+    afterEach(() => {
+      proxyCertificates.clear();
+      vi.unstubAllGlobals();
+    });
+
     // Helper to create a valid Fast certificate
     function createFastCertificate(
       recipient: Uint8Array,
@@ -30,6 +80,7 @@ describe("verify", () => {
         tamperSenderSignature?: boolean;
         tamperCommitteeSignature?: boolean;
         duplicateCommitteeSigner?: boolean;
+        forgeCommitteeSigners?: boolean;
       } = {}
     ) {
       const { publicKey: senderPublicKey, privateKey: senderPrivateKey } = generateKeyPairSync("ed25519");
@@ -51,11 +102,8 @@ describe("verify", () => {
 
       const transactionBytes = serializeFastTransaction(transaction);
       const senderSignature = new Uint8Array(sign(null, Buffer.from(transactionBytes), senderPrivateKey));
-      if (options.tamperSenderSignature) {
-        senderSignature[0] ^= 0xff;
-      }
 
-      const committeeSignatures: Array<[number[], number[]]> = [];
+      const canonicalCommitteeSignatures: Array<[number[], number[]]> = [];
       const committeeKeys: Uint8Array[] = [];
       for (let i = 0; i < 3; i++) {
         const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -63,31 +111,63 @@ describe("verify", () => {
         committeeKeys.push(committeePublicKey);
 
         const signature = new Uint8Array(sign(null, Buffer.from(transactionBytes), privateKey));
-        committeeSignatures.push([
+        canonicalCommitteeSignatures.push([
           Array.from(committeePublicKey),
           Array.from(signature),
         ]);
       }
 
-      if (options.duplicateCommitteeSigner) {
-        committeeSignatures[1] = [
-          Array.from(committeeKeys[0]),
-          [...committeeSignatures[1][1]],
-        ];
-      }
-
-      if (options.tamperCommitteeSignature) {
-        committeeSignatures[0][1][0] ^= 0xff;
-      }
-
-      return {
+      const canonicalCertificate: FastTransactionCertificate = {
         envelope: {
           transaction,
           signature: {
             Signature: Array.from(senderSignature),
           },
         },
-        signatures: committeeSignatures,
+        signatures: canonicalCommitteeSignatures,
+      };
+      proxyCertificates.set(certificateLookupKey(canonicalCertificate), cloneCertificate(canonicalCertificate));
+
+      const certificate = cloneCertificate(canonicalCertificate);
+      if (options.tamperSenderSignature) {
+        ((certificate.envelope.signature.Signature as number[]) ?? [])[0] ^= 0xff;
+      }
+
+      if (options.duplicateCommitteeSigner) {
+        (certificate.signatures as Array<[number[], number[]]>)[1] = [
+          Array.from(committeeKeys[0]),
+          [...(certificate.signatures as Array<[number[], number[]]>)[1][1]],
+        ];
+      }
+
+      if (options.tamperCommitteeSignature) {
+        (certificate.signatures as Array<[number[], number[]]>)[0][1][0] ^= 0xff;
+      }
+
+      if (options.forgeCommitteeSigners) {
+        const forgedSignatures: Array<[number[], number[]]> = [];
+        for (let i = 0; i < certificate.signatures.length; i++) {
+          const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+          forgedSignatures.push([
+            Array.from(rawPublicKey(publicKey)),
+            Array.from(new Uint8Array(sign(null, Buffer.from(transactionBytes), privateKey))),
+          ]);
+        }
+        certificate.signatures = forgedSignatures;
+      }
+
+      return certificate;
+    }
+
+    function createFastPayload(
+      certificate: FastTransactionCertificate,
+      network: string = "fast-testnet"
+    ): PaymentPayload {
+      return {
+        x402Version: 1,
+        scheme: "exact",
+        network,
+        payload: { transactionCertificate: certificate },
       };
     }
 
@@ -186,6 +266,30 @@ describe("verify", () => {
       const result = await verify(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_fast_committee_signature");
+    });
+
+    it("rejects committee signers that are not in the proxy certificate", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        forgeCommitteeSigners: true,
+      });
+
+      const payload = createFastPayload(certificate);
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("fast_certificate_mismatch");
     });
 
     it("rejects payment with wrong recipient", async () => {
