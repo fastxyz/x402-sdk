@@ -5,7 +5,11 @@
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
-import { bytesToHex, serializeFastTransaction } from "./fast-bcs.js";
+import {
+  bytesToHex,
+  createFastTransactionSigningMessage,
+  serializeFastTransaction,
+} from "./fast-bcs.js";
 import type { FastTransactionCertificate } from "./types.js";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
@@ -79,7 +83,11 @@ function createFastCertificate(
   };
 
   const transactionBytes = serializeFastTransaction(transaction);
-  const senderSignature = sign(null, Buffer.from(transactionBytes), senderPrivateKey);
+  const senderSignature = sign(
+    null,
+    Buffer.from(createFastTransactionSigningMessage(transactionBytes)),
+    senderPrivateKey
+  );
 
   const signatures: Array<[number[], number[]]> = [];
   for (let i = 0; i < 3; i++) {

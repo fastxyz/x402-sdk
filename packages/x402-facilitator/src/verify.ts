@@ -23,6 +23,7 @@ import type {
 import { getNetworkType, getNetworkId } from "./types.js";
 import { getEvmChainConfig, getFastRpcUrl } from "./chains.js";
 import {
+  createFastTransactionSigningMessage,
   decodeEnvelope,
   getTransferDetails,
   serializeFastTransaction,
@@ -471,10 +472,11 @@ async function fetchFastCertificateByNonce(
  * 
  * Verifies:
  * 1. Certificate structure matches Fast RPC output
- * 2. Sender and committee signatures verify against the serialized transaction
- * 3. Verify recipient matches payTo
- * 4. Verify amount >= maxAmountRequired
- * 5. Verify token matches asset
+ * 2. Sender signature verifies against "Transaction::" + serialized transaction
+ * 3. Committee signatures verify against the serialized transaction
+ * 4. Verify recipient matches payTo
+ * 5. Verify amount >= maxAmountRequired
+ * 6. Verify token matches asset
  */
 async function verifyFastPayment(
   paymentPayload: PaymentPayload,
@@ -603,6 +605,7 @@ async function verifyFastPayment(
   tokenIdHex = transferDetails.tokenId;
   amountBigInt = transferDetails.amount;
 
+  const senderSigningMessage = createFastTransactionSigningMessage(transactionBytes);
   const senderPublicKey = toByteArray(envelope.transaction.sender);
   if (!senderPublicKey) {
     return {
@@ -612,7 +615,7 @@ async function verifyFastPayment(
     };
   }
 
-  if (!verifyEd25519(senderPublicKey, transactionBytes, senderSignature)) {
+  if (!verifyEd25519(senderPublicKey, senderSigningMessage, senderSignature)) {
     return {
       isValid: false,
       invalidReason: "invalid_fast_transaction_signature",

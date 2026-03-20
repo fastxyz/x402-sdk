@@ -5,7 +5,11 @@
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { verify } from "./verify.js";
-import { bytesToHex, serializeFastTransaction } from "./fast-bcs.js";
+import {
+  bytesToHex,
+  createFastTransactionSigningMessage,
+  serializeFastTransaction,
+} from "./fast-bcs.js";
 import type { PaymentPayload, PaymentRequirement, FastTransactionCertificate } from "./types.js";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
@@ -81,6 +85,7 @@ describe("verify", () => {
         tamperCommitteeSignature?: boolean;
         duplicateCommitteeSigner?: boolean;
         forgeCommitteeSigners?: boolean;
+        signSenderWithRawTransaction?: boolean;
       } = {}
     ) {
       const { publicKey: senderPublicKey, privateKey: senderPrivateKey } = generateKeyPairSync("ed25519");
@@ -101,7 +106,12 @@ describe("verify", () => {
       };
 
       const transactionBytes = serializeFastTransaction(transaction);
-      const senderSignature = new Uint8Array(sign(null, Buffer.from(transactionBytes), senderPrivateKey));
+      const senderPayload = options.signSenderWithRawTransaction
+        ? transactionBytes
+        : createFastTransactionSigningMessage(transactionBytes);
+      const senderSignature = new Uint8Array(
+        sign(null, Buffer.from(senderPayload), senderPrivateKey)
+      );
 
       const canonicalCommitteeSignatures: Array<[number[], number[]]> = [];
       const committeeKeys: Uint8Array[] = [];
@@ -221,6 +231,30 @@ describe("verify", () => {
         network: "fast-testnet",
         payload: { transactionCertificate: certificate },
       };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("invalid_fast_transaction_signature");
+    });
+
+    it("rejects payment when the sender signs raw transaction bytes", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        signSenderWithRawTransaction: true,
+      });
+
+      const payload = createFastPayload(certificate);
 
       const requirement: PaymentRequirement = {
         scheme: "exact",

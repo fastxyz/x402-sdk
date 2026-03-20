@@ -67,7 +67,7 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
 
 1. **Verify**: Decode and validate transaction certificate
    - Require the Fast RPC object certificate shape
-   - Verify the sender Ed25519 signature against the serialized transaction
+   - Verify the sender Ed25519 signature against `Transaction::` + the serialized transaction
    - Verify each committee Ed25519 signature against the serialized transaction
    - Cross-check the submitted certificate against the network certificate returned by `proxy_getAccountInfo` for the sender nonce
    - Decode the canonical transaction bytes to extract transfer details

@@ -6,6 +6,8 @@
 import { bcs } from "@mysten/bcs";
 import { keccak256, type Hex } from "viem";
 
+const FAST_TRANSACTION_SIGNING_PREFIX = new TextEncoder().encode("Transaction::");
+
 // ---------------------------------------------------------------------------
 // BCS Type Definitions — must match Fast on-chain types exactly
 // ---------------------------------------------------------------------------
@@ -272,6 +274,18 @@ export function serializeFastTransaction(transaction: FastSerializableTransactio
     },
     archival: Boolean(transaction.archival),
   }).toBytes();
+}
+
+/**
+ * Build the sender signing payload used by Fast for transaction submission.
+ */
+export function createFastTransactionSigningMessage(transactionBytes: Uint8Array): Uint8Array {
+  const message = new Uint8Array(
+    FAST_TRANSACTION_SIGNING_PREFIX.length + transactionBytes.length
+  );
+  message.set(FAST_TRANSACTION_SIGNING_PREFIX, 0);
+  message.set(transactionBytes, FAST_TRANSACTION_SIGNING_PREFIX.length);
+  return message;
 }
 
 /**
