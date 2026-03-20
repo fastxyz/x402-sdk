@@ -59,6 +59,7 @@ function createMockResponse() {
 }
 
 const proxyCertificates = new Map<string, FastTransactionCertificate>();
+let lastFetchUrl: string | undefined;
 
 function createFastCertificate(
   recipient: Uint8Array,
@@ -113,6 +114,7 @@ const certificate: FastTransactionCertificate = {
 
 beforeEach(() => {
   vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: { body?: unknown }) => {
+    lastFetchUrl = String(_input);
     const body = JSON.parse(String(init?.body ?? "{}")) as {
       id?: number;
       method?: string;
@@ -146,6 +148,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  lastFetchUrl = undefined;
   proxyCertificates.clear();
   vi.unstubAllGlobals();
 });
@@ -303,6 +306,47 @@ describe("POST /verify", () => {
     
     const body = res.getJson() as { isValid: boolean };
     expect(body.isValid).toBe(true);
+  });
+
+  it("uses fastRpcUrl override when verifying through the server", async () => {
+    const routes = createFacilitatorRoutes({
+      fastRpcUrl: "https://custom.fast.example/proxy",
+    });
+    const verifyRoute = routes.find(r => r.path === "/verify");
+
+    const recipient = new Uint8Array(32).fill(0xcc);
+    const tokenId = new Uint8Array(32);
+    tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
+    const certificate = createFastCertificate(recipient, "2000000000000000000", tokenId);
+
+    const req = createMockRequest("post", "/verify", {
+      paymentPayload: {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-mainnet",
+        payload: {
+          transactionCertificate: certificate,
+        },
+      },
+      paymentRequirements: {
+        scheme: "exact",
+        network: "fast-mainnet",
+        maxAmountRequired: "1000000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: bytesToHex(recipient),
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      },
+    });
+    const res = createMockResponse();
+
+    await verifyRoute!.handler(req as any, res as any);
+
+    const body = res.getJson() as { isValid: boolean };
+    expect(body.isValid).toBe(true);
+    expect(lastFetchUrl).toBe("https://custom.fast.example/proxy");
   });
 
   it("returns 400 for invalid base64", async () => {

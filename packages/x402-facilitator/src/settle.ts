@@ -99,7 +99,7 @@ async function settleEvmPayment(
   const { authorization, signature } = payload;
 
   // Re-verify before settling (reference implementation does this)
-  const verifyResult = await verify(paymentPayload, paymentRequirement);
+  const verifyResult = await verify(paymentPayload, paymentRequirement, config);
   if (!verifyResult.isValid) {
     return {
       success: false,

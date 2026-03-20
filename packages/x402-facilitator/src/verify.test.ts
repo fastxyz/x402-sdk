@@ -35,9 +35,11 @@ function cloneCertificate(certificate: FastTransactionCertificate): FastTransact
 describe("verify", () => {
   describe("Fast payments", () => {
     const proxyCertificates = new Map<string, FastTransactionCertificate>();
+    let lastFetchUrl: string | undefined;
 
     beforeEach(() => {
       vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: { body?: unknown }) => {
+        lastFetchUrl = String(_input);
         const body = JSON.parse(String(init?.body ?? "{}")) as {
           id?: number;
           method?: string;
@@ -71,6 +73,7 @@ describe("verify", () => {
     });
 
     afterEach(() => {
+      lastFetchUrl = undefined;
       proxyCertificates.clear();
       vi.unstubAllGlobals();
     });
@@ -271,6 +274,50 @@ describe("verify", () => {
       const result = await verify(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_fast_transaction_signature");
+    });
+
+    it("uses the official Fast mainnet proxy by default", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId);
+      const payload = createFastPayload(certificate, "fast-mainnet");
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-mainnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(true);
+      expect(lastFetchUrl).toBe("https://api.fast.xyz/proxy");
+    });
+
+    it("uses fastRpcUrl override for network certificate lookup", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId);
+      const payload = createFastPayload(certificate, "fast-mainnet");
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-mainnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement, {
+        fastRpcUrl: "https://custom.fast.example/proxy",
+      });
+      expect(result.isValid).toBe(true);
+      expect(lastFetchUrl).toBe("https://custom.fast.example/proxy");
     });
 
     it("rejects payment with an invalid committee signature", async () => {

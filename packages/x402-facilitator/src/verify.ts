@@ -17,6 +17,7 @@ import type {
   VerifyResponse,
   EvmPayload,
   FastPayload,
+  FacilitatorConfig,
   FastCommitteeSignature,
   FastTransactionCertificate,
 } from "./types.js";
@@ -55,7 +56,8 @@ const authorizationTypes = {
  */
 export async function verify(
   paymentPayload: PaymentPayload,
-  paymentRequirement: PaymentRequirement
+  paymentRequirement: PaymentRequirement,
+  config: FacilitatorConfig = {}
 ): Promise<VerifyResponse> {
   const networkType = getNetworkType(paymentPayload.network);
 
@@ -63,7 +65,7 @@ export async function verify(
     case "evm":
       return verifyEvmPayment(paymentPayload, paymentRequirement);
     case "fast":
-      return verifyFastPayment(paymentPayload, paymentRequirement);
+      return verifyFastPayment(paymentPayload, paymentRequirement, config);
     default:
       return {
         isValid: false,
@@ -425,13 +427,14 @@ interface FastRpcAccountInfoResponse {
 async function fetchFastCertificateByNonce(
   network: string,
   senderPublicKey: Uint8Array,
-  nonce: bigint
+  nonce: bigint,
+  fastRpcUrl?: string
 ): Promise<FastTransactionCertificate | null> {
   if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new Error("nonce_out_of_range");
   }
 
-  const response = await fetch(getFastRpcUrl(network), {
+  const response = await fetch(getFastRpcUrl(network, fastRpcUrl), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -480,7 +483,8 @@ async function fetchFastCertificateByNonce(
  */
 async function verifyFastPayment(
   paymentPayload: PaymentPayload,
-  paymentRequirement: PaymentRequirement
+  paymentRequirement: PaymentRequirement,
+  config: FacilitatorConfig
 ): Promise<VerifyResponse> {
   // Verify scheme matches
   if (paymentPayload.scheme !== "exact" || paymentRequirement.scheme !== "exact") {
@@ -662,7 +666,8 @@ async function verifyFastPayment(
     networkCertificate = await fetchFastCertificateByNonce(
       paymentPayload.network,
       senderPublicKey,
-      decoded.nonce
+      decoded.nonce,
+      config.fastRpcUrl
     );
   } catch (error) {
     return {

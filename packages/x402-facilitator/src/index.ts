@@ -14,7 +14,9 @@
  * import express from 'express';
  * 
  * // Use as a library
- * const result = await verify(paymentPayload, paymentRequirement);
+ * const result = await verify(paymentPayload, paymentRequirement, {
+ *   fastRpcUrl: process.env.FAST_RPC_URL,
+ * });
  * 
  * // Or create an Express server
  * const app = express();

@@ -37,7 +37,9 @@ app.listen(4020, () => {
 import { verify, settle } from '@fastxyz/x402-facilitator';
 
 // Verify a payment
-const verifyResult = await verify(paymentPayload, paymentRequirement);
+const verifyResult = await verify(paymentPayload, paymentRequirement, {
+  fastRpcUrl: process.env.FAST_RPC_URL,
+});
 if (!verifyResult.isValid) {
   console.error('Invalid:', verifyResult.invalidReason);
 }
@@ -145,7 +147,7 @@ When using `createFacilitatorServer()`:
 import { verify, settle, createFacilitatorServer } from '@fastxyz/x402-facilitator';
 
 // Verify payment
-verify(paymentPayload, paymentRequirement): Promise<VerifyResponse>
+verify(paymentPayload, paymentRequirement, config?): Promise<VerifyResponse>
 
 // Settle payment
 settle(paymentPayload, paymentRequirement, config): Promise<SettleResponse>
@@ -160,7 +162,7 @@ createFacilitatorServer(config): ExpressMiddleware
 interface FacilitatorConfig {
   /** EVM private key for settling EIP-3009 authorizations */
   evmPrivateKey?: `0x${string}`;
-  /** Fast RPC endpoint (optional) */
+  /** Fast RPC endpoint override used for Fast verification */
   fastRpcUrl?: string;
 }
 ```
