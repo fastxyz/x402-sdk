@@ -2,10 +2,22 @@
  * Tests for payment verification
  */
 
+import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { describe, it, expect } from "vitest";
 import { verify } from "./verify.js";
-import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
+import { bytesToHex, serializeFastTransaction } from "./fast-bcs.js";
 import type { PaymentPayload, PaymentRequirement } from "./types.js";
+
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+
+function rawPublicKey(key: KeyObject): Uint8Array {
+  const spki = key.export({ format: "der", type: "spki" });
+  if (!Buffer.from(spki).subarray(0, ED25519_SPKI_PREFIX.length).equals(ED25519_SPKI_PREFIX)) {
+    throw new Error("unexpected_ed25519_spki_prefix");
+  }
+
+  return new Uint8Array(Buffer.from(spki).subarray(ED25519_SPKI_PREFIX.length));
+}
 
 describe("verify", () => {
   describe("Fast payments", () => {
@@ -13,66 +25,69 @@ describe("verify", () => {
     function createFastCertificate(
       recipient: Uint8Array,
       amountHex: string,
-      tokenId: Uint8Array
+      tokenId: Uint8Array,
+      options: {
+        tamperSenderSignature?: boolean;
+        tamperCommitteeSignature?: boolean;
+        duplicateCommitteeSigner?: boolean;
+      } = {}
     ) {
-      const sender = new Uint8Array(32).fill(0xaa);
+      const { publicKey: senderPublicKey, privateKey: senderPrivateKey } = generateKeyPairSync("ed25519");
+      const sender = rawPublicKey(senderPublicKey);
       const transaction = {
-        sender,
-        recipient,
+        sender: Array.from(sender),
+        recipient: Array.from(recipient),
         nonce: 1,
-        timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
+        timestamp_nanos: (BigInt(Date.now()) * 1_000_000n).toString(),
         claim: {
           TokenTransfer: {
-            token_id: tokenId,
+            token_id: Array.from(tokenId),
             amount: amountHex,
             user_data: null,
           },
         },
         archival: false,
       };
-      
-      const envelope = TransactionBcs.serialize(transaction).toBytes();
-      return {
-        envelope: bytesToHex(envelope),
-        signatures: [
-          { committee_member: 0, signature: "0x" + "aa".repeat(64) },
-          { committee_member: 1, signature: "0x" + "bb".repeat(64) },
-          { committee_member: 2, signature: "0x" + "cc".repeat(64) },
-        ],
-      };
-    }
 
-    function createFastObjectCertificate(
-      recipient: Uint8Array,
-      amountHex: string,
-      tokenId: Uint8Array
-    ) {
-      const sender = new Uint8Array(32).fill(0xaa);
+      const transactionBytes = serializeFastTransaction(transaction);
+      const senderSignature = new Uint8Array(sign(null, Buffer.from(transactionBytes), senderPrivateKey));
+      if (options.tamperSenderSignature) {
+        senderSignature[0] ^= 0xff;
+      }
+
+      const committeeSignatures: Array<[number[], number[]]> = [];
+      const committeeKeys: Uint8Array[] = [];
+      for (let i = 0; i < 3; i++) {
+        const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+        const committeePublicKey = rawPublicKey(publicKey);
+        committeeKeys.push(committeePublicKey);
+
+        const signature = new Uint8Array(sign(null, Buffer.from(transactionBytes), privateKey));
+        committeeSignatures.push([
+          Array.from(committeePublicKey),
+          Array.from(signature),
+        ]);
+      }
+
+      if (options.duplicateCommitteeSigner) {
+        committeeSignatures[1] = [
+          Array.from(committeeKeys[0]),
+          [...committeeSignatures[1][1]],
+        ];
+      }
+
+      if (options.tamperCommitteeSignature) {
+        committeeSignatures[0][1][0] ^= 0xff;
+      }
+
       return {
         envelope: {
-          transaction: {
-            sender: Array.from(sender),
-            recipient: Array.from(recipient),
-            nonce: 1,
-            timestamp_nanos: Date.now(),
-            claim: {
-              TokenTransfer: {
-                token_id: Array.from(tokenId),
-                amount: amountHex,
-                user_data: null,
-              },
-            },
-            archival: false,
-          },
+          transaction,
           signature: {
-            Signature: [],
+            Signature: Array.from(senderSignature),
           },
         },
-        signatures: [
-          [new Array(32).fill(0xaa), new Array(64).fill(0xaa)],
-          [new Array(32).fill(0xbb), new Array(64).fill(0xbb)],
-          [new Array(32).fill(0xcc), new Array(64).fill(0xcc)],
-        ],
+        signatures: committeeSignatures,
       };
     }
 
@@ -113,6 +128,64 @@ describe("verify", () => {
       const result = await verify(payload, requirement);
       expect(result.isValid).toBe(true);
       expect(result.payer).toBeDefined();
+    });
+
+    it("rejects payment with an invalid sender signature", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        tamperSenderSignature: true,
+      });
+
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: { transactionCertificate: certificate },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("invalid_fast_transaction_signature");
+    });
+
+    it("rejects payment with an invalid committee signature", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        tamperCommitteeSignature: true,
+      });
+
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: { transactionCertificate: certificate },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("invalid_fast_committee_signature");
     });
 
     it("rejects payment with wrong recipient", async () => {
@@ -217,9 +290,9 @@ describe("verify", () => {
         network: "fast-testnet",
         payload: {
           transactionCertificate: {
-            envelope: "",
+            envelope: null,
             signatures: [],
-          },
+          } as any,
         },
       };
 
@@ -334,7 +407,7 @@ describe("verify", () => {
       expect(result.invalidReason).toBe("invalid_network");
     });
 
-    it("rejects BCS envelopes that underpay after decoding", async () => {
+    it("rejects underpayments after decoding the transaction certificate", async () => {
       const certificate = createFastCertificate(
         recipient,
         (50_000n).toString(16),
@@ -366,11 +439,7 @@ describe("verify", () => {
     });
 
     it("accepts object-format envelopes with short hex amounts", async () => {
-      const certificate = createFastObjectCertificate(
-        recipient,
-        "3e8",
-        tokenId
-      );
+      const certificate = createFastCertificate(recipient, "3e8", tokenId);
 
       const payload: PaymentPayload = {
         x402Version: 1,
@@ -394,6 +463,67 @@ describe("verify", () => {
       const result = await verify(payload, requirement);
       expect(result.isValid).toBe(true);
       expect(result.payer).toBeDefined();
+    });
+
+    it("rejects duplicate committee signers", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        duplicateCommitteeSigner: true,
+      });
+
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: { transactionCertificate: certificate },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("duplicate_committee_signature");
+    });
+
+    it("rejects legacy string-envelope certificates", async () => {
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: {
+          transactionCertificate: {
+            envelope: "0x1234",
+            signatures: [
+              [new Array(32).fill(0xaa), new Array(64).fill(0xbb)],
+            ],
+          } as any,
+        },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("unsupported_fast_certificate_format");
     });
   });
 

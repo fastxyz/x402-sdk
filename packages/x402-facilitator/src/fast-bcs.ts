@@ -4,6 +4,7 @@
  */
 
 import { bcs } from "@mysten/bcs";
+import { keccak256, type Hex } from "viem";
 
 // ---------------------------------------------------------------------------
 // BCS Type Definitions — must match Fast on-chain types exactly
@@ -124,6 +125,22 @@ export interface DecodedFastTransaction {
   archival: boolean;
 }
 
+export interface FastSerializableTransaction {
+  sender: Uint8Array | number[];
+  recipient: Uint8Array | number[];
+  nonce: bigint | number | string;
+  timestamp_nanos: bigint | number | string;
+  claim: {
+    TokenTransfer?: {
+      token_id: Uint8Array | number[];
+      amount: bigint | number | string;
+      user_data?: Uint8Array | number[] | null;
+    };
+    [key: string]: unknown;
+  };
+  archival?: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
@@ -141,6 +158,127 @@ export function bytesToHex(bytes: Uint8Array): string {
 export function hexToBytes(hex: string): Uint8Array {
   const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
   return new Uint8Array(Buffer.from(clean, "hex"));
+}
+
+function toByteArray(value: Uint8Array | number[], field: string): Uint8Array {
+  if (value instanceof Uint8Array) {
+    return value;
+  }
+
+  if (Array.isArray(value) && value.every(v => Number.isInteger(v) && v >= 0 && v <= 255)) {
+    return new Uint8Array(value);
+  }
+
+  throw new Error(`invalid_${field}`);
+}
+
+function toOptionalByteArray(
+  value: Uint8Array | number[] | null | undefined,
+  field: string
+): Uint8Array | null {
+  if (value == null) {
+    return null;
+  }
+
+  return toByteArray(value, field);
+}
+
+function toBigInt(value: bigint | number | string, field: string): bigint {
+  if (typeof value === "bigint") {
+    if (value < 0n) {
+      throw new Error(`invalid_${field}`);
+    }
+
+    return value;
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`invalid_${field}`);
+    }
+
+    return BigInt(value);
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    if (!normalized) {
+      throw new Error(`invalid_${field}`);
+    }
+
+    return BigInt(normalized);
+  }
+
+  throw new Error(`invalid_${field}`);
+}
+
+function normalizeFastHexAmount(value: bigint | number | string, field: string): string {
+  if (typeof value === "bigint") {
+    if (value < 0n) {
+      throw new Error(`invalid_${field}`);
+    }
+
+    return value.toString(16);
+  }
+
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`invalid_${field}`);
+    }
+
+    return value.toString(16);
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.startsWith("0x") ? value.slice(2) : value;
+    if (!normalized || !/^[0-9a-fA-F]+$/.test(normalized)) {
+      throw new Error(`invalid_${field}`);
+    }
+
+    return normalized.toLowerCase();
+  }
+
+  throw new Error(`invalid_${field}`);
+}
+
+/**
+ * Fast RPC object envelopes encode amounts as hex strings without a 0x prefix.
+ */
+export function parseFastRpcAmount(amount: string): bigint {
+  const normalized = amount.startsWith("0x") ? amount : `0x${amount}`;
+  return BigInt(normalized);
+}
+
+/**
+ * Serialize a Fast TokenTransfer transaction into canonical BCS bytes.
+ */
+export function serializeFastTransaction(transaction: FastSerializableTransaction): Uint8Array {
+  const transfer = transaction.claim?.TokenTransfer;
+  if (!transfer) {
+    throw new Error("not_a_token_transfer");
+  }
+
+  return TransactionBcs.serialize({
+    sender: toByteArray(transaction.sender, "sender"),
+    recipient: toByteArray(transaction.recipient, "recipient"),
+    nonce: toBigInt(transaction.nonce, "nonce"),
+    timestamp_nanos: toBigInt(transaction.timestamp_nanos, "timestamp_nanos"),
+    claim: {
+      TokenTransfer: {
+        token_id: toByteArray(transfer.token_id, "token_id"),
+        amount: normalizeFastHexAmount(transfer.amount, "amount"),
+        user_data: toOptionalByteArray(transfer.user_data, "user_data"),
+      },
+    },
+    archival: Boolean(transaction.archival),
+  }).toBytes();
+}
+
+/**
+ * Hash a Fast transaction the same way the client computes txHash.
+ */
+export function hashFastTransaction(transaction: FastSerializableTransaction): Hex {
+  return keccak256(bytesToHex(serializeFastTransaction(transaction)) as Hex);
 }
 
 /**

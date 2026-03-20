@@ -2,9 +2,21 @@
  * Tests for facilitator server endpoints
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
+import { describe, it, expect } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
-import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
+import { bytesToHex, serializeFastTransaction } from "./fast-bcs.js";
+
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+
+function rawPublicKey(key: KeyObject): Uint8Array {
+  const spki = key.export({ format: "der", type: "spki" });
+  if (!Buffer.from(spki).subarray(0, ED25519_SPKI_PREFIX.length).equals(ED25519_SPKI_PREFIX)) {
+    throw new Error("unexpected_ed25519_spki_prefix");
+  }
+
+  return new Uint8Array(Buffer.from(spki).subarray(ED25519_SPKI_PREFIX.length));
+}
 
 // Mock Express request/response
 function createMockRequest(method: string, path: string, body?: unknown) {
@@ -29,6 +41,51 @@ function createMockResponse() {
     },
     getStatus: () => statusCode,
     getJson: () => jsonBody,
+  };
+}
+
+function createFastCertificate(
+  recipient: Uint8Array,
+  amountHex: string,
+  tokenId: Uint8Array
+) {
+  const { publicKey: senderPublicKey, privateKey: senderPrivateKey } = generateKeyPairSync("ed25519");
+  const sender = rawPublicKey(senderPublicKey);
+  const transaction = {
+    sender: Array.from(sender),
+    recipient: Array.from(recipient),
+    nonce: 1,
+    timestamp_nanos: (BigInt(Date.now()) * 1_000_000n).toString(),
+    claim: {
+      TokenTransfer: {
+        token_id: Array.from(tokenId),
+        amount: amountHex,
+        user_data: null,
+      },
+    },
+    archival: false,
+  };
+
+  const transactionBytes = serializeFastTransaction(transaction);
+  const senderSignature = sign(null, Buffer.from(transactionBytes), senderPrivateKey);
+
+  const signatures: Array<[number[], number[]]> = [];
+  for (let i = 0; i < 3; i++) {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    signatures.push([
+      Array.from(rawPublicKey(publicKey)),
+      Array.from(sign(null, Buffer.from(transactionBytes), privateKey)),
+    ]);
+  }
+
+  return {
+    envelope: {
+      transaction,
+      signature: {
+        Signature: Array.from(senderSignature),
+      },
+    },
+    signatures,
   };
 }
 
@@ -111,35 +168,14 @@ describe("POST /verify", () => {
     const recipient = new Uint8Array(32).fill(0xbb);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-    
-    const transaction = {
-      sender: new Uint8Array(32).fill(0xaa),
-      recipient,
-      nonce: 1,
-      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-      claim: {
-        TokenTransfer: {
-          token_id: tokenId,
-          amount: "1000000000000000000",
-          user_data: null,
-        },
-      },
-      archival: false,
-    };
-    
-    const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
+    const certificate = createFastCertificate(recipient, "1000000000000000000", tokenId);
     
     const payloadObj = {
       x402Version: 1,
       scheme: "exact",
       network: "fast-testnet",
       payload: {
-        transactionCertificate: {
-          envelope,
-          signatures: [
-            { committee_member: 0, signature: "0x" + "aa".repeat(64) },
-          ],
-        },
+        transactionCertificate: certificate,
       },
     };
     
@@ -176,23 +212,7 @@ describe("POST /verify", () => {
     const recipient = new Uint8Array(32).fill(0xcc);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-    
-    const transaction = {
-      sender: new Uint8Array(32).fill(0xdd),
-      recipient,
-      nonce: 2,
-      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-      claim: {
-        TokenTransfer: {
-          token_id: tokenId,
-          amount: "2000000000000000000",
-          user_data: null,
-        },
-      },
-      archival: false,
-    };
-    
-    const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
+    const certificate = createFastCertificate(recipient, "2000000000000000000", tokenId);
     
     const req = createMockRequest("post", "/verify", {
       paymentPayload: {
@@ -200,12 +220,7 @@ describe("POST /verify", () => {
         scheme: "exact",
         network: "fast-testnet",
         payload: {
-          transactionCertificate: {
-            envelope,
-            signatures: [
-              { committee_member: 0, signature: "0x" + "aa".repeat(64) },
-            ],
-          },
+          transactionCertificate: certificate,
         },
       },
       paymentRequirements: {
@@ -271,23 +286,7 @@ describe("POST /settle", () => {
     const recipient = new Uint8Array(32).fill(0xee);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-    
-    const transaction = {
-      sender: new Uint8Array(32).fill(0xff),
-      recipient,
-      nonce: 3,
-      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-      claim: {
-        TokenTransfer: {
-          token_id: tokenId,
-          amount: "3000000000000000000",
-          user_data: null,
-        },
-      },
-      archival: false,
-    };
-    
-    const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
+    const certificate = createFastCertificate(recipient, "3000000000000000000", tokenId);
     
     const req = createMockRequest("post", "/settle", {
       paymentPayload: {
@@ -295,12 +294,7 @@ describe("POST /settle", () => {
         scheme: "exact",
         network: "fast-testnet",
         payload: {
-          transactionCertificate: {
-            envelope,
-            signatures: [
-              { committee_member: 0, signature: "0x" + "aa".repeat(64) },
-            ],
-          },
+          transactionCertificate: certificate,
         },
       },
       paymentRequirements: {

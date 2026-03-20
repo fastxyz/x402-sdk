@@ -39,14 +39,46 @@ export interface PaymentPayload {
 /**
  * Fast transaction certificate payload
  */
-export interface FastPayload {
-  transactionCertificate: {
-    envelope: string;
-    signatures: Array<{
-      committee_member: number;
-      signature: string;
-    }>;
+export interface FastTransactionEnvelope {
+  transaction: {
+    sender: number[] | Uint8Array;
+    recipient: number[] | Uint8Array;
+    nonce: number | string | bigint;
+    timestamp_nanos: number | string | bigint;
+    claim: {
+      TokenTransfer?: {
+        token_id: number[] | Uint8Array;
+        amount: string | number | bigint;
+        user_data?: number[] | Uint8Array | null;
+      };
+      [key: string]: unknown;
+    };
+    archival?: boolean;
   };
+  signature: {
+    Signature?: number[] | Uint8Array | string;
+    MultiSig?: unknown;
+  };
+}
+
+export type FastCommitteeSignature =
+  | [number[] | Uint8Array, number[] | Uint8Array]
+  | {
+      committee_member: number[] | Uint8Array;
+      signature: number[] | Uint8Array | string;
+    }
+  | {
+      validator: number[] | Uint8Array;
+      signature: number[] | Uint8Array | string;
+    };
+
+export interface FastTransactionCertificate {
+  envelope: FastTransactionEnvelope;
+  signatures: FastCommitteeSignature[];
+}
+
+export interface FastPayload {
+  transactionCertificate: FastTransactionCertificate;
 }
 
 /**

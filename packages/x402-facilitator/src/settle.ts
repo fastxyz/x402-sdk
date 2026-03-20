@@ -22,6 +22,12 @@ import type {
 } from "./types.js";
 import { getNetworkType } from "./types.js";
 import { getEvmChainConfig } from "./chains.js";
+import {
+  decodeEnvelope,
+  getTransferDetails,
+  hashFastTransaction,
+  serializeFastTransaction,
+} from "./fast-bcs.js";
 import { verify } from "./verify.js";
 
 /**
@@ -211,17 +217,34 @@ async function settleFastPayment(
     };
   }
 
-  // Fast transactions are already settled on-chain
-  // The wallet extension handles signing and broadcasting
-  // Return success with a transaction identifier based on the certificate
-  const transactionId = payload.transactionCertificate.envelope
-    ? payload.transactionCertificate.envelope.substring(0, 66)
-    : "";
+  let transactionId = "";
+  let payer: string | undefined;
+
+  try {
+    const transaction = payload.transactionCertificate.envelope?.transaction;
+    if (!transaction) {
+      return {
+        success: false,
+        errorReason: "invalid_payload",
+        network: paymentPayload.network,
+      };
+    }
+
+    transactionId = hashFastTransaction(transaction);
+    const transferDetails = getTransferDetails(decodeEnvelope(serializeFastTransaction(transaction)));
+    payer = transferDetails?.sender;
+  } catch {
+    return {
+      success: false,
+      errorReason: "invalid_payload",
+      network: paymentPayload.network,
+    };
+  }
 
   return {
     success: true,
     transaction: transactionId,
     network: paymentPayload.network,
-    // TODO: Extract payer from transaction envelope
+    payer,
   };
 }

@@ -66,15 +66,16 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
 ### Fast Payments
 
 1. **Verify**: Decode and validate transaction certificate
-   - Check envelope and signatures exist
-   - Decode BCS envelope to extract transaction details
+   - Require the Fast RPC object certificate shape
+   - Verify the sender Ed25519 signature against the serialized transaction
+   - Verify each committee Ed25519 signature against the serialized transaction
+   - Decode the canonical transaction bytes to extract transfer details
    - Verify recipient matches `paymentRequirement.payTo`
-   - Verify amount ≥ `maxAmountRequired` (with 18→6 decimal normalization)
+   - Verify amount ≥ `maxAmountRequired`
    - Verify token matches `paymentRequirement.asset`
 
 2. **Settle**: No-op — Fast transactions are already on-chain
-   - Certificate proves consensus was reached
-   - Returns success with transaction ID
+   - Returns success with the deterministic Fast transaction hash
 
 ## API
 
@@ -201,9 +202,16 @@ interface FacilitatorConfig {
 | Reason | Description |
 |--------|-------------|
 | `missing_envelope` | Certificate has no envelope |
+| `missing_transaction` | Certificate envelope has no transaction |
+| `missing_transaction_signature` | Certificate envelope has no sender signature |
 | `missing_signatures` | Certificate has no signatures |
 | `insufficient_signatures` | Not enough committee signatures |
-| `envelope_decode_failed` | Failed to decode BCS envelope |
+| `unsupported_fast_certificate_format` | Certificate is not in the supported Fast RPC object format |
+| `unsupported_fast_transaction_multisig` | MultiSig transaction envelopes are not supported |
+| `invalid_transaction` | Transaction payload could not be serialized canonically |
+| `invalid_fast_transaction_signature` | Sender signature verification failed |
+| `invalid_fast_committee_signature` | Committee signature verification failed |
+| `duplicate_committee_signature` | The same committee public key appeared more than once |
 | `not_a_token_transfer` | Transaction is not a TokenTransfer |
 | `recipient_mismatch` | Recipient doesn't match payTo |
 | `insufficient_amount` | Transfer amount too low |
