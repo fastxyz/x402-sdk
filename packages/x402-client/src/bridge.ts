@@ -10,6 +10,7 @@ import { sha512 } from '@noble/hashes/sha512';
 import { bech32m } from 'bech32';
 import { encodeAbiParameters, keccak256 } from 'viem';
 import type { FastWallet } from './types.js';
+import { resolveFastRpcUrl } from './fast-rpc.js';
 
 // Configure ed25519
 ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
@@ -17,7 +18,6 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CROSS_SIGN_URL = 'https://staging.cross-sign.allset.fastset.xyz';
-const FAST_RPC_URL = 'https://staging.proxy.fastset.xyz';
 
 /** fastUSDC token ID on Fast */
 // fastUSDC token ID
@@ -143,7 +143,7 @@ function buildTransferClaimHash(details: NonNullable<TransactionResult['transfer
 export async function getFastBalance(
   wallet: FastWallet
 ): Promise<bigint> {
-  const rpcUrl = wallet.rpcUrl || FAST_RPC_URL;
+  const rpcUrl = resolveFastRpcUrl('fast-testnet', wallet.rpcUrl);
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
   
   const payload = {
@@ -199,8 +199,9 @@ async function sendTokenTransfer(
   recipientAddress: string,
   amount: bigint,
   tokenId: Uint8Array,
-  rpcUrl: string = FAST_RPC_URL
+  rpcUrl?: string
 ): Promise<TransactionResult> {
+  const resolvedRpcUrl = rpcUrl || resolveFastRpcUrl('fast-testnet');
   const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
 
@@ -229,7 +230,7 @@ async function sendTokenTransfer(
       certificate_by_nonce: null,
     },
   };
-  const nonceResponse = await fetch(rpcUrl, {
+  const nonceResponse = await fetch(resolvedRpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(noncePayload),
@@ -313,7 +314,7 @@ async function sendTokenTransfer(
     },
   };
 
-  const response = await fetch(rpcUrl, {
+  const response = await fetch(resolvedRpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: toJSON(payload),
@@ -392,8 +393,9 @@ async function submitExternalClaim(
   wallet: FastWallet,
   externalAddress: string,
   intentPayload: Uint8Array,
-  rpcUrl: string = FAST_RPC_URL
+  rpcUrl?: string
 ): Promise<TransactionResult> {
+  const resolvedRpcUrl = rpcUrl || resolveFastRpcUrl('fast-testnet');
   const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
   const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
 
@@ -433,7 +435,7 @@ async function submitExternalClaim(
       certificate_by_nonce: null,
     },
   };
-  const nonceResponse = await fetch(rpcUrl, {
+  const nonceResponse = await fetch(resolvedRpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(noncePayload),
@@ -537,7 +539,7 @@ async function submitExternalClaim(
     },
   };
 
-  const response = await fetch(rpcUrl, {
+  const response = await fetch(resolvedRpcUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: toJSON(payload),
@@ -666,7 +668,7 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
   log(`  To: ${evmReceiverAddress} on ${network}`);
 
   try {
-    const rpcUrl = fastWallet.rpcUrl || FAST_RPC_URL;
+    const rpcUrl = resolveFastRpcUrl('fast-testnet', fastWallet.rpcUrl);
 
     // Step 1: Transfer fastUSDC to Fast bridge account
     log(`[Step 1] Transferring fastUSDC to Fast bridge...`);
