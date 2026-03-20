@@ -19,6 +19,10 @@ x402 is a payment protocol built on HTTP status code `402 Payment Required`. It 
 | [x402-server](./packages/x402-server) | Server SDK - protect routes, verify payments | `npm i @fastxyz/x402-server` |
 | [x402-facilitator](./packages/x402-facilitator) | Facilitator - verify signatures, settle on-chain | `npm i @fastxyz/x402-facilitator` |
 
+## Releasing
+
+Package publishing is handled by GitHub Actions via npm trusted publishing. See [RELEASING.md](./RELEASING.md) for the one-time npm setup and the coordinated tag-based release flow.
+
 ## Quick Start
 
 ### 1. Run a Facilitator
@@ -202,14 +206,18 @@ Client                          Server                         Facilitator
   │                               │                                │
   │ X-PAYMENT: {                  │                                │
   │   transactionCertificate: {   │                                │
-  │     envelope: "0x...",        │                                │
+  │     envelope: {               │                                │
+  │       transaction: {...},     │                                │
+  │       signature: {...}        │                                │
+  │     },                        │                                │
   │     signatures: [...]         │                                │
   │   }                           │                                │
   │ }                             │                                │
   │──────────────────────────────>│                                │
   │                               │  /verify                       │
-  │                               │  - Check certificate structure │
-  │                               │  - (TODO: on-chain verify)     │
+  │                               │  - Verify sender signature     │
+  │                               │  - Verify committee signatures │
+  │                               │  - Check recipient/amount/token│
   │                               │────────────────────────────────>
   │                               │  { isValid: true }             │
   │                               │<────────────────────────────────
@@ -238,9 +246,9 @@ The facilitator exposes three endpoints:
 5. Query on-chain USDC balance
 
 **Fast payments:**
-1. Check certificate structure (envelope + signatures)
-2. Validate scheme and network match
-3. *(TODO: Query Fast RPC for on-chain verification)*
+1. Require the Fast RPC object certificate format
+2. Verify sender and committee Ed25519 signatures over the canonical transaction bytes
+3. Validate scheme, network, recipient, amount, and token
 
 ### Settlement Logic
 

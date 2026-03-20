@@ -20,7 +20,8 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # Trusted publishing requires a recent enough Node runtime for npm OIDC.
+          node-version: 24
           cache: npm
           registry-url: https://registry.npmjs.org/
 
