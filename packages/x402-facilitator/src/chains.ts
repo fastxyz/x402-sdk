@@ -63,6 +63,25 @@ export const FAST_RPC_URLS: Record<string, string> = {
 };
 
 /**
+ * Bundled trusted Fast validator committees for the official networks.
+ * These values are derived from the Fast deployment committee manifests.
+ */
+export const FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS: Record<string, string[]> = {
+  "fast-testnet": [
+    "0xdfa5a82548d58dbfd17c9eb32818c47a5ca2b8f8e7da84942ca7ca0c7e57f98d",
+    "0x62f9728b168c443204c5fee22ff21aef3e4d3c422bc01067f14a6e2a1eab4ae0",
+    "0x96145c0ca385ced0bfbd2ab28578e0acb774912ff3e8dd166ef326b1178b0a78",
+    "0xecf967fc920082df854828574315bb0d6434c1c2f29843b50802964833e6f5a9",
+  ],
+  "fast-mainnet": [
+    "0x2a0f5870993fac2f20999e23e763838a40595c6f3d971f327e264bc5442e598c",
+    "0x03473bc3523e0c2b0e259b179251774764782473854317f519e0e16e9d77f680",
+    "0xb4d47f3f43906f354410da1ca02c8436a3550855d105b0d29c135b6a27361387",
+    "0x08210bb6ae6b46eef95d7815d12d1820c368f5a6e8c76cc4dd3812b67cd54324",
+  ],
+};
+
+/**
  * Get chain config for a network
  */
 export function getEvmChainConfig(network: string): EvmChainConfig | null {

@@ -136,6 +136,11 @@ export interface FacilitatorConfig {
   evmPrivateKey?: `0x${string}`;
   /** Fast RPC endpoint */
   fastRpcUrl?: string;
+  /**
+   * Trusted Fast committee public keys by network.
+   * Entries may be 32-byte hex public keys (with or without 0x) or Fast bech32m addresses.
+   */
+  committeePublicKeys?: Record<string, string[]>;
   /** Custom chain configs */
   chains?: Record<string, Chain>;
 }

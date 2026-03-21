@@ -22,7 +22,11 @@ import type {
   FastTransactionCertificate,
 } from "./types.js";
 import { getNetworkType, getNetworkId } from "./types.js";
-import { getEvmChainConfig, getFastRpcUrl } from "./chains.js";
+import {
+  FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS,
+  getEvmChainConfig,
+  getFastRpcUrl,
+} from "./chains.js";
 import {
   createFastTransactionSigningMessage,
   decodeEnvelope,
@@ -258,87 +262,67 @@ function normalizeAddress(addr: string): string {
 }
 
 /**
+ * Decode a Fast bech32m address to hex.
+ */
+function bech32mToHex(addr: string): string | null {
+  try {
+    const normalized = addr.toLowerCase();
+    if (!normalized.startsWith("fast1") && !normalized.startsWith("set1")) {
+      return null;
+    }
+
+    const sep = normalized.indexOf("1");
+    if (sep === -1) return null;
+
+    const data = normalized.slice(sep + 1);
+    const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+
+    const values: number[] = [];
+    for (const c of data) {
+      const idx = CHARSET.indexOf(c);
+      if (idx === -1) return null;
+      values.push(idx);
+    }
+
+    const dataValues = values.slice(0, -6);
+    let acc = 0;
+    let bits = 0;
+    const result: number[] = [];
+    for (const v of dataValues) {
+      acc = (acc << 5) | v;
+      bits += 5;
+      while (bits >= 8) {
+        bits -= 8;
+        result.push((acc >> bits) & 0xff);
+      }
+    }
+
+    return result.length === 32 ? Buffer.from(result).toString("hex") : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeComparableAddress(addr: string): string | null {
+  if (addr.startsWith("fast1") || addr.startsWith("set1")) {
+    return bech32mToHex(addr);
+  }
+
+  return normalizeAddress(addr);
+}
+
+/**
  * Compare two addresses for equality
  * Supports hex pubkeys and bech32m addresses (fast1... or set1...)
  */
 function addressesMatch(a: string, b: string): boolean {
-  // Helper to decode bech32m to hex
-  const bech32mToHex = (addr: string): string | null => {
-    try {
-      // Import bech32m dynamically would be better but for sync use:
-      // Simple implementation: extract the data part and decode
-      const sep = addr.indexOf("1");
-      if (sep === -1) return null;
-      
-      const data = addr.slice(sep + 1);
-      const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-      
-      // Decode each character to 5-bit value
-      const values: number[] = [];
-      for (const c of data) {
-        const idx = CHARSET.indexOf(c.toLowerCase());
-        if (idx === -1) return null;
-        values.push(idx);
-      }
-      
-      // Remove checksum (last 6 characters)
-      const dataValues = values.slice(0, -6);
-      
-      // Convert 5-bit to 8-bit
-      let acc = 0;
-      let bits = 0;
-      const result: number[] = [];
-      for (const v of dataValues) {
-        acc = (acc << 5) | v;
-        bits += 5;
-        while (bits >= 8) {
-          bits -= 8;
-          result.push((acc >> bits) & 0xff);
-        }
-      }
-      
-      return Buffer.from(result).toString("hex");
-    } catch {
-      return null;
-    }
-  };
-
-  // If both start with "fast1" or "set1", compare directly
-  if ((a.startsWith("fast1") || a.startsWith("set1")) && 
-      (b.startsWith("fast1") || b.startsWith("set1"))) {
-    return a.toLowerCase() === b.toLowerCase();
-  }
-  
-  // If both are hex, compare normalized
-  if ((a.startsWith("0x") || /^[0-9a-fA-F]+$/.test(a)) &&
-      (b.startsWith("0x") || /^[0-9a-fA-F]+$/.test(b))) {
-    return normalizeAddress(a) === normalizeAddress(b);
-  }
-  
-  // Mixed format - decode bech32m to hex and compare
-  let hexA = a;
-  let hexB = b;
-  
-  if (a.startsWith("fast1") || a.startsWith("set1")) {
-    const decoded = bech32mToHex(a);
-    if (!decoded) return false;
-    hexA = decoded;
-  } else {
-    hexA = normalizeAddress(a);
-  }
-  
-  if (b.startsWith("fast1") || b.startsWith("set1")) {
-    const decoded = bech32mToHex(b);
-    if (!decoded) return false;
-    hexB = decoded;
-  } else {
-    hexB = normalizeAddress(b);
-  }
-  
-  return hexA.toLowerCase() === hexB.toLowerCase();
+  const normalizedA = normalizeComparableAddress(a);
+  const normalizedB = normalizeComparableAddress(b);
+  return normalizedA != null && normalizedB != null && normalizedA === normalizedB;
 }
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+const warnedUntrustedCommitteeNetworks = new Set<string>();
 
 function toByteArray(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) {
@@ -346,11 +330,16 @@ function toByteArray(value: unknown): Uint8Array | null {
   }
 
   if (typeof value === "string") {
-    if (!/^0x[0-9a-fA-F]+$/.test(value)) {
+    if (!/^(?:0x)?[0-9a-fA-F]+$/.test(value)) {
       return null;
     }
 
-    return new Uint8Array(Buffer.from(value.slice(2), "hex"));
+    const normalized = value.startsWith("0x") ? value.slice(2) : value;
+    if (normalized.length === 0 || normalized.length % 2 !== 0) {
+      return null;
+    }
+
+    return new Uint8Array(Buffer.from(normalized, "hex"));
   }
 
   if (Array.isArray(value) && value.every(v => Number.isInteger(v) && v >= 0 && v <= 255)) {
@@ -418,6 +407,69 @@ function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
 
 function signatureKey(publicKey: Uint8Array, signature: Uint8Array): string {
   return `${Buffer.from(publicKey).toString("hex")}:${Buffer.from(signature).toString("hex")}`;
+}
+
+function quorumThreshold(totalMembers: number): number {
+  return Math.floor((2 * totalMembers) / 3) + 1;
+}
+
+interface ResolvedTrustedCommittee {
+  memberKeys: Set<string>;
+  minSignatures: number;
+}
+
+function parseTrustedCommitteePublicKey(value: string): string | null {
+  const bytes = toByteArray(value);
+  if (bytes?.length === 32) {
+    return Buffer.from(bytes).toString("hex");
+  }
+
+  return bech32mToHex(value);
+}
+
+function resolveTrustedCommittee(
+  network: string,
+  config: FacilitatorConfig
+): ResolvedTrustedCommittee | null {
+  const configuredKeys = config.committeePublicKeys?.[network];
+  const bundledKeys = FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS[network];
+  const keys = configuredKeys ?? bundledKeys;
+
+  if (!keys?.length) {
+    return null;
+  }
+
+  const memberKeys = new Set<string>();
+  for (const key of keys) {
+    const parsed = parseTrustedCommitteePublicKey(key);
+    if (!parsed) {
+      throw new Error(`invalid_committee_public_key:${key}`);
+    }
+    memberKeys.add(parsed);
+  }
+
+  if (memberKeys.size === 0) {
+    throw new Error("empty_committee_public_keys");
+  }
+
+  return {
+    memberKeys,
+    minSignatures: quorumThreshold(memberKeys.size),
+  };
+}
+
+function warnUntrustedCommittee(network: string, fastRpcUrl?: string): void {
+  const rpcUrl = getFastRpcUrl(network, fastRpcUrl);
+  const warningKey = `${network}:${rpcUrl}`;
+  if (warnedUntrustedCommitteeNetworks.has(warningKey)) {
+    return;
+  }
+
+  warnedUntrustedCommitteeNetworks.add(warningKey);
+  console.warn(
+    `x402-facilitator: no trusted Fast committee configured for ${network}; ` +
+      `verification is trusting ${rpcUrl} for committee membership.`
+  );
 }
 
 interface FastRpcAccountInfoResponse {
@@ -513,6 +565,21 @@ async function verifyFastPayment(
     };
   }
 
+  let trustedCommittee: ResolvedTrustedCommittee | null;
+  try {
+    trustedCommittee = resolveTrustedCommittee(paymentPayload.network, config);
+  } catch (error) {
+    return {
+      isValid: false,
+      invalidReason: `invalid_committee_configuration: ${error instanceof Error ? error.message : String(error)}`,
+      network: paymentPayload.network,
+    };
+  }
+
+  if (!trustedCommittee) {
+    warnUntrustedCommittee(paymentPayload.network, config.fastRpcUrl);
+  }
+
   const certificate = payload.transactionCertificate;
   const { envelope, signatures } = certificate as FastTransactionCertificate;
 
@@ -566,10 +633,7 @@ async function verifyFastPayment(
     };
   }
 
-  // Minimum signature threshold (2f+1 for BFT, typically 3+ for testnets)
-  // Fast testnet has a small committee, so we check for at least 1
-  // In production, this should be configurable based on network
-  const minSignatures = paymentPayload.network === "fast-testnet" ? 1 : 3;
+  const minSignatures = trustedCommittee?.minSignatures ?? 3;
   if (signatures.length < minSignatures) {
     return {
       isValid: false,
@@ -650,6 +714,15 @@ async function verifyFastPayment(
       };
     }
     seenCommitteeMembers.add(memberKey);
+
+    if (trustedCommittee && !trustedCommittee.memberKeys.has(memberKey)) {
+      return {
+        isValid: false,
+        invalidReason: "unknown_fast_committee_signer",
+        payer: senderHex,
+        network: paymentPayload.network,
+      };
+    }
 
     if (!verifyEd25519(parsedSignature.publicKey, transactionBytes, parsedSignature.signature)) {
       return {

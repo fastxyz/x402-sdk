@@ -46,6 +46,7 @@ export { getNetworkType } from "./types.js";
 export {
   EVM_CHAINS,
   FAST_RPC_URLS,
+  FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS,
   SUPPORTED_EVM_NETWORKS,
   SUPPORTED_FAST_NETWORKS,
   getEvmChainConfig,

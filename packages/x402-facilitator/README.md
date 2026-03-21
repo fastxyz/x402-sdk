@@ -39,6 +39,14 @@ import { verify, settle } from '@fastxyz/x402-facilitator';
 // Verify a payment
 const verifyResult = await verify(paymentPayload, paymentRequirement, {
   fastRpcUrl: process.env.FAST_RPC_URL,
+  committeePublicKeys: {
+    "fast-mainnet": [
+      "fast19g84suye87kz7gyenc37wcur3fq9jhr08kt37vn7ye9u23pwtxxq7p6cwt",
+      "fast1qdrnhs6j8cxzkr39nvtey5thgaj8sfrns4p30ageurska8th76qqca2xdk",
+      "fast1kn28706rjphn23qsmgw2qtyyx6342zz46yzmp55uzddk5fekzwrsmjr888",
+      "fast1pqsshd4wddrwa72a0q2aztgcyrpk3adxarrke3xa8qftvlx4gvjqgelxwk",
+    ],
+  },
 });
 if (!verifyResult.isValid) {
   console.error('Invalid:', verifyResult.invalidReason);
@@ -71,6 +79,7 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
    - Require the Fast RPC object certificate shape
    - Verify the sender Ed25519 signature against `Transaction::` + the serialized transaction
    - Verify each committee Ed25519 signature against the serialized transaction
+   - Verify each committee signer is in the trusted committee for the selected network
    - Cross-check the submitted certificate against the network certificate returned by `proxy_getAccountInfo` for the sender nonce
    - Decode the canonical transaction bytes to extract transfer details
    - Verify recipient matches `paymentRequirement.payTo`
@@ -164,8 +173,15 @@ interface FacilitatorConfig {
   evmPrivateKey?: `0x${string}`;
   /** Fast RPC endpoint override used for Fast verification */
   fastRpcUrl?: string;
+  /**
+   * Trusted Fast committee public keys by network.
+   * Values may be 32-byte hex strings or fast1.../set1... addresses.
+   */
+  committeePublicKeys?: Record<string, string[]>;
 }
 ```
+
+For the official `fast-testnet` and `fast-mainnet` networks, `x402-facilitator` ships with bundled committee snapshots. Use `committeePublicKeys` to override those defaults or to configure custom Fast deployments. In production, source these values from the official Fast deployment committee manifest and ship them with your application config rather than relying on a local checkout.
 
 ## Supported Networks
 
@@ -216,9 +232,11 @@ interface FacilitatorConfig {
 | `fast_certificate_not_found` | No settled Fast certificate was found for the sender nonce |
 | `fast_certificate_mismatch` | Submitted certificate does not match the network certificate |
 | `invalid_network_fast_certificate` | Fast proxy returned an invalid certificate |
+| `invalid_committee_configuration` | Trusted committee config could not be parsed |
 | `invalid_fast_transaction_signature` | Sender signature verification failed |
 | `invalid_fast_committee_signature` | Committee signature verification failed |
 | `duplicate_committee_signature` | The same committee public key appeared more than once |
+| `unknown_fast_committee_signer` | Committee signer is not in the trusted committee |
 | `not_a_token_transfer` | Transaction is not a TokenTransfer |
 | `recipient_mismatch` | Recipient doesn't match payTo |
 | `insufficient_amount` | Transfer amount too low |

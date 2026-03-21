@@ -10,7 +10,7 @@ import {
   createFastTransactionSigningMessage,
   serializeFastTransaction,
 } from "./fast-bcs.js";
-import type { FastTransactionCertificate } from "./types.js";
+import type { FacilitatorConfig, FastTransactionCertificate } from "./types.js";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
@@ -153,6 +153,26 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function fastRouteConfig(
+  certificate: FastTransactionCertificate,
+  network: string,
+  extra: FacilitatorConfig = {}
+): FacilitatorConfig {
+  const trustedCertificate = proxyCertificates.get(certificateLookupKey(certificate)) ?? certificate;
+  const committeePublicKeys = trustedCertificate.signatures.map((signatureEntry) => {
+    const [publicKey] = signatureEntry as [number[], number[]];
+    return Buffer.from(publicKey).toString("hex");
+  });
+
+  return {
+    ...extra,
+    committeePublicKeys: {
+      ...(extra.committeePublicKeys ?? {}),
+      [network]: committeePublicKeys,
+    },
+  };
+}
+
 describe("createFacilitatorRoutes", () => {
 
   it("creates routes for /verify, /settle, /supported", () => {
@@ -226,14 +246,13 @@ describe("POST /verify", () => {
   });
 
   it("handles base64 encoded payload", async () => {
-    const routes = createFacilitatorRoutes();
-    const verifyRoute = routes.find(r => r.path === "/verify");
-    
     // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xbb);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     const certificate = createFastCertificate(recipient, "1000000000000000000", tokenId);
+    const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-testnet"));
+    const verifyRoute = routes.find(r => r.path === "/verify");
     
     const payloadObj = {
       x402Version: 1,
@@ -270,14 +289,13 @@ describe("POST /verify", () => {
   });
 
   it("handles decoded payload object", async () => {
-    const routes = createFacilitatorRoutes();
-    const verifyRoute = routes.find(r => r.path === "/verify");
-    
     // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xcc);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     const certificate = createFastCertificate(recipient, "2000000000000000000", tokenId);
+    const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-testnet"));
+    const verifyRoute = routes.find(r => r.path === "/verify");
     
     const req = createMockRequest("post", "/verify", {
       paymentPayload: {
@@ -309,15 +327,14 @@ describe("POST /verify", () => {
   });
 
   it("uses fastRpcUrl override when verifying through the server", async () => {
-    const routes = createFacilitatorRoutes({
-      fastRpcUrl: "https://custom.fast.example/proxy",
-    });
-    const verifyRoute = routes.find(r => r.path === "/verify");
-
     const recipient = new Uint8Array(32).fill(0xcc);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     const certificate = createFastCertificate(recipient, "2000000000000000000", tokenId);
+    const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-mainnet", {
+      fastRpcUrl: "https://custom.fast.example/proxy",
+    }));
+    const verifyRoute = routes.find(r => r.path === "/verify");
 
     const req = createMockRequest("post", "/verify", {
       paymentPayload: {
@@ -385,14 +402,13 @@ describe("POST /settle", () => {
   });
 
   it("succeeds for Fast (no-op settlement)", async () => {
-    const routes = createFacilitatorRoutes();
-    const settleRoute = routes.find(r => r.path === "/settle");
-    
     // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xee);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     const certificate = createFastCertificate(recipient, "3000000000000000000", tokenId);
+    const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-testnet"));
+    const settleRoute = routes.find(r => r.path === "/settle");
     
     const req = createMockRequest("post", "/settle", {
       paymentPayload: {

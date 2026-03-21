@@ -248,7 +248,8 @@ The facilitator exposes three endpoints:
 **Fast payments:**
 1. Require the Fast RPC object certificate format
 2. Verify the sender signature over `Transaction::` + the canonical transaction bytes, and committee signatures over the canonical transaction bytes
-3. Validate scheme, network, recipient, amount, and token
+3. Check committee signers against the trusted Fast committee for the selected network
+4. Validate scheme, network, recipient, amount, and token
 
 ### Settlement Logic
 

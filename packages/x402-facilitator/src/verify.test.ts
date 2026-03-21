@@ -10,7 +10,12 @@ import {
   createFastTransactionSigningMessage,
   serializeFastTransaction,
 } from "./fast-bcs.js";
-import type { PaymentPayload, PaymentRequirement, FastTransactionCertificate } from "./types.js";
+import type {
+  FacilitatorConfig,
+  PaymentPayload,
+  PaymentRequirement,
+  FastTransactionCertificate,
+} from "./types.js";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
@@ -77,6 +82,39 @@ describe("verify", () => {
       proxyCertificates.clear();
       vi.unstubAllGlobals();
     });
+
+    function committeePublicKeysForCertificate(certificate: FastTransactionCertificate): string[] {
+      const trustedCertificate = proxyCertificates.get(certificateLookupKey(certificate)) ?? certificate;
+      return trustedCertificate.signatures.map((signatureEntry) => {
+        const [publicKey] = signatureEntry as [number[], number[]];
+        return Buffer.from(publicKey).toString("hex");
+      });
+    }
+
+    function fastVerificationConfig(
+      certificate: FastTransactionCertificate,
+      network: string,
+      extra: FacilitatorConfig = {}
+    ): FacilitatorConfig {
+      return {
+        ...extra,
+        committeePublicKeys: {
+          ...(extra.committeePublicKeys ?? {}),
+          [network]: committeePublicKeysForCertificate(certificate),
+        },
+      };
+    }
+
+    async function verifyFastFixture(
+      payload: PaymentPayload,
+      requirement: PaymentRequirement,
+      extra: FacilitatorConfig = {}
+    ) {
+      const certificate = (
+        payload.payload as { transactionCertificate: FastTransactionCertificate }
+      ).transactionCertificate;
+      return verify(payload, requirement, fastVerificationConfig(certificate, payload.network, extra));
+    }
 
     // Helper to create a valid Fast certificate
     function createFastCertificate(
@@ -218,7 +256,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(true);
       expect(result.payer).toBeDefined();
     });
@@ -247,7 +285,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_fast_transaction_signature");
     });
@@ -271,7 +309,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_fast_transaction_signature");
     });
@@ -292,7 +330,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(true);
       expect(lastFetchUrl).toBe("https://api.fast.xyz/proxy");
     });
@@ -313,7 +351,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement, {
+      const result = await verifyFastFixture(payload, requirement, {
         fastRpcUrl: "https://custom.fast.example/proxy",
       });
       expect(result.isValid).toBe(true);
@@ -344,7 +382,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_fast_committee_signature");
     });
@@ -368,9 +406,9 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
-      expect(result.invalidReason).toBe("fast_certificate_mismatch");
+      expect(result.invalidReason).toBe("unknown_fast_committee_signer");
     });
 
     it("rejects payment with wrong recipient", async () => {
@@ -400,7 +438,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toContain("recipient_mismatch");
     });
@@ -431,7 +469,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toContain("insufficient_amount");
     });
@@ -463,7 +501,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId), // Different from certificate
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toContain("token_mismatch");
     });
@@ -525,7 +563,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("missing_signatures");
     });
@@ -556,7 +594,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("unsupported_scheme");
     });
@@ -587,7 +625,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_network");
     });
@@ -618,7 +656,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toContain("insufficient_amount");
     });
@@ -645,7 +683,7 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(true);
       expect(result.payer).toBeDefined();
     });
@@ -674,9 +712,80 @@ describe("verify", () => {
         asset: bytesToHex(tokenId),
       };
 
-      const result = await verify(payload, requirement);
+      const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("duplicate_committee_signature");
+    });
+
+    it("accepts plain hex signatures without 0x prefixes", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId);
+      certificate.envelope.signature.Signature = Buffer.from(
+        certificate.envelope.signature.Signature as number[]
+      ).toString("hex");
+      certificate.signatures = (certificate.signatures as Array<[number[], number[]]>).map(
+        ([committeeMember, signature]) => ({
+          committee_member: committeeMember,
+          signature: Buffer.from(signature).toString("hex"),
+        })
+      );
+
+      const payload = createFastPayload(certificate);
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verifyFastFixture(payload, requirement);
+      expect(result.isValid).toBe(true);
+    });
+
+    it("rejects forged committee signers even when the RPC echoes the forged certificate", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId);
+      const trustedCommitteePublicKeys = committeePublicKeysForCertificate(certificate);
+      const forgedCertificate = cloneCertificate(certificate);
+      const transactionBytes = serializeFastTransaction(forgedCertificate.envelope.transaction);
+
+      forgedCertificate.signatures = forgedCertificate.signatures.map(() => {
+        const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+        return [
+          Array.from(rawPublicKey(publicKey)),
+          Array.from(new Uint8Array(sign(null, Buffer.from(transactionBytes), privateKey))),
+        ];
+      }) as Array<[number[], number[]]>;
+      proxyCertificates.set(
+        certificateLookupKey(forgedCertificate),
+        cloneCertificate(forgedCertificate)
+      );
+
+      const payload = createFastPayload(forgedCertificate);
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verify(payload, requirement, {
+        committeePublicKeys: {
+          "fast-testnet": trustedCommitteePublicKeys,
+        },
+      });
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("unknown_fast_committee_signer");
     });
 
     it("rejects legacy string-envelope certificates", async () => {
