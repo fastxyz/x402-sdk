@@ -99,8 +99,13 @@ export interface SupportedPaymentKind {
 export interface FacilitatorConfig {
   /** EVM private key for settling EIP-3009 authorizations */
   evmPrivateKey?: `0x${string}`;
-  /** Fast RPC endpoint */
+  /** Fast RPC endpoint override used for Fast verification */
   fastRpcUrl?: string;
+  /**
+   * Trusted Fast committee public keys by network.
+   * Values may be 32-byte hex strings or fast1.../set1... addresses.
+   */
+  committeePublicKeys?: Record<string, string[]>;
   /** Custom chain configs */
   chains?: Record<string, Chain>;
 }

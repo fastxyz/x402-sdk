@@ -4,13 +4,39 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  FAST_NETWORK_IDS,
   TransactionBcs,
+  VersionedTransactionBcs,
   decodeEnvelope,
   getTransferDetails,
   bytesToHex,
   hexToBytes,
+  serializeFastTransaction,
+  unwrapFastTransaction,
 } from "./fast-bcs.js";
+
+function createTransaction() {
+  const sender = new Uint8Array(32).fill(0x01);
+  const recipient = new Uint8Array(32).fill(0x02);
+  const tokenId = new Uint8Array(32);
+  tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
+
+  return {
+    network_id: "fast:testnet",
+    sender,
+    nonce: 1,
+    timestamp_nanos: BigInt(1709712000000) * 1_000_000n,
+    claim: {
+      TokenTransfer: {
+        token_id: tokenId,
+        recipient,
+        amount: "f4240",
+        user_data: null,
+      },
+    },
+    archival: false,
+    fee_token: null,
+  };
+}
 
 describe("Fast BCS utilities", () => {
   describe("bytesToHex", () => {
@@ -37,82 +63,44 @@ describe("Fast BCS utilities", () => {
     });
   });
 
-  describe("TransactionBcs", () => {
-    it("can serialize and deserialize a TokenTransfer transaction", () => {
-      const sender = new Uint8Array(32).fill(0x01);
-      const recipient = new Uint8Array(32).fill(0x02);
-      const tokenId = new Uint8Array(32);
-      tokenId.set([0x1b, 0x48, 0x76, 0x61], 0); // fastUSDC prefix
+  describe("VersionedTransactionBcs", () => {
+    it("serializes the current Release20260319 transaction format", () => {
+      const transaction = createTransaction();
+      const serialized = serializeFastTransaction(transaction);
+      const parsed = VersionedTransactionBcs.parse(serialized);
+      const inner = unwrapFastTransaction(parsed);
+      const transfer = "TokenTransfer" in inner.claim ? inner.claim.TokenTransfer : undefined;
 
-      const transaction = {
-        network_id: FAST_NETWORK_IDS.TESTNET,
-        sender,
-        nonce: 1,
-        timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-        claim: {
-          TokenTransfer: {
-            token_id: tokenId,
-            recipient,
-            amount: "1000000000000000000", // 1 token with 18 decimals
-            user_data: null,
-          },
-        },
-        archival: false,
-        fee_token: null,
-      };
+      expect(inner.network_id).toBe("fast:testnet");
+      expect(inner.sender).toEqual(transaction.sender);
+      expect(Number(inner.nonce)).toBe(1);
+      expect(transfer?.recipient).toEqual(transaction.claim.TokenTransfer.recipient);
+    });
 
-      // Serialize
+    it("can still parse bare current transaction bytes", () => {
+      const transaction = createTransaction();
       const serialized = TransactionBcs.serialize(transaction).toBytes();
-      expect(serialized.length).toBeGreaterThan(0);
+      const decoded = decodeEnvelope(serialized);
 
-      // Deserialize
-      const deserialized = TransactionBcs.parse(serialized);
-      expect(deserialized.sender).toEqual(sender);
-      expect(deserialized.network_id).toBe(FAST_NETWORK_IDS.TESTNET);
-      expect(deserialized.claim.TokenTransfer?.recipient).toEqual(recipient);
-      expect(Number(deserialized.nonce)).toBe(1);
-      expect(deserialized.archival).toBe(false);
+      expect(decoded.network_id).toBe("fast:testnet");
+      expect(decoded.sender).toEqual(transaction.sender);
+      expect(decoded.claim.TokenTransfer?.recipient).toEqual(transaction.claim.TokenTransfer.recipient);
     });
   });
 
   describe("decodeEnvelope", () => {
-    it("decodes a valid TokenTransfer envelope", () => {
-      // Create a test transaction
-      const sender = new Uint8Array(32).fill(0xaa);
-      const recipient = new Uint8Array(32).fill(0xbb);
-      const tokenId = new Uint8Array(32);
-      tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-
-      const transaction = {
-        network_id: FAST_NETWORK_IDS.TESTNET,
-        sender,
-        nonce: 42,
-        timestamp_nanos: BigInt(1709712000000) * 1_000_000n,
-        claim: {
-          TokenTransfer: {
-            token_id: tokenId,
-            recipient,
-            amount: "5000000000000000000", // 5 tokens
-            user_data: null,
-          },
-        },
-        archival: false,
-        fee_token: null,
-      };
-
-      // Serialize to create envelope
-      const envelope = TransactionBcs.serialize(transaction).toBytes();
-      const envelopeHex = bytesToHex(envelope);
-
-      // Decode
+    it("decodes a valid Release20260319 TokenTransfer envelope", () => {
+      const transaction = createTransaction();
+      const envelopeHex = bytesToHex(serializeFastTransaction(transaction));
       const decoded = decodeEnvelope(envelopeHex);
 
-      expect(decoded.sender).toEqual(sender);
-      expect(decoded.network_id).toBe(FAST_NETWORK_IDS.TESTNET);
-      expect(decoded.claim.TokenTransfer?.recipient).toEqual(recipient);
-      expect(decoded.nonce).toBe(42n);
+      expect(decoded.network_id).toBe("fast:testnet");
+      expect(decoded.sender).toEqual(transaction.sender);
+      expect(decoded.nonce).toBe(1n);
       expect(decoded.archival).toBe(false);
+      expect(decoded.fee_token).toBeNull();
       expect(decoded.claim.TokenTransfer).toBeDefined();
+      expect(decoded.claim.TokenTransfer?.recipient).toEqual(transaction.claim.TokenTransfer.recipient);
     });
 
     it("throws on invalid hex", () => {
@@ -126,43 +114,20 @@ describe("Fast BCS utilities", () => {
 
   describe("getTransferDetails", () => {
     it("extracts transfer details from decoded transaction", () => {
-      const sender = new Uint8Array(32).fill(0xcc);
-      const recipient = new Uint8Array(32).fill(0xdd);
-      const tokenId = new Uint8Array(32);
-      tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-
-      const transaction = {
-        network_id: FAST_NETWORK_IDS.TESTNET,
-        sender,
-        nonce: 100,
-        timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-        claim: {
-          TokenTransfer: {
-            token_id: tokenId,
-            recipient,
-            amount: "10000000000000000000", // 10 tokens
-            user_data: null,
-          },
-        },
-        archival: false,
-        fee_token: null,
-      };
-
-      const envelope = TransactionBcs.serialize(transaction).toBytes();
-      const decoded = decodeEnvelope(bytesToHex(envelope));
+      const transaction = createTransaction();
+      const decoded = decodeEnvelope(serializeFastTransaction(transaction));
       const details = getTransferDetails(decoded);
 
       expect(details).not.toBeNull();
-      expect(details!.sender).toBe(bytesToHex(sender));
-      expect(details!.recipient).toBe(bytesToHex(recipient));
-      // Amount is parsed from BCS - check it's a valid bigint
-      expect(details!.amount).toBeGreaterThan(0n);
-      expect(details!.tokenId).toBe(bytesToHex(tokenId));
+      expect(details!.sender).toBe(bytesToHex(transaction.sender));
+      expect(details!.recipient).toBe(bytesToHex(transaction.claim.TokenTransfer.recipient));
+      expect(details!.amount).toBe(1_000_000n);
+      expect(details!.tokenId).toBe(bytesToHex(transaction.claim.TokenTransfer.token_id));
     });
 
     it("returns null for non-TokenTransfer transactions", () => {
       const decoded = {
-        network_id: FAST_NETWORK_IDS.TESTNET,
+        network_id: "fast:testnet",
         sender: new Uint8Array(32),
         nonce: 0n,
         timestamp_nanos: 0n,
@@ -177,7 +142,7 @@ describe("Fast BCS utilities", () => {
         fee_token: null,
       };
 
-      const details = getTransferDetails(decoded);
+      const details = getTransferDetails(decoded as Parameters<typeof getTransferDetails>[0]);
       expect(details).toBeNull();
     });
   });
