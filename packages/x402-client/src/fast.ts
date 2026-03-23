@@ -132,12 +132,15 @@ export async function handleFastPayment(
   }
 
   // Send payment using SDK's send() method
+  // Convert raw amount to human-readable (FastWallet.send expects human-readable)
+  const amountHuman = (Number(fastReq.maxAmountRequired) / 1e6).toString();
   log(`[Fast] Sending payment via FastWallet.send()...`);
+  log(`  Amount: ${fastReq.maxAmountRequired} raw → ${amountHuman} USDC`);
   const txStartTime = Date.now();
   
   const result = await sdkWallet.send({
     to: fastReq.payTo,
-    amount: fastReq.maxAmountRequired,
+    amount: amountHuman,
     token,
   });
   
@@ -173,8 +176,6 @@ export async function handleFastPayment(
 
   let resBody: unknown;
   try { resBody = await paidRes.json(); } catch { resBody = await paidRes.text(); }
-
-  const amountHuman = (Number(fastReq.maxAmountRequired) / 1e6).toString();
 
   log(`━━━ Fast Payment Handler END ━━━`);
   log(`  Success: ${paidRes.ok}`);
