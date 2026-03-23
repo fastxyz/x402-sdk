@@ -2,6 +2,7 @@
  * AllSet bridge integration for x402-client
  * 
  * Bridges fastUSDC from Fast to USDC on EVM chains when needed.
+ * Chain configurations are imported from @fastxyz/allset-sdk.
  */
 
 import * as ed from '@noble/ed25519';
@@ -16,6 +17,7 @@ import {
   type FastTransaction,
   type FastTransactionCertificate,
 } from '@fastxyz/sdk/core';
+import { AllSetProvider } from '@fastxyz/allset-sdk/node';
 import type { FastWallet } from './types.js';
 
 // Configure ed25519
@@ -23,7 +25,6 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CROSS_SIGN_URL = 'https://testnet.cross-sign.allset.fast.xyz';
 const FAST_RPC_URL = 'https://testnet.api.fast.xyz/proxy';
 
 /** fastUSDC token ID on Fast */
@@ -31,7 +32,7 @@ const FAST_RPC_URL = 'https://testnet.api.fast.xyz/proxy';
 const fastUSDC_TOKEN_ID = hexToBytes('b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5');
 
 /** Bridge configuration per EVM chain */
-interface BridgeChainConfig {
+export interface BridgeChainConfig {
   chainId: number;
   usdcAddress: string;
   fastBridgeAddress: string;
@@ -39,32 +40,51 @@ interface BridgeChainConfig {
   bridgeContract?: string;
 }
 
-const BRIDGE_CONFIGS: Record<string, BridgeChainConfig> = {
-  'ethereum-sepolia': {
-    chainId: 11155111,
-    usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    fastBridgeAddress: 'fast1fxtkgpwcy7hnakw96gg7relph4wxx7ghrukm723p3l9adxuxljzsc6f958',
-    relayerUrl: 'https://testnet.allset.fast.xyz/ethereum-sepolia/relayer',
-    bridgeContract: '0xb53600976275D6f541a3B929328d07714EFA581F',
-  },
-  'arbitrum-sepolia': {
-    chainId: 421614,
-    usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    fastBridgeAddress: 'fast1tkmtqxulhnzeeg9zhuwxy3x95wr7waytm9cq40ndf7tkuwwcc6jseg24j8',
-    relayerUrl: 'https://testnet.allset.fast.xyz/arbitrum-sepolia/relayer',
-    bridgeContract: '0xb53600976275D6f541a3B929328d07714EFA581F',
-  },
-  'base': {
-    chainId: 8453,
-    usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    fastBridgeAddress: 'fast1a4fza9xc8jcm7jp64a0ugtuyw3hkkmje02e8af9aaer4r0je4dpqz4uf58',
-    relayerUrl: 'https://testnet.allset.fast.xyz/base/relayer',
-    bridgeContract: '0x83f0644FF860423539Dc6b6cA6d3b05a6F03337B',
-  },
-};
+// Cached AllSetProvider instances
+const allsetProviders: Record<string, AllSetProvider> = {};
 
+function getAllSetProvider(network: 'testnet' | 'mainnet' = 'testnet'): AllSetProvider {
+  if (!allsetProviders[network]) {
+    allsetProviders[network] = new AllSetProvider({ network });
+  }
+  return allsetProviders[network];
+}
+
+/**
+ * Get bridge configuration for a network.
+ * Configurations are loaded from @fastxyz/allset-sdk.
+ */
 export function getBridgeConfig(network: string): BridgeChainConfig | null {
-  return BRIDGE_CONFIGS[network] ?? null;
+  // Determine which AllSet network to use based on chain name
+  const isTestnet = network.includes('sepolia') || network === 'base';
+  const allset = getAllSetProvider(isTestnet ? 'testnet' : 'mainnet');
+  
+  // Map x402 network names to allset-sdk chain names
+  const chainName = network === 'ethereum-sepolia' ? 'ethereum-sepolia'
+    : network === 'arbitrum-sepolia' ? 'arbitrum-sepolia'
+    : network === 'base' ? 'base'
+    : network;
+  
+  const chainConfig = allset.getChainConfig(chainName);
+  if (!chainConfig) return null;
+  
+  const tokenConfig = allset.getTokenConfig(chainName, 'USDC');
+  if (!tokenConfig) return null;
+  
+  return {
+    chainId: chainConfig.chainId,
+    usdcAddress: tokenConfig.evmAddress,
+    fastBridgeAddress: chainConfig.fastBridgeAddress,
+    relayerUrl: chainConfig.relayerUrl,
+    bridgeContract: chainConfig.bridgeContract,
+  };
+}
+
+/**
+ * Get the cross-sign URL for a network.
+ */
+export function getCrossSignUrl(network: 'testnet' | 'mainnet' = 'testnet'): string {
+  return getAllSetProvider(network).crossSignUrl;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -439,9 +459,11 @@ async function submitExternalClaim(
  * Cross-sign a certificate via AllSet
  */
 async function crossSignCertificate(
-  certificate: TransactionResult['certificate']
+  certificate: TransactionResult['certificate'],
+  network: 'testnet' | 'mainnet' = 'testnet'
 ): Promise<{ transaction: number[]; signature: string }> {
-  const res = await fetch(CROSS_SIGN_URL, {
+  const crossSignUrl = getCrossSignUrl(network);
+  const res = await fetch(crossSignUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
