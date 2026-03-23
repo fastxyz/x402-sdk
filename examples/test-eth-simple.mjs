@@ -1,5 +1,13 @@
 import { x402Pay } from '@fastxyz/x402-client';
 
+const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY;
+const EVM_ADDRESS = process.env.EVM_ADDRESS;
+
+if (!EVM_PRIVATE_KEY || !EVM_ADDRESS) {
+  console.error('ERROR: EVM_PRIVATE_KEY and EVM_ADDRESS environment variables required');
+  process.exit(1);
+}
+
 console.log('Starting x402Pay for ethereum-sepolia...');
 console.log('ETH_SEPOLIA_RPC:', process.env.ETH_SEPOLIA_RPC ? 'set' : 'not set');
 
@@ -8,7 +16,7 @@ try {
     url: 'http://localhost:4021/api/eth-sepolia',
     method: 'GET',
     wallet: [
-      { type: 'evm', address: '0x1253537Cd5848424C920DD54Ce6DFeBD75EDC471', privateKey: '0x8ffe13c5c67e1c4cc467bc5a0f167f23703646e286469b66e0c49cb587751d89' },
+      { type: 'evm', address: EVM_ADDRESS, privateKey: EVM_PRIVATE_KEY },
     ],
     facilitatorUrl: 'http://localhost:4020',
     verbose: true,
