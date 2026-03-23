@@ -193,6 +193,8 @@ Client                          Server                         Facilitator
 
 Client submits transaction directly, sends **certificate** as proof.
 
+The Fast client and facilitator both use the canonical `@fastxyz/sdk` transaction codec, including Fast `network_id` validation for `fast-testnet` and `fast-mainnet`.
+
 ```
 Client                          Server                         Facilitator
   │                               │                                │

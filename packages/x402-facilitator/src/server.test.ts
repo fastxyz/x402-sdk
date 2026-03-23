@@ -3,8 +3,12 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
+import {
+  getCertificateHash,
+  type FastTransactionCertificate,
+} from "@fastxyz/sdk/core";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
-import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
+import { FAST_NETWORK_IDS, TransactionBcs, bytesToHex } from "./fast-bcs.js";
 
 // Mock Express request/response
 function createMockRequest(method: string, path: string, body?: unknown) {
@@ -113,18 +117,20 @@ describe("POST /verify", () => {
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     
     const transaction = {
+      network_id: FAST_NETWORK_IDS.TESTNET,
       sender: new Uint8Array(32).fill(0xaa),
-      recipient,
       nonce: 1,
       timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
       claim: {
         TokenTransfer: {
           token_id: tokenId,
+          recipient,
           amount: "1000000000000000000",
           user_data: null,
         },
       },
       archival: false,
+      fee_token: null,
     };
     
     const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
@@ -178,18 +184,20 @@ describe("POST /verify", () => {
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     
     const transaction = {
+      network_id: FAST_NETWORK_IDS.TESTNET,
       sender: new Uint8Array(32).fill(0xdd),
-      recipient,
       nonce: 2,
       timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
       claim: {
         TokenTransfer: {
           token_id: tokenId,
+          recipient,
           amount: "2000000000000000000",
           user_data: null,
         },
       },
       archival: false,
+      fee_token: null,
     };
     
     const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
@@ -273,18 +281,20 @@ describe("POST /settle", () => {
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
     
     const transaction = {
+      network_id: FAST_NETWORK_IDS.TESTNET,
       sender: new Uint8Array(32).fill(0xff),
-      recipient,
       nonce: 3,
       timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
       claim: {
         TokenTransfer: {
           token_id: tokenId,
+          recipient,
           amount: "3000000000000000000",
           user_data: null,
         },
       },
       archival: false,
+      fee_token: null,
     };
     
     const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
@@ -322,6 +332,73 @@ describe("POST /settle", () => {
     const body = res.getJson() as { success: boolean; transaction?: string };
     expect(body.success).toBe(true);
     expect(body.transaction).toBeDefined();
+  });
+
+  it("returns a transaction id for object-format Fast certificates", async () => {
+    const routes = createFacilitatorRoutes();
+    const settleRoute = routes.find(r => r.path === "/settle");
+
+    const recipient = new Uint8Array(32).fill(0xee);
+    const tokenId = new Uint8Array(32);
+    tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
+
+    const certificate: FastTransactionCertificate = {
+      envelope: {
+        transaction: {
+          Release20260319: {
+            network_id: FAST_NETWORK_IDS.TESTNET,
+            sender: Array.from(new Uint8Array(32).fill(0xff)),
+            nonce: 4,
+            timestamp_nanos: Date.now(),
+            claim: {
+              TokenTransfer: {
+                token_id: Array.from(tokenId),
+                recipient: Array.from(recipient),
+                amount: "3e8",
+                user_data: null,
+              },
+            },
+            archival: false,
+            fee_token: null,
+          },
+        },
+        signature: {
+          Signature: [],
+        },
+      },
+      signatures: [
+        [new Array(32).fill(0xaa), new Array(64).fill(0xaa)],
+      ],
+    };
+
+    const req = createMockRequest("post", "/settle", {
+      paymentPayload: {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: {
+          transactionCertificate: certificate,
+        },
+      },
+      paymentRequirements: {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: "1000000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: bytesToHex(recipient),
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      },
+    });
+    const res = createMockResponse();
+
+    await settleRoute!.handler(req as any, res as any);
+
+    const body = res.getJson() as { success: boolean; transaction?: string };
+    expect(body.success).toBe(true);
+    expect(body.transaction).toBe(getCertificateHash(certificate));
   });
 
   it("fails for EVM without private key configured", async () => {

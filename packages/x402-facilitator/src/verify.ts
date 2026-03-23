@@ -19,7 +19,13 @@ import type {
 } from "./types.js";
 import { getNetworkType, getNetworkId } from "./types.js";
 import { getEvmChainConfig } from "./chains.js";
-import { decodeEnvelope, getTransferDetails, bytesToHex } from "./fast-bcs.js";
+import {
+  FAST_NETWORK_IDS,
+  bytesToHex,
+  decodeEnvelope,
+  fastAddressToBytes,
+  getTransferDetails,
+} from "./fast-bcs.js";
 
 /**
  * USDC ABI for balance check
@@ -49,6 +55,14 @@ export async function verify(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement
 ): Promise<VerifyResponse> {
+  if (paymentPayload.network === "fast" || paymentRequirement.network === "fast") {
+    return {
+      isValid: false,
+      invalidReason: "invalid_network",
+      network: paymentPayload.network,
+    };
+  }
+
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {
@@ -244,114 +258,74 @@ async function verifyEvmPayment(
  * Handles both hex (0x...) and bech32m (set1...) formats
  */
 function normalizeAddress(addr: string): string {
-  return addr.toLowerCase().replace(/^0x/, "");
+  return addr.trim().toLowerCase().replace(/^0x/, "");
 }
 
-/**
- * Compare two addresses for equality
- * Supports hex pubkeys and bech32m addresses (fast1... or set1...)
- */
-function addressesMatch(a: string, b: string): boolean {
-  // Helper to decode bech32m to hex
-  const bech32mToHex = (addr: string): string | null => {
+function normalizeComparableFastAddress(addr: string): string | null {
+  const trimmed = addr.trim();
+  if (trimmed.startsWith("fast1") || trimmed.startsWith("set1")) {
+    const canonicalFastAddress = trimmed.startsWith("set1")
+      ? `fast1${trimmed.slice(4)}`
+      : trimmed;
     try {
-      // Import bech32m dynamically would be better but for sync use:
-      // Simple implementation: extract the data part and decode
-      const sep = addr.indexOf("1");
-      if (sep === -1) return null;
-      
-      const data = addr.slice(sep + 1);
-      const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-      
-      // Decode each character to 5-bit value
-      const values: number[] = [];
-      for (const c of data) {
-        const idx = CHARSET.indexOf(c.toLowerCase());
-        if (idx === -1) return null;
-        values.push(idx);
-      }
-      
-      // Remove checksum (last 6 characters)
-      const dataValues = values.slice(0, -6);
-      
-      // Convert 5-bit to 8-bit
-      let acc = 0;
-      let bits = 0;
-      const result: number[] = [];
-      for (const v of dataValues) {
-        acc = (acc << 5) | v;
-        bits += 5;
-        while (bits >= 8) {
-          bits -= 8;
-          result.push((acc >> bits) & 0xff);
-        }
-      }
-      
-      return Buffer.from(result).toString("hex");
+      return normalizeAddress(bytesToHex(fastAddressToBytes(canonicalFastAddress)));
     } catch {
       return null;
     }
-  };
+  }
 
-  // If both start with "fast1" or "set1", compare directly
-  if ((a.startsWith("fast1") || a.startsWith("set1")) && 
-      (b.startsWith("fast1") || b.startsWith("set1"))) {
-    return a.toLowerCase() === b.toLowerCase();
+  if (/^(0x)?[0-9a-fA-F]+$/.test(trimmed)) {
+    return normalizeAddress(trimmed);
   }
-  
-  // If both are hex, compare normalized
-  if ((a.startsWith("0x") || /^[0-9a-fA-F]+$/.test(a)) &&
-      (b.startsWith("0x") || /^[0-9a-fA-F]+$/.test(b))) {
-    return normalizeAddress(a) === normalizeAddress(b);
-  }
-  
-  // Mixed format - decode bech32m to hex and compare
-  let hexA = a;
-  let hexB = b;
-  
-  if (a.startsWith("fast1") || a.startsWith("set1")) {
-    const decoded = bech32mToHex(a);
-    if (!decoded) return false;
-    hexA = decoded;
-  } else {
-    hexA = normalizeAddress(a);
-  }
-  
-  if (b.startsWith("fast1") || b.startsWith("set1")) {
-    const decoded = bech32mToHex(b);
-    if (!decoded) return false;
-    hexB = decoded;
-  } else {
-    hexB = normalizeAddress(b);
-  }
-  
-  return hexA.toLowerCase() === hexB.toLowerCase();
+
+  return null;
 }
 
-/**
- * Fast transaction certificate structure (from RPC)
- */
-interface FastTransactionCertificate {
-  envelope: {
-    transaction: {
-      sender: number[];
-      recipient: number[];
-      nonce: number;
-      timestamp_nanos: number;
-      claim: {
-        TokenTransfer?: {
-          token_id: number[];
-          amount: string;
-          user_data: number[] | null;
-        };
-      };
-      archival?: boolean;
-    };
-    signature: {
-      Signature: number[];
-    };
+function addressesMatch(a: string, b: string): boolean {
+  const left = normalizeComparableFastAddress(a);
+  const right = normalizeComparableFastAddress(b);
+  return left !== null && right !== null && left === right;
+}
+
+function expectedFastNetworkId(network: string): string | null {
+  switch (network) {
+    case "fast-testnet":
+      return FAST_NETWORK_IDS.TESTNET;
+    case "fast-mainnet":
+      return FAST_NETWORK_IDS.MAINNET;
+    default:
+      return null;
+  }
+}
+
+interface FastRpcTokenTransfer {
+  token_id: number[];
+  recipient: number[];
+  amount: string;
+  user_data: number[] | null;
+}
+
+interface FastRpcTransaction {
+  network_id: string;
+  sender: number[];
+  nonce: number | string;
+  timestamp_nanos: number | string;
+  claim: {
+    TokenTransfer?: FastRpcTokenTransfer;
   };
-  signatures: Array<[number[], number[]]>;
+  archival?: boolean;
+  fee_token?: number[] | null;
+}
+
+type FastRpcVersionedTransaction =
+  | FastRpcTransaction
+  | {
+      Release20260319: FastRpcTransaction;
+    };
+
+interface FastRpcCertificateEnvelope {
+  transaction: FastRpcVersionedTransaction;
+  signature: unknown;
 }
 
 // Fast RPC object envelopes encode amounts as hex strings without a 0x prefix.
@@ -402,12 +376,20 @@ async function verifyFastPayment(
   }
 
   const certificate = payload.transactionCertificate;
+  const expectedNetworkId = expectedFastNetworkId(paymentPayload.network);
+  if (!expectedNetworkId) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_network",
+      network: paymentPayload.network,
+    };
+  }
   
   // Handle both formats:
   // 1. BCS serialized: { envelope: "0x...", signatures: [...] }
   // 2. Object format: { envelope: { transaction: {...} }, signatures: [...] }
   const { envelope, signatures } = certificate as { 
-    envelope: string | { transaction: FastTransactionCertificate["envelope"]["transaction"] };
+    envelope: string | FastRpcCertificateEnvelope;
     signatures: unknown[];
   };
 
@@ -450,6 +432,13 @@ async function verifyFastPayment(
     // BCS serialized format - decode using decodeEnvelope
     try {
       const decoded = decodeEnvelope(envelope);
+      if (expectedNetworkId && decoded.network_id !== expectedNetworkId) {
+        return {
+          isValid: false,
+          invalidReason: `network_id_mismatch: expected ${expectedNetworkId}, got ${decoded.network_id}`,
+          network: paymentPayload.network,
+        };
+      }
       const transferDetails = getTransferDetails(decoded);
       
       if (!transferDetails) {
@@ -474,14 +463,33 @@ async function verifyFastPayment(
     }
   } else {
     // Object format from RPC
-    const tx = envelope.transaction;
-    if (!tx) {
-      return {
-        isValid: false,
-        invalidReason: "missing_transaction",
-        network: paymentPayload.network,
-      };
-    }
+      const txContainer = envelope.transaction;
+      const tx = (txContainer && typeof txContainer === "object" && "Release20260319" in txContainer)
+        ? (txContainer as { Release20260319: FastRpcTransaction }).Release20260319
+        : txContainer as FastRpcTransaction;
+      if (!tx) {
+        return {
+          isValid: false,
+          invalidReason: "missing_transaction",
+          network: paymentPayload.network,
+        };
+      }
+
+      if (!tx.network_id) {
+        return {
+          isValid: false,
+          invalidReason: "missing_network_id",
+          network: paymentPayload.network,
+        };
+      }
+
+      if (expectedNetworkId && tx.network_id !== expectedNetworkId) {
+        return {
+          isValid: false,
+          invalidReason: `network_id_mismatch: expected ${expectedNetworkId}, got ${tx.network_id}`,
+          network: paymentPayload.network,
+        };
+      }
     
     // Verify it's a TokenTransfer
     if (!tx.claim.TokenTransfer) {
@@ -495,9 +503,9 @@ async function verifyFastPayment(
     const transfer = tx.claim.TokenTransfer;
     
     // Convert byte arrays to hex for comparison
-    senderHex = "0x" + Buffer.from(tx.sender).toString("hex");
-    recipientHex = "0x" + Buffer.from(tx.recipient).toString("hex");
-    tokenIdHex = "0x" + Buffer.from(transfer.token_id).toString("hex");
+    senderHex = bytesToHex(tx.sender);
+    recipientHex = bytesToHex(transfer.recipient);
+    tokenIdHex = bytesToHex(transfer.token_id);
     
     try {
       amountBigInt = parseFastRpcAmount(transfer.amount);

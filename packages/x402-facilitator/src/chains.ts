@@ -49,7 +49,7 @@ export const EVM_CHAINS: Record<string, EvmChainConfig> = {
   "ethereum-sepolia": {
     chain: sepolia,
     usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-    usdcName: "USD Coin",
+    usdcName: "USDC",
     usdcVersion: "2",
   },
 };
@@ -58,8 +58,8 @@ export const EVM_CHAINS: Record<string, EvmChainConfig> = {
  * Fast RPC endpoints
  */
 export const FAST_RPC_URLS: Record<string, string> = {
-  "fast-testnet": "https://staging.proxy.fastset.xyz/",
-  "fast-mainnet": "https://staging.proxy.fastset.xyz/",
+  "fast-testnet": "https://testnet.api.fast.xyz/proxy",
+  "fast-mainnet": "https://api.fast.xyz/proxy",
 };
 
 /**

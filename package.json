@@ -31,6 +31,6 @@
     "url": "https://github.com/fastxyz/x402-sdk"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }
