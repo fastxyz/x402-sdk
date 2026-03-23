@@ -31,7 +31,9 @@
     "url": "https://github.com/fastxyz/x402-sdk/issues"
   },
   "homepage": "https://github.com/fastxyz/x402-sdk#readme",
-  "dependencies": {},
+  "dependencies": {
+    "@fastxyz/allset-sdk": "^0.1.5"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.3.3"
