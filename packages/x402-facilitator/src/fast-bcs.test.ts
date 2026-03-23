@@ -69,11 +69,12 @@ describe("Fast BCS utilities", () => {
       const serialized = serializeFastTransaction(transaction);
       const parsed = VersionedTransactionBcs.parse(serialized);
       const inner = unwrapFastTransaction(parsed);
+      const transfer = "TokenTransfer" in inner.claim ? inner.claim.TokenTransfer : undefined;
 
       expect(inner.network_id).toBe("fast:testnet");
       expect(inner.sender).toEqual(transaction.sender);
       expect(Number(inner.nonce)).toBe(1);
-      expect(inner.claim.TokenTransfer?.recipient).toEqual(transaction.claim.TokenTransfer.recipient);
+      expect(transfer?.recipient).toEqual(transaction.claim.TokenTransfer.recipient);
     });
 
     it("can still parse bare current transaction bytes", () => {
@@ -141,7 +142,7 @@ describe("Fast BCS utilities", () => {
         fee_token: null,
       };
 
-      const details = getTransferDetails(decoded);
+      const details = getTransferDetails(decoded as Parameters<typeof getTransferDetails>[0]);
       expect(details).toBeNull();
     });
   });

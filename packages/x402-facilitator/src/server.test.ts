@@ -3,6 +3,7 @@
  */
 
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
+import type { FastTransactionCertificate } from "@fastxyz/sdk/core";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
 import {
@@ -11,7 +12,7 @@ import {
   serializeFastTransaction,
   unwrapFastTransaction,
 } from "./fast-bcs.js";
-import type { FacilitatorConfig, FastTransactionCertificate } from "./types.js";
+import type { FacilitatorConfig } from "./types.js";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
@@ -26,7 +27,7 @@ function rawPublicKey(key: KeyObject): Uint8Array {
 
 function certificateLookupKey(certificate: FastTransactionCertificate): string {
   const transaction = unwrapFastTransaction(certificate.envelope.transaction);
-  const sender = Buffer.from(transaction.sender).toString("hex");
+  const sender = Buffer.from(Array.from(transaction.sender)).toString("hex");
   return `${sender}:${transaction.nonce.toString()}`;
 }
 
@@ -73,11 +74,9 @@ function createFastCertificate(
   const sender = rawPublicKey(senderPublicKey);
   const networkId = network === "fast-mainnet"
     ? "fast:mainnet"
-    : network === "fast"
-      ? "fast:testnet"
-      : network.startsWith("fast-")
-        ? `fast:${network.slice("fast-".length)}`
-        : "fast:testnet";
+    : network.startsWith("fast-")
+      ? `fast:${network.slice("fast-".length)}`
+      : "fast:testnet";
   const transaction = {
     network_id: networkId,
     sender: Array.from(sender),
@@ -111,7 +110,7 @@ function createFastCertificate(
     ]);
   }
 
-const certificate: FastTransactionCertificate = {
+  const certificate: FastTransactionCertificate = {
     envelope: {
       transaction: {
         Release20260319: transaction,
@@ -173,7 +172,7 @@ function fastRouteConfig(
   extra: FacilitatorConfig = {}
 ): FacilitatorConfig {
   const trustedCertificate = proxyCertificates.get(certificateLookupKey(certificate)) ?? certificate;
-  const committeePublicKeys = trustedCertificate.signatures.map((signatureEntry) => {
+  const committeePublicKeys = trustedCertificate.signatures.map((signatureEntry: [number[], number[]]) => {
     const [publicKey] = signatureEntry as [number[], number[]];
     return Buffer.from(publicKey).toString("hex");
   });

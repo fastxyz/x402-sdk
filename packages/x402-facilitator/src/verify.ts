@@ -4,6 +4,7 @@
  */
 
 import { createPublicKey, verify as verifySignature } from "node:crypto";
+import type { FastTransactionCertificate } from "@fastxyz/sdk/core";
 import {
   createPublicClient,
   http,
@@ -18,35 +19,28 @@ import type {
   EvmPayload,
   FastPayload,
   FacilitatorConfig,
-  FastCommitteeSignature,
-  FastTransactionCertificate,
 } from "./types.js";
 import { getNetworkType, getNetworkId } from "./types.js";
 import {
   FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS,
   getEvmChainConfig,
-  getFastNetworkFromNetworkId,
   getExpectedFastNetworkId,
   getFastRpcUrl,
 } from "./chains.js";
 import {
+  bytesToHex,
   createFastTransactionSigningMessage,
   decodeEnvelope,
+  fastAddressToBytes,
   getTransferDetails,
   serializeFastTransaction,
   unwrapFastTransaction,
 } from "./fast-bcs.js";
 
-/**
- * USDC ABI for balance check
- */
 const ERC20_ABI = parseAbi([
   "function balanceOf(address account) external view returns (uint256)",
 ]);
 
-/**
- * EIP-3009 authorization types for typed data verification
- */
 const authorizationTypes = {
   TransferWithAuthorization: [
     { name: "from", type: "address" },
@@ -58,14 +52,22 @@ const authorizationTypes = {
   ],
 } as const;
 
-/**
- * Verify a payment
- */
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+const warnedUntrustedCommitteeNetworks = new Set<string>();
+
 export async function verify(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement,
-  config: FacilitatorConfig = {}
+  config: FacilitatorConfig = {},
 ): Promise<VerifyResponse> {
+  if (paymentPayload.network === "fast" || paymentRequirement.network === "fast") {
+    return {
+      isValid: false,
+      invalidReason: "invalid_network",
+      network: paymentPayload.network,
+    };
+  }
+
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {
@@ -76,25 +78,21 @@ export async function verify(
     default:
       return {
         isValid: false,
-        invalidReason: `unsupported_network_type`,
+        invalidReason: "unsupported_network_type",
         network: paymentPayload.network,
       };
   }
 }
 
-/**
- * Verify EVM EIP-3009 payment
- * Uses viem's verifyTypedData for signature verification
- */
 async function verifyEvmPayment(
   paymentPayload: PaymentPayload,
-  paymentRequirement: PaymentRequirement
+  paymentRequirement: PaymentRequirement,
 ): Promise<VerifyResponse> {
   const chainConfig = getEvmChainConfig(paymentPayload.network);
   if (!chainConfig) {
     return {
       isValid: false,
-      invalidReason: `invalid_network`,
+      invalidReason: "invalid_network",
       network: paymentPayload.network,
     };
   }
@@ -110,7 +108,6 @@ async function verifyEvmPayment(
 
   const { authorization, signature } = payload;
 
-  // Verify scheme matches
   if (paymentPayload.scheme !== "exact" || paymentRequirement.scheme !== "exact") {
     return {
       isValid: false,
@@ -120,7 +117,6 @@ async function verifyEvmPayment(
     };
   }
 
-  // Verify network matches
   if (paymentPayload.network !== paymentRequirement.network) {
     return {
       isValid: false,
@@ -130,7 +126,6 @@ async function verifyEvmPayment(
     };
   }
 
-  // Verify payment recipient matches
   if (authorization.to.toLowerCase() !== paymentRequirement.payTo.toLowerCase()) {
     return {
       isValid: false,
@@ -140,19 +135,16 @@ async function verifyEvmPayment(
     };
   }
 
-  // Get domain parameters
   const chainId = getNetworkId(paymentPayload.network);
   const name = paymentRequirement.extra?.name ?? chainConfig.usdcName ?? "USD Coin";
   const version = paymentRequirement.extra?.version ?? chainConfig.usdcVersion ?? "2";
   const erc20Address = paymentRequirement.asset as Address;
 
-  // Create public client for verification
   const client = createPublicClient({
     chain: chainConfig.chain,
     transport: http(),
   });
 
-  // Verify signature using viem's verifyTypedData
   try {
     const isValidSignature = await client.verifyTypedData({
       address: authorization.from as Address,
@@ -183,7 +175,7 @@ async function verifyEvmPayment(
         network: paymentPayload.network,
       };
     }
-  } catch (error) {
+  } catch {
     return {
       isValid: false,
       invalidReason: "invalid_exact_evm_payload_signature",
@@ -192,7 +184,6 @@ async function verifyEvmPayment(
     };
   }
 
-  // Verify timing - validBefore must be sufficiently in the future (pad 6 seconds for 3 blocks)
   const now = Math.floor(Date.now() / 1000);
   if (BigInt(authorization.validBefore) < BigInt(now + 6)) {
     return {
@@ -203,7 +194,6 @@ async function verifyEvmPayment(
     };
   }
 
-  // Verify timing - validAfter must be in the past
   if (BigInt(authorization.validAfter) > BigInt(now)) {
     return {
       isValid: false,
@@ -213,7 +203,6 @@ async function verifyEvmPayment(
     };
   }
 
-  // Verify value meets requirement
   if (BigInt(authorization.value) < BigInt(paymentRequirement.maxAmountRequired)) {
     return {
       isValid: false,
@@ -223,7 +212,6 @@ async function verifyEvmPayment(
     };
   }
 
-  // Check on-chain balance
   try {
     const balance = await client.readContract({
       address: erc20Address,
@@ -240,7 +228,7 @@ async function verifyEvmPayment(
         network: paymentPayload.network,
       };
     }
-  } catch (error) {
+  } catch {
     return {
       isValid: false,
       invalidReason: "balance_check_failed",
@@ -256,76 +244,36 @@ async function verifyEvmPayment(
   };
 }
 
-/**
- * Normalize address for comparison
- * Handles both hex (0x...) and bech32m (set1...) formats
- */
 function normalizeAddress(addr: string): string {
-  return addr.toLowerCase().replace(/^0x/, "");
-}
-
-/**
- * Decode a Fast bech32m address to hex.
- */
-function bech32mToHex(addr: string): string | null {
-  try {
-    const normalized = addr.toLowerCase();
-    if (!normalized.startsWith("fast1") && !normalized.startsWith("set1")) {
-      return null;
-    }
-
-    const sep = normalized.indexOf("1");
-    if (sep === -1) return null;
-
-    const data = normalized.slice(sep + 1);
-    const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-
-    const values: number[] = [];
-    for (const c of data) {
-      const idx = CHARSET.indexOf(c);
-      if (idx === -1) return null;
-      values.push(idx);
-    }
-
-    const dataValues = values.slice(0, -6);
-    let acc = 0;
-    let bits = 0;
-    const result: number[] = [];
-    for (const v of dataValues) {
-      acc = (acc << 5) | v;
-      bits += 5;
-      while (bits >= 8) {
-        bits -= 8;
-        result.push((acc >> bits) & 0xff);
-      }
-    }
-
-    return result.length === 32 ? Buffer.from(result).toString("hex") : null;
-  } catch {
-    return null;
-  }
+  return addr.trim().toLowerCase().replace(/^0x/, "");
 }
 
 function normalizeComparableAddress(addr: string): string | null {
-  if (addr.startsWith("fast1") || addr.startsWith("set1")) {
-    return bech32mToHex(addr);
+  const trimmed = addr.trim();
+  if (trimmed.startsWith("fast1") || trimmed.startsWith("set1")) {
+    const canonicalFastAddress = trimmed.startsWith("set1")
+      ? `fast1${trimmed.slice(4)}`
+      : trimmed;
+
+    try {
+      return normalizeAddress(bytesToHex(fastAddressToBytes(canonicalFastAddress)));
+    } catch {
+      return null;
+    }
   }
 
-  return normalizeAddress(addr);
+  if (/^(0x)?[0-9a-fA-F]+$/.test(trimmed)) {
+    return normalizeAddress(trimmed);
+  }
+
+  return null;
 }
 
-/**
- * Compare two addresses for equality
- * Supports hex pubkeys and bech32m addresses (fast1... or set1...)
- */
 function addressesMatch(a: string, b: string): boolean {
-  const normalizedA = normalizeComparableAddress(a);
-  const normalizedB = normalizeComparableAddress(b);
-  return normalizedA != null && normalizedB != null && normalizedA === normalizedB;
+  const left = normalizeComparableAddress(a);
+  const right = normalizeComparableAddress(b);
+  return left !== null && right !== null && left === right;
 }
-
-const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
-const warnedUntrustedCommitteeNetworks = new Set<string>();
 
 function toByteArray(value: unknown): Uint8Array | null {
   if (value instanceof Uint8Array) {
@@ -355,7 +303,7 @@ function toByteArray(value: unknown): Uint8Array | null {
 function verifyEd25519(
   publicKeyBytes: Uint8Array,
   message: Uint8Array,
-  signatureBytes: Uint8Array
+  signatureBytes: Uint8Array,
 ): boolean {
   if (publicKeyBytes.length !== 32 || signatureBytes.length !== 64) {
     return false;
@@ -374,13 +322,33 @@ function verifyEd25519(
   }
 }
 
+function extractSenderSignature(signature: unknown): Uint8Array | null {
+  if (Array.isArray(signature)) {
+    return toByteArray(signature);
+  }
+
+  if (!signature || typeof signature !== "object") {
+    return null;
+  }
+
+  return toByteArray((signature as Record<string, unknown>).Signature);
+}
+
+function hasMultiSig(signature: unknown): boolean {
+  return Boolean(
+    signature &&
+      typeof signature === "object" &&
+      !Array.isArray(signature) &&
+      (signature as Record<string, unknown>).MultiSig,
+  );
+}
+
 function parseCommitteeSignature(
-  entry: FastCommitteeSignature | unknown
+  entry: unknown,
 ): { publicKey: Uint8Array; signature: Uint8Array } | null {
   if (Array.isArray(entry) && entry.length === 2) {
     const publicKey = toByteArray(entry[0]);
     const signature = toByteArray(entry[1]);
-
     if (!publicKey || !signature) {
       return null;
     }
@@ -393,10 +361,8 @@ function parseCommitteeSignature(
   }
 
   const record = entry as Record<string, unknown>;
-  const member = record.committee_member ?? record.validator;
-  const publicKey = toByteArray(member);
+  const publicKey = toByteArray(record.committee_member ?? record.validator);
   const signature = toByteArray(record.signature);
-
   if (!publicKey || !signature) {
     return null;
   }
@@ -427,17 +393,25 @@ function parseTrustedCommitteePublicKey(value: string): string | null {
     return Buffer.from(bytes).toString("hex");
   }
 
-  return bech32mToHex(value);
+  const normalized = value.startsWith("set1") ? `fast1${value.slice(4)}` : value;
+  if (!normalized.startsWith("fast1")) {
+    return null;
+  }
+
+  try {
+    return normalizeAddress(bytesToHex(fastAddressToBytes(normalized)));
+  } catch {
+    return null;
+  }
 }
 
 function resolveTrustedCommittee(
   network: string,
-  config: FacilitatorConfig
+  config: FacilitatorConfig,
 ): ResolvedTrustedCommittee | null {
   const configuredKeys = config.committeePublicKeys?.[network];
   const bundledKeys = FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS[network];
   const keys = configuredKeys ?? bundledKeys;
-
   if (!keys?.length) {
     return null;
   }
@@ -471,7 +445,7 @@ function warnUntrustedCommittee(network: string, fastRpcUrl?: string): void {
   warnedUntrustedCommitteeNetworks.add(warningKey);
   console.warn(
     `x402-facilitator: no trusted Fast committee configured for ${network}; ` +
-      `verification is trusting ${rpcUrl} for committee membership.`
+      `verification is trusting ${rpcUrl} for committee membership.`,
   );
 }
 
@@ -483,7 +457,7 @@ async function fetchFastCertificateByNonce(
   network: string,
   senderPublicKey: Uint8Array,
   nonce: bigint,
-  fastRpcUrl?: string
+  fastRpcUrl?: string,
 ): Promise<FastTransactionCertificate | null> {
   if (nonce > BigInt(Number.MAX_SAFE_INTEGER)) {
     throw new Error("nonce_out_of_range");
@@ -513,7 +487,7 @@ async function fetchFastCertificateByNonce(
     throw new Error(`http_${response.status}`);
   }
 
-  const json = await response.json() as {
+  const json = (await response.json()) as {
     result?: FastRpcAccountInfoResponse;
     error?: { message?: string };
   };
@@ -525,23 +499,11 @@ async function fetchFastCertificateByNonce(
   return json.result?.requested_certificates?.[0] ?? null;
 }
 
-/**
- * Verify Fast payment by validating the transaction certificate
- * 
- * Verifies:
- * 1. Certificate structure matches Fast RPC output
- * 2. Sender signature verifies against "VersionedTransaction::" + serialized transaction
- * 3. Committee signatures verify against the serialized transaction
- * 4. Verify recipient matches payTo
- * 5. Verify amount >= maxAmountRequired
- * 6. Verify token matches asset
- */
 async function verifyFastPayment(
   paymentPayload: PaymentPayload,
   paymentRequirement: PaymentRequirement,
-  config: FacilitatorConfig
+  config: FacilitatorConfig,
 ): Promise<VerifyResponse> {
-  // Verify scheme matches
   if (paymentPayload.scheme !== "exact" || paymentRequirement.scheme !== "exact") {
     return {
       isValid: false,
@@ -550,7 +512,6 @@ async function verifyFastPayment(
     };
   }
 
-  // Verify network matches
   if (paymentPayload.network !== paymentRequirement.network) {
     return {
       isValid: false,
@@ -568,10 +529,18 @@ async function verifyFastPayment(
     };
   }
 
-  const certificate = payload.transactionCertificate;
-  const { envelope, signatures } = certificate as FastTransactionCertificate;
+  const expectedNetworkId = getExpectedFastNetworkId(paymentPayload.network);
+  if (!expectedNetworkId) {
+    return {
+      isValid: false,
+      invalidReason: "invalid_network",
+      network: paymentPayload.network,
+    };
+  }
 
-  // Validate certificate structure
+  const certificate = payload.transactionCertificate as FastTransactionCertificate;
+  const { envelope, signatures } = certificate;
+
   if (!envelope) {
     return {
       isValid: false,
@@ -588,7 +557,7 @@ async function verifyFastPayment(
     };
   }
 
-  if (typeof envelope !== "object") {
+  if (typeof envelope !== "object" || envelope === null) {
     return {
       isValid: false,
       invalidReason: "unsupported_fast_certificate_format",
@@ -596,7 +565,7 @@ async function verifyFastPayment(
     };
   }
 
-  if (!envelope.transaction) {
+  if (!("transaction" in envelope) || !envelope.transaction) {
     return {
       isValid: false,
       invalidReason: "missing_transaction",
@@ -604,18 +573,7 @@ async function verifyFastPayment(
     };
   }
 
-  let transaction;
-  try {
-    transaction = unwrapFastTransaction(envelope.transaction);
-  } catch {
-    return {
-      isValid: false,
-      invalidReason: "unsupported_fast_certificate_format",
-      network: paymentPayload.network,
-    };
-  }
-
-  if (envelope.signature?.MultiSig) {
+  if (hasMultiSig(envelope.signature)) {
     return {
       isValid: false,
       invalidReason: "unsupported_fast_transaction_multisig",
@@ -623,7 +581,7 @@ async function verifyFastPayment(
     };
   }
 
-  const senderSignature = toByteArray(envelope.signature?.Signature);
+  const senderSignature = extractSenderSignature(envelope.signature);
   if (!senderSignature) {
     return {
       isValid: false,
@@ -632,24 +590,18 @@ async function verifyFastPayment(
     };
   }
 
+  let transaction;
   let transactionBytes: Uint8Array;
   try {
+    transaction = unwrapFastTransaction(envelope.transaction);
     transactionBytes = serializeFastTransaction(transaction);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
       isValid: false,
-      invalidReason: message === "not_a_token_transfer" ? message : `invalid_transaction: ${message}`,
-      network: paymentPayload.network,
-    };
-  }
-
-  const decoded = decodeEnvelope(transactionBytes);
-  const transferDetails = getTransferDetails(decoded);
-  if (!transferDetails) {
-    return {
-      isValid: false,
-      invalidReason: "not_a_token_transfer",
+      invalidReason: message === "not_a_token_transfer"
+        ? message
+        : `invalid_transaction: ${message}`,
       network: paymentPayload.network,
     };
   }
@@ -658,62 +610,65 @@ async function verifyFastPayment(
   let recipientHex: string;
   let tokenIdHex: string;
   let amountBigInt: bigint;
-  senderHex = transferDetails.sender;
-  recipientHex = transferDetails.recipient;
-  tokenIdHex = transferDetails.tokenId;
-  amountBigInt = transferDetails.amount;
+  let nonce: bigint;
+  try {
+    const decoded = decodeEnvelope(transactionBytes);
+    if (decoded.network_id !== expectedNetworkId) {
+      return {
+        isValid: false,
+        invalidReason: `network_id_mismatch: expected ${expectedNetworkId}, got ${decoded.network_id}`,
+        network: paymentPayload.network,
+      };
+    }
 
-  const resolvedCertificateNetwork = getFastNetworkFromNetworkId(decoded.network_id);
-  if (!resolvedCertificateNetwork) {
+    const transferDetails = getTransferDetails(decoded);
+    if (!transferDetails) {
+      return {
+        isValid: false,
+        invalidReason: "not_a_token_transfer",
+        network: paymentPayload.network,
+      };
+    }
+
+    senderHex = transferDetails.sender;
+    recipientHex = transferDetails.recipient;
+    tokenIdHex = transferDetails.tokenId;
+    amountBigInt = transferDetails.amount;
+    nonce = decoded.nonce;
+  } catch (resultOrError) {
+    if (
+      resultOrError &&
+      typeof resultOrError === "object" &&
+      "isValid" in resultOrError &&
+      "network" in resultOrError
+    ) {
+      return resultOrError as VerifyResponse;
+    }
+
     return {
       isValid: false,
-      invalidReason: `invalid_network: unsupported fast network_id ${decoded.network_id}`,
-      payer: senderHex,
+      invalidReason: `invalid_transaction: ${
+        resultOrError instanceof Error ? resultOrError.message : String(resultOrError)
+      }`,
       network: paymentPayload.network,
     };
   }
-
-  const expectedNetworkId = getExpectedFastNetworkId(paymentPayload.network);
-  if (expectedNetworkId && decoded.network_id !== expectedNetworkId) {
-    return {
-      isValid: false,
-      invalidReason: `invalid_network: expected ${expectedNetworkId}, got ${decoded.network_id}`,
-      payer: senderHex,
-      network: paymentPayload.network,
-    };
-  }
-
-  const effectiveFastNetwork = paymentPayload.network === "fast"
-    ? resolvedCertificateNetwork
-    : paymentPayload.network;
-
-  const effectiveCommitteeConfig = (
-    paymentPayload.network !== effectiveFastNetwork &&
-    config.committeePublicKeys?.[paymentPayload.network] &&
-    !config.committeePublicKeys?.[effectiveFastNetwork]
-  )
-    ? {
-        ...config,
-        committeePublicKeys: {
-          ...config.committeePublicKeys,
-          [effectiveFastNetwork]: config.committeePublicKeys[paymentPayload.network],
-        },
-      }
-    : config;
 
   let trustedCommittee: ResolvedTrustedCommittee | null;
   try {
-    trustedCommittee = resolveTrustedCommittee(effectiveFastNetwork, effectiveCommitteeConfig);
+    trustedCommittee = resolveTrustedCommittee(paymentPayload.network, config);
   } catch (error) {
     return {
       isValid: false,
-      invalidReason: `invalid_committee_configuration: ${error instanceof Error ? error.message : String(error)}`,
+      invalidReason: `invalid_committee_configuration: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
       network: paymentPayload.network,
     };
   }
 
   if (!trustedCommittee) {
-    warnUntrustedCommittee(effectiveFastNetwork, config.fastRpcUrl);
+    warnUntrustedCommittee(paymentPayload.network, config.fastRpcUrl);
   }
 
   const minSignatures = trustedCommittee?.minSignatures ?? 3;
@@ -725,7 +680,6 @@ async function verifyFastPayment(
     };
   }
 
-  const senderSigningMessage = createFastTransactionSigningMessage(transactionBytes);
   const senderPublicKey = toByteArray(transaction.sender);
   if (!senderPublicKey) {
     return {
@@ -735,7 +689,13 @@ async function verifyFastPayment(
     };
   }
 
-  if (!verifyEd25519(senderPublicKey, senderSigningMessage, senderSignature)) {
+  if (
+    !verifyEd25519(
+      senderPublicKey,
+      createFastTransactionSigningMessage(transactionBytes),
+      senderSignature,
+    )
+  ) {
     return {
       isValid: false,
       invalidReason: "invalid_fast_transaction_signature",
@@ -789,15 +749,17 @@ async function verifyFastPayment(
   let networkCertificate: FastTransactionCertificate | null;
   try {
     networkCertificate = await fetchFastCertificateByNonce(
-      effectiveFastNetwork,
+      paymentPayload.network,
       senderPublicKey,
-      decoded.nonce,
-      config.fastRpcUrl
+      nonce,
+      config.fastRpcUrl,
     );
   } catch (error) {
     return {
       isValid: false,
-      invalidReason: `fast_certificate_lookup_failed: ${error instanceof Error ? error.message : String(error)}`,
+      invalidReason: `fast_certificate_lookup_failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
       payer: senderHex,
       network: paymentPayload.network,
     };
@@ -813,11 +775,11 @@ async function verifyFastPayment(
   }
 
   let networkTransactionBytes: Uint8Array;
-  let networkTransaction;
   try {
-    networkTransaction = unwrapFastTransaction(networkCertificate.envelope.transaction);
-    networkTransactionBytes = serializeFastTransaction(networkTransaction);
-  } catch (error) {
+    networkTransactionBytes = serializeFastTransaction(
+      unwrapFastTransaction(networkCertificate.envelope.transaction),
+    );
+  } catch {
     return {
       isValid: false,
       invalidReason: "invalid_network_fast_certificate",
@@ -835,7 +797,7 @@ async function verifyFastPayment(
     };
   }
 
-  const networkSenderSignature = toByteArray(networkCertificate.envelope.signature?.Signature);
+  const networkSenderSignature = extractSenderSignature(networkCertificate.envelope.signature);
   if (!networkSenderSignature || !bytesEqual(senderSignature, networkSenderSignature)) {
     return {
       isValid: false,
@@ -858,7 +820,7 @@ async function verifyFastPayment(
     }
 
     networkCommitteeSignatureKeys.add(
-      signatureKey(parsedSignature.publicKey, parsedSignature.signature)
+      signatureKey(parsedSignature.publicKey, parsedSignature.signature),
     );
   }
 
@@ -873,9 +835,11 @@ async function verifyFastPayment(
       };
     }
 
-    if (!networkCommitteeSignatureKeys.has(
-      signatureKey(parsedSignature.publicKey, parsedSignature.signature)
-    )) {
+    if (
+      !networkCommitteeSignatureKeys.has(
+        signatureKey(parsedSignature.publicKey, parsedSignature.signature),
+      )
+    ) {
       return {
         isValid: false,
         invalidReason: "fast_certificate_mismatch",
@@ -885,7 +849,6 @@ async function verifyFastPayment(
     }
   }
 
-  // Verify recipient matches payTo (comparing hex pubkeys with bech32m addresses)
   if (!addressesMatch(recipientHex, paymentRequirement.payTo)) {
     return {
       isValid: false,
@@ -895,10 +858,7 @@ async function verifyFastPayment(
     };
   }
 
-  // Verify amount >= maxAmountRequired
-  // Note: Both are in the same decimal format (6 decimals for USDC)
   const requiredAmount = BigInt(paymentRequirement.maxAmountRequired);
-
   if (amountBigInt < requiredAmount) {
     return {
       isValid: false,
@@ -908,11 +868,9 @@ async function verifyFastPayment(
     };
   }
 
-  // Verify token matches asset (if asset is specified)
   if (paymentRequirement.asset) {
     const normalizedAsset = normalizeAddress(paymentRequirement.asset);
     const normalizedTokenId = normalizeAddress(tokenIdHex);
-    
     if (normalizedAsset !== normalizedTokenId) {
       return {
         isValid: false,

@@ -4,7 +4,6 @@
  */
 
 import type { Chain } from "viem";
-import type { FastSerializableTransaction, FastVersionedTransaction } from "./fast-bcs.js";
 
 /**
  * Payment requirement from the server
@@ -40,32 +39,11 @@ export interface PaymentPayload {
 /**
  * Fast transaction certificate payload
  */
-export interface FastTransactionEnvelope {
-  transaction: FastSerializableTransaction | FastVersionedTransaction;
-  signature: {
-    Signature?: number[] | Uint8Array | string;
-    MultiSig?: unknown;
-  };
-}
-
-export type FastCommitteeSignature =
-  | [number[] | Uint8Array, number[] | Uint8Array]
-  | {
-      committee_member: number[] | Uint8Array;
-      signature: number[] | Uint8Array | string;
-    }
-  | {
-      validator: number[] | Uint8Array;
-      signature: number[] | Uint8Array | string;
-    };
-
-export interface FastTransactionCertificate {
-  envelope: FastTransactionEnvelope;
-  signatures: FastCommitteeSignature[];
-}
-
 export interface FastPayload {
-  transactionCertificate: FastTransactionCertificate;
+  transactionCertificate: {
+    envelope: unknown;
+    signatures: unknown[];
+  };
 }
 
 /**
@@ -121,11 +99,11 @@ export interface SupportedPaymentKind {
 export interface FacilitatorConfig {
   /** EVM private key for settling EIP-3009 authorizations */
   evmPrivateKey?: `0x${string}`;
-  /** Fast RPC endpoint */
+  /** Fast RPC endpoint override used for Fast verification */
   fastRpcUrl?: string;
   /**
    * Trusted Fast committee public keys by network.
-   * Entries may be 32-byte hex public keys (with or without 0x) or Fast bech32m addresses.
+   * Values may be 32-byte hex strings or fast1.../set1... addresses.
    */
   committeePublicKeys?: Record<string, string[]>;
   /** Custom chain configs */
@@ -154,7 +132,7 @@ export type NetworkType = "evm" | "fast" | "svm";
  * Determine network type
  */
 export function getNetworkType(network: string): NetworkType {
-  if (network.startsWith("fast-") || network === "fast") {
+  if (network.startsWith("fast-")) {
     return "fast";
   }
   if (network.startsWith("solana")) {

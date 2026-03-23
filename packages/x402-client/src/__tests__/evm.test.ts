@@ -52,7 +52,7 @@ describe('EVM Payment Handler', () => {
 
       // Mock balance check to pass
       globalThis.fetch = createMockFetch([
-        { match: /testnet\.api\.fast\.xyz\/proxy/, status: 200, body: { result: { balances: [] } } },
+        { match: /testnet\.api\.fast\.xyz/, status: 200, body: { result: { balances: [] } } },
       ]);
       
       await assert.rejects(

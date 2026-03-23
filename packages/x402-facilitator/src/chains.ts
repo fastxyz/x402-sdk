@@ -67,22 +67,14 @@ export const FAST_RPC_URLS: Record<string, string> = {
  * signed Fast transactions.
  */
 export function getExpectedFastNetworkId(network: string): string | null {
-  if (network.startsWith("fast-")) {
-    return `fast:${network.slice("fast-".length)}`;
+  switch (network) {
+    case "fast-testnet":
+      return "fast:testnet";
+    case "fast-mainnet":
+      return "fast:mainnet";
+    default:
+      return null;
   }
-
-  return null;
-}
-
-/**
- * Convert a signed Fast CAIP-2 network id to the x402 Fast network name.
- */
-export function getFastNetworkFromNetworkId(networkId: string): string | null {
-  if (!networkId.startsWith("fast:")) {
-    return null;
-  }
-
-  return `fast-${networkId.slice("fast:".length)}`;
 }
 
 /**

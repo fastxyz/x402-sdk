@@ -212,6 +212,23 @@ describe('x402-server middleware', () => {
         const body = res.body as { error: string };
         assert.ok(body.error.includes('Fast payment address not configured'));
       });
+
+      it('should reject the deprecated Fast network alias', async () => {
+        const middleware = paymentMiddleware(
+          { evm: '0xEvmAddress', fast: 'fast1FastAddress' },
+          { '/api/fast': { price: '$0.10', network: 'fast' } },
+          { url: 'http://localhost:4020' }
+        );
+
+        const req = mockRequest('/api/fast');
+        const res = mockResponse();
+
+        await middleware(req, res, () => {});
+
+        assert.strictEqual(res.statusCode, 500);
+        const body = res.body as { error: string };
+        assert.ok(body.error.includes('Unsupported Fast network alias "fast"'));
+      });
     });
   });
 

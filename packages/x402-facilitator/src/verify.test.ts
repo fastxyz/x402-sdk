@@ -3,6 +3,7 @@
  */
 
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
+import type { FastTransactionCertificate } from "@fastxyz/sdk/core";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { verify } from "./verify.js";
 import {
@@ -11,12 +12,7 @@ import {
   serializeFastTransaction,
   unwrapFastTransaction,
 } from "./fast-bcs.js";
-import type {
-  FacilitatorConfig,
-  PaymentPayload,
-  PaymentRequirement,
-  FastTransactionCertificate,
-} from "./types.js";
+import type { FacilitatorConfig, PaymentPayload, PaymentRequirement } from "./types.js";
 
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 
@@ -31,7 +27,7 @@ function rawPublicKey(key: KeyObject): Uint8Array {
 
 function certificateLookupKey(certificate: FastTransactionCertificate): string {
   const transaction = unwrapFastTransaction(certificate.envelope.transaction);
-  const sender = Buffer.from(transaction.sender).toString("hex");
+  const sender = Buffer.from(Array.from(transaction.sender)).toString("hex");
   return `${sender}:${transaction.nonce.toString()}`;
 }
 
@@ -87,7 +83,7 @@ describe("verify", () => {
 
     function committeePublicKeysForCertificate(certificate: FastTransactionCertificate): string[] {
       const trustedCertificate = proxyCertificates.get(certificateLookupKey(certificate)) ?? certificate;
-      return trustedCertificate.signatures.map((signatureEntry) => {
+      return trustedCertificate.signatures.map((signatureEntry: [number[], number[]]) => {
         const [publicKey] = signatureEntry as [number[], number[]];
         return Buffer.from(publicKey).toString("hex");
       });
@@ -136,11 +132,9 @@ describe("verify", () => {
       const sender = rawPublicKey(senderPublicKey);
       const networkId = options.network === "fast-mainnet"
         ? "fast:mainnet"
-        : options.network === "fast"
-          ? "fast:testnet"
-          : options.network?.startsWith("fast-")
-            ? `fast:${options.network.slice("fast-".length)}`
-            : "fast:testnet";
+        : options.network?.startsWith("fast-")
+          ? `fast:${options.network.slice("fast-".length)}`
+          : "fast:testnet";
       const transaction = {
         network_id: networkId,
         sender: Array.from(sender),
@@ -195,7 +189,8 @@ describe("verify", () => {
 
       const certificate = cloneCertificate(canonicalCertificate);
       if (options.tamperSenderSignature) {
-        ((certificate.envelope.signature.Signature as number[]) ?? [])[0] ^= 0xff;
+        const envelopeSignature = certificate.envelope.signature as { Signature?: number[] };
+        (envelopeSignature.Signature ?? [])[0] ^= 0xff;
       }
 
       if (options.duplicateCommitteeSigner) {
@@ -396,10 +391,10 @@ describe("verify", () => {
 
       const result = await verifyFastFixture(payload, requirement);
       expect(result.isValid).toBe(false);
-      expect(result.invalidReason).toBe("invalid_network: expected fast:mainnet, got fast:testnet");
+      expect(result.invalidReason).toBe("network_id_mismatch: expected fast:mainnet, got fast:testnet");
     });
 
-    it("derives the concrete network from network_id when payload network is fast", async () => {
+    it("rejects the legacy fast alias", async () => {
       const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
         network: "fast-mainnet",
       });
@@ -418,8 +413,8 @@ describe("verify", () => {
       };
 
       const result = await verifyFastFixture(payload, requirement);
-      expect(result.isValid).toBe(true);
-      expect(lastFetchUrl).toBe("https://api.fast.xyz/proxy");
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("invalid_network");
     });
 
     it("rejects payment with an invalid committee signature", async () => {
@@ -783,15 +778,14 @@ describe("verify", () => {
 
     it("accepts plain hex signatures without 0x prefixes", async () => {
       const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId);
-      certificate.envelope.signature.Signature = Buffer.from(
-        certificate.envelope.signature.Signature as number[]
-      ).toString("hex");
+      const envelopeSignature = certificate.envelope.signature as { Signature: number[] };
+      envelopeSignature.Signature = Buffer.from(envelopeSignature.Signature).toString("hex") as unknown as number[];
       certificate.signatures = (certificate.signatures as Array<[number[], number[]]>).map(
         ([committeeMember, signature]) => ({
           committee_member: committeeMember,
           signature: Buffer.from(signature).toString("hex"),
-        })
-      );
+        }),
+      ) as unknown as FastTransactionCertificate["signatures"];
 
       const payload = createFastPayload(certificate);
 

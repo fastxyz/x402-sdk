@@ -59,10 +59,12 @@ export { settle } from "./settle.js";
 
 // Fast BCS utilities
 export {
+  FAST_NETWORK_IDS,
   TransactionBcs,
   decodeEnvelope,
   getTransferDetails,
   bytesToHex,
+  fastAddressToBytes,
   hexToBytes,
   pubkeyToAddress,
   type DecodedFastTransaction,

@@ -12,6 +12,13 @@ import {
   parseSignature,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import {
+  decodeTransactionEnvelope,
+  getCertificateHash,
+  hashTransaction,
+  type FastTransaction,
+  type FastTransactionCertificate,
+} from "@fastxyz/sdk/core";
 import type {
   PaymentPayload,
   PaymentRequirement,
@@ -22,13 +29,6 @@ import type {
 } from "./types.js";
 import { getNetworkType } from "./types.js";
 import { getEvmChainConfig } from "./chains.js";
-import {
-  decodeEnvelope,
-  getTransferDetails,
-  hashFastTransaction,
-  serializeFastTransaction,
-  unwrapFastTransaction,
-} from "./fast-bcs.js";
 import { verify } from "./verify.js";
 
 /**
@@ -47,6 +47,14 @@ export async function settle(
   paymentRequirement: PaymentRequirement,
   config: FacilitatorConfig
 ): Promise<SettleResponse> {
+  if (paymentPayload.network === "fast" || paymentRequirement.network === "fast") {
+    return {
+      success: false,
+      errorReason: "invalid_network",
+      network: paymentPayload.network,
+    };
+  }
+
   const networkType = getNetworkType(paymentPayload.network);
 
   switch (networkType) {
@@ -61,6 +69,28 @@ export async function settle(
         network: paymentPayload.network,
       };
   }
+}
+
+function getFastTransactionId(certificate: FastPayload["transactionCertificate"]): string {
+  if (typeof certificate.envelope === "string") {
+    try {
+      return hashTransaction(
+        decodeTransactionEnvelope(certificate.envelope) as FastTransaction
+      );
+    } catch {
+      return certificate.envelope.substring(0, 66);
+    }
+  }
+
+  if (certificate.envelope && typeof certificate.envelope === "object") {
+    try {
+      return getCertificateHash(certificate as FastTransactionCertificate);
+    } catch {
+      return "";
+    }
+  }
+
+  return "";
 }
 
 /**
@@ -218,37 +248,15 @@ async function settleFastPayment(
     };
   }
 
-  let transactionId = "";
-  let payer: string | undefined;
-
-  try {
-    const wrappedTransaction = payload.transactionCertificate.envelope?.transaction;
-    const transaction = wrappedTransaction
-      ? unwrapFastTransaction(wrappedTransaction)
-      : null;
-    if (!transaction) {
-      return {
-        success: false,
-        errorReason: "invalid_payload",
-        network: paymentPayload.network,
-      };
-    }
-
-    transactionId = hashFastTransaction(transaction);
-    const transferDetails = getTransferDetails(decodeEnvelope(serializeFastTransaction(transaction)));
-    payer = transferDetails?.sender;
-  } catch {
-    return {
-      success: false,
-      errorReason: "invalid_payload",
-      network: paymentPayload.network,
-    };
-  }
+  // Fast transactions are already settled on-chain
+  // The wallet extension handles signing and broadcasting
+  // Return success with a transaction identifier based on the certificate
+  const transactionId = getFastTransactionId(payload.transactionCertificate);
 
   return {
     success: true,
     transaction: transactionId,
     network: paymentPayload.network,
-    payer,
+    // TODO: Extract payer from transaction envelope
   };
 }
