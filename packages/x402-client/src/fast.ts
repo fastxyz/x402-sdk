@@ -33,29 +33,38 @@ function toFastNetworkId(network: string): FastNetworkId {
   }
 }
 
-function serializeFastRpcJsonValue(value: unknown): string | undefined {
+function serializeFastRpcJsonValue(value: unknown, quoteBigInt = false): string | undefined {
   if (value === null) return 'null';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return JSON.stringify(value);
   }
   if (typeof value === 'bigint') {
-    return value.toString();
+    // quoteBigInt: wrap in quotes to preserve precision through JSON.parse
+    return quoteBigInt ? `"${value.toString()}"` : value.toString();
   }
   if (value instanceof Uint8Array) {
-    return serializeFastRpcJsonValue(Array.from(value));
+    return serializeFastRpcJsonValue(Array.from(value), quoteBigInt);
   }
   if (Array.isArray(value)) {
-    return `[${value.map((item) => serializeFastRpcJsonValue(item) ?? 'null').join(',')}]`;
+    return `[${value.map((item) => serializeFastRpcJsonValue(item, quoteBigInt) ?? 'null').join(',')}]`;
   }
   if (typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)
       .flatMap(([key, entryValue]) => {
-        const serialized = serializeFastRpcJsonValue(entryValue);
+        const serialized = serializeFastRpcJsonValue(entryValue, quoteBigInt);
         return serialized === undefined ? [] : [`${JSON.stringify(key)}:${serialized}`];
       });
     return `{${entries.join(',')}}`;
   }
   return undefined;
+}
+
+function serializeX402Payload(data: unknown): string {
+  const serialized = serializeFastRpcJsonValue(data, true); // Quote BigInts for precision
+  if (serialized === undefined) {
+    throw new TypeError('x402 payload must be JSON-serializable');
+  }
+  return serialized;
 }
 
 function toFastRpcJson(data: unknown): string {
@@ -265,7 +274,7 @@ export async function handleFastPayment(
     },
   };
 
-  const payloadBase64 = Buffer.from(toFastRpcJson(paymentPayload)).toString('base64');
+  const payloadBase64 = Buffer.from(serializeX402Payload(paymentPayload)).toString('base64');
   log(`  Payload base64 length: ${payloadBase64.length}`);
 
   // Retry request with X-PAYMENT header
