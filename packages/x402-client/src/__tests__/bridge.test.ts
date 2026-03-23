@@ -28,11 +28,20 @@ describe('AllSet Bridge', () => {
       assert.ok(config.relayerUrl.includes('arbitrum'));
     });
 
-    it('should return config for base-sepolia', () => {
-      const config = getBridgeConfig('base-sepolia');
+    it('should return config for ethereum-sepolia', () => {
+      const config = getBridgeConfig('ethereum-sepolia');
       assert.ok(config);
-      assert.strictEqual(config.chainId, 84532);
+      assert.strictEqual(config.chainId, 11155111);
       assert.ok(config.usdcAddress.startsWith('0x'));
+      assert.ok(config.fastBridgeAddress.startsWith('fast'));
+    });
+
+    it('should return config for base', () => {
+      const config = getBridgeConfig('base');
+      assert.ok(config);
+      assert.strictEqual(config.chainId, 8453);
+      assert.ok(config.usdcAddress.startsWith('0x'));
+      assert.ok(config.fastBridgeAddress.startsWith('fast'));
     });
 
     it('should return null for unsupported network', () => {

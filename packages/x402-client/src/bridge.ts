@@ -23,8 +23,8 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CROSS_SIGN_URL = 'https://staging.cross-sign.allset.fastset.xyz';
-const FAST_RPC_URL = 'https://staging.proxy.fastset.xyz';
+const CROSS_SIGN_URL = 'https://testnet.cross-sign.allset.fast.xyz';
+const FAST_RPC_URL = 'https://testnet.api.fast.xyz/proxy';
 
 /** fastUSDC token ID on Fast */
 // fastUSDC token ID
@@ -40,18 +40,26 @@ interface BridgeChainConfig {
 }
 
 const BRIDGE_CONFIGS: Record<string, BridgeChainConfig> = {
+  'ethereum-sepolia': {
+    chainId: 11155111,
+    usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
+    fastBridgeAddress: 'fast1fxtkgpwcy7hnakw96gg7relph4wxx7ghrukm723p3l9adxuxljzsc6f958',
+    relayerUrl: 'https://testnet.allset.fast.xyz/ethereum-sepolia/relayer',
+    bridgeContract: '0xb53600976275D6f541a3B929328d07714EFA581F',
+  },
   'arbitrum-sepolia': {
     chainId: 421614,
     usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    fastBridgeAddress: 'fast1x0g58phuf0pf32e9uvp3mv6hak4z37ytpqyfzjzhfsehua9kmegqwzv0td',
-    relayerUrl: 'https://staging.allset.fastset.xyz/arbitrum-sepolia/relayer/relay',
-    bridgeContract: '0xAc5164c04ee74c417e809916C65455499ae70eb6',
+    fastBridgeAddress: 'fast1tkmtqxulhnzeeg9zhuwxy3x95wr7waytm9cq40ndf7tkuwwcc6jseg24j8',
+    relayerUrl: 'https://testnet.allset.fast.xyz/arbitrum-sepolia/relayer',
+    bridgeContract: '0xb53600976275D6f541a3B929328d07714EFA581F',
   },
-  'base-sepolia': {
-    chainId: 84532,
-    usdcAddress: '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-    fastBridgeAddress: 'fast1x0g58phuf0pf32e9uvp3mv6hak4z37ytpqyfzjzhfsehua9kmegqwzv0td', // TODO: verify base bridge address
-    relayerUrl: 'https://staging.allset.fastset.xyz/base-sepolia/relayer/relay',
+  'base': {
+    chainId: 8453,
+    usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+    fastBridgeAddress: 'fast1a4fza9xc8jcm7jp64a0ugtuyw3hkkmje02e8af9aaer4r0je4dpqz4uf58',
+    relayerUrl: 'https://testnet.allset.fast.xyz/base/relayer',
+    bridgeContract: '0x83f0644FF860423539Dc6b6cA6d3b05a6F03337B',
   },
 };
 
@@ -614,7 +622,7 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
       external_token_address: bridgeConfig.usdcAddress,
     };
 
-    const relayRes = await fetch(bridgeConfig.relayerUrl, {
+    const relayRes = await fetch(`${bridgeConfig.relayerUrl}/relay`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(relayerBody),

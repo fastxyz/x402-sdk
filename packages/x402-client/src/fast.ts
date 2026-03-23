@@ -21,7 +21,7 @@ import type {
 
 export const FAST_NETWORKS = ['fast-testnet', 'fast-mainnet'];
 
-const DEFAULT_RPC_URL = 'https://staging.proxy.fastset.xyz/';
+const DEFAULT_RPC_URL = 'https://testnet.api.fast.xyz/proxy';
 
 function toFastNetworkId(network: string): FastNetworkId {
   switch (network) {
