@@ -146,7 +146,7 @@ async function createTxExecutor(wallet: FastWallet, rpcUrl: string) {
     const txHash = hashTransaction(transaction);
 
     // Submit transaction (use custom serializer for BigInt)
-    const submitPayload = {
+    const envelope = {
       transaction: {
         Release20260319: transaction,
       },
@@ -160,19 +160,26 @@ async function createTxExecutor(wallet: FastWallet, rpcUrl: string) {
         jsonrpc: '2.0',
         id: Date.now(),
         method: 'proxy_submitTransaction',
-        params: submitPayload,
+        params: envelope,
       }),
     });
-    const result = await response.json() as { result?: { Success?: unknown }; error?: { message: string } };
+    const result = await response.json() as { result?: { Success?: { signatures?: unknown[] } }; error?: { message: string } };
     if (result.error) {
       throw new Error(`Fast RPC error (submit): ${result.error.message}`);
     }
-    const submitResult = result.result as { Success?: unknown };
+    const submitResult = result.result as { Success?: { signatures?: unknown[] } } | undefined;
+    const serverResult = submitResult?.Success;
 
-    const certificate = submitResult?.Success ?? submitResult;
-    if (!certificate) {
-      throw new Error('proxy_submitTransaction returned empty result');
+    if (!serverResult?.signatures) {
+      throw new Error('proxy_submitTransaction returned empty or invalid result');
     }
+
+    // Build certificate using our original envelope (with full precision numbers)
+    // and the committee signatures from the server response
+    const certificate = {
+      envelope,
+      signatures: serverResult.signatures,
+    };
 
     return { txHash, certificate };
   }
@@ -246,6 +253,7 @@ export async function handleFastPayment(
   log(`  txHash: ${txHash}`);
 
   // Build x402 payment payload
+  // Use custom JSON serializer to handle BigInt values
   log(`[Fast] Building x402 payment payload...`);
   const paymentPayload = {
     x402Version: paymentRequired.x402Version ?? 1,
@@ -257,7 +265,7 @@ export async function handleFastPayment(
     },
   };
 
-  const payloadBase64 = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
+  const payloadBase64 = Buffer.from(toFastRpcJson(paymentPayload)).toString('base64');
   log(`  Payload base64 length: ${payloadBase64.length}`);
 
   // Retry request with X-PAYMENT header

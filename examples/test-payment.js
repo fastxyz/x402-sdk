@@ -4,18 +4,23 @@
  */
 
 import { x402Pay } from '@fastxyz/x402-client';
+import { ed25519 } from '@noble/curves/ed25519';
 import fs from 'fs';
 import path from 'path';
 
 // Load test-wallet keys
-const fastKeyPath = path.join(process.env.HOME, '.fast/keys/fast.json');
+const fastKeyPath = path.join(process.env.HOME, '.fast/keys/test-wallet.json');
 const fastKey = JSON.parse(fs.readFileSync(fastKeyPath, 'utf8'));
+
+// Derive publicKey from privateKey if not present
+const privateKey = fastKey.privateKey;
+const publicKey = fastKey.publicKey || Buffer.from(ed25519.getPublicKey(Buffer.from(privateKey, 'hex'))).toString('hex');
 
 const wallet = {
   type: 'fast',
-  privateKey: fastKey.privateKey,
-  publicKey: fastKey.publicKey,
-  address: 'fast1rsxfj84yhsskpr6g5ll2td7pkk3dnlsfwldsmawca4922qn3dqvqsxelzv',
+  privateKey,
+  publicKey,
+  address: fastKey.address,
 };
 
 console.log('=== Testing x402 Payment ===');

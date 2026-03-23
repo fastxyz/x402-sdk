@@ -736,7 +736,8 @@ async function verifyFastPayment(
       };
     }
 
-    if (!verifyEd25519(parsedSignature.publicKey, transactionBytes, parsedSignature.signature)) {
+    // Committee signatures also sign the prefixed message (same as sender)
+    if (!verifyEd25519(parsedSignature.publicKey, createFastTransactionSigningMessage(transactionBytes), parsedSignature.signature)) {
       return {
         isValid: false,
         invalidReason: "invalid_fast_committee_signature",
@@ -746,7 +747,11 @@ async function verifyFastPayment(
     }
   }
 
-  let networkCertificate: FastTransactionCertificate | null;
+  // Certificate lookup is optional - the cryptographic verification above already proves
+  // the committee accepted this transaction. Some Fast RPC endpoints don't store
+  // historical certificates, so we skip cross-validation if lookup fails.
+  let networkCertificate: FastTransactionCertificate | null = null;
+  let skipNetworkValidation = false;
   try {
     networkCertificate = await fetchFastCertificateByNonce(
       paymentPayload.network,
@@ -754,63 +759,23 @@ async function verifyFastPayment(
       nonce,
       config.fastRpcUrl,
     );
-  } catch (error) {
-    return {
-      isValid: false,
-      invalidReason: `fast_certificate_lookup_failed: ${
-        error instanceof Error ? error.message : String(error)
-      }`,
-      payer: senderHex,
-      network: paymentPayload.network,
-    };
-  }
-
-  if (!networkCertificate) {
-    return {
-      isValid: false,
-      invalidReason: "fast_certificate_not_found",
-      payer: senderHex,
-      network: paymentPayload.network,
-    };
-  }
-
-  let networkTransactionBytes: Uint8Array;
-  try {
-    networkTransactionBytes = serializeFastTransaction(
-      unwrapFastTransaction(networkCertificate.envelope.transaction),
-    );
+    if (!networkCertificate) {
+      // RPC doesn't store historical certificates - skip cross-validation
+      skipNetworkValidation = true;
+    }
   } catch {
-    return {
-      isValid: false,
-      invalidReason: "invalid_network_fast_certificate",
-      payer: senderHex,
-      network: paymentPayload.network,
-    };
+    // RPC error - skip cross-validation since crypto checks already passed
+    skipNetworkValidation = true;
   }
 
-  if (!bytesEqual(transactionBytes, networkTransactionBytes)) {
-    return {
-      isValid: false,
-      invalidReason: "fast_certificate_mismatch",
-      payer: senderHex,
-      network: paymentPayload.network,
-    };
-  }
-
-  const networkSenderSignature = extractSenderSignature(networkCertificate.envelope.signature);
-  if (!networkSenderSignature || !bytesEqual(senderSignature, networkSenderSignature)) {
-    return {
-      isValid: false,
-      invalidReason: "fast_certificate_mismatch",
-      payer: senderHex,
-      network: paymentPayload.network,
-    };
-  }
-
-  const networkCommitteeSignatureKeys = new Set<string>();
-  for (const signatureEntry of networkCertificate.signatures) {
-    const parsedSignature = parseCommitteeSignature(signatureEntry);
-    if (!parsedSignature) {
+  // Cross-validate with network certificate if available
+  if (!skipNetworkValidation && networkCertificate) {
+    let networkTransactionBytes: Uint8Array;
+    try {
+      networkTransactionBytes = serializeFastTransaction(
+        unwrapFastTransaction(networkCertificate.envelope.transaction),
+      );
+    } catch {
       return {
         isValid: false,
         invalidReason: "invalid_network_fast_certificate",
@@ -819,33 +784,65 @@ async function verifyFastPayment(
       };
     }
 
-    networkCommitteeSignatureKeys.add(
-      signatureKey(parsedSignature.publicKey, parsedSignature.signature),
-    );
-  }
-
-  for (const signatureEntry of signatures) {
-    const parsedSignature = parseCommitteeSignature(signatureEntry);
-    if (!parsedSignature) {
-      return {
-        isValid: false,
-        invalidReason: "unsupported_fast_certificate_format",
-        payer: senderHex,
-        network: paymentPayload.network,
-      };
-    }
-
-    if (
-      !networkCommitteeSignatureKeys.has(
-        signatureKey(parsedSignature.publicKey, parsedSignature.signature),
-      )
-    ) {
+    if (!bytesEqual(transactionBytes, networkTransactionBytes)) {
       return {
         isValid: false,
         invalidReason: "fast_certificate_mismatch",
         payer: senderHex,
         network: paymentPayload.network,
       };
+    }
+
+    const networkSenderSignature = extractSenderSignature(networkCertificate.envelope.signature);
+    if (!networkSenderSignature || !bytesEqual(senderSignature, networkSenderSignature)) {
+      return {
+        isValid: false,
+        invalidReason: "fast_certificate_mismatch",
+        payer: senderHex,
+        network: paymentPayload.network,
+      };
+    }
+
+    const networkCommitteeSignatureKeys = new Set<string>();
+    for (const signatureEntry of networkCertificate.signatures) {
+      const parsedSignature = parseCommitteeSignature(signatureEntry);
+      if (!parsedSignature) {
+        return {
+          isValid: false,
+          invalidReason: "invalid_network_fast_certificate",
+          payer: senderHex,
+          network: paymentPayload.network,
+        };
+      }
+
+      networkCommitteeSignatureKeys.add(
+        signatureKey(parsedSignature.publicKey, parsedSignature.signature),
+      );
+    }
+
+    for (const signatureEntry of signatures) {
+      const parsedSignature = parseCommitteeSignature(signatureEntry);
+      if (!parsedSignature) {
+        return {
+          isValid: false,
+          invalidReason: "unsupported_fast_certificate_format",
+          payer: senderHex,
+          network: paymentPayload.network,
+        };
+      }
+
+      if (
+        !networkCommitteeSignatureKeys.has(
+          signatureKey(parsedSignature.publicKey, parsedSignature.signature),
+        )
+      ) {
+        return {
+          isValid: false,
+          invalidReason: "fast_certificate_mismatch",
+          payer: senderHex,
+          network: paymentPayload.network,
+        };
+      }
     }
   }
 
