@@ -27,8 +27,11 @@ describe('Fast RPC resolution', () => {
       resolveFastRpcUrl('fast-mainnet'),
       'https://api.fast.xyz/proxy'
     );
+  });
+
+  it('falls back to testnet for unknown networks', () => {
     assert.strictEqual(
-      resolveFastRpcUrl('fast'),
+      resolveFastRpcUrl('unknown-fast-network'),
       'https://testnet.api.fast.xyz/proxy'
     );
   });

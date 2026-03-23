@@ -13,10 +13,7 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
-  decodeTransactionEnvelope,
   getCertificateHash,
-  hashTransaction,
-  type FastTransaction,
   type FastTransactionCertificate,
 } from "@fastxyz/sdk/core";
 import type {
@@ -61,7 +58,7 @@ export async function settle(
     case "evm":
       return settleEvmPayment(paymentPayload, paymentRequirement, config);
     case "fast":
-      return settleFastPayment(paymentPayload, paymentRequirement);
+      return settleFastPayment(paymentPayload, paymentRequirement, config);
     default:
       return {
         success: false,
@@ -72,16 +69,6 @@ export async function settle(
 }
 
 function getFastTransactionId(certificate: FastPayload["transactionCertificate"]): string {
-  if (typeof certificate.envelope === "string") {
-    try {
-      return hashTransaction(
-        decodeTransactionEnvelope(certificate.envelope) as FastTransaction
-      );
-    } catch {
-      return certificate.envelope.substring(0, 66);
-    }
-  }
-
   if (certificate.envelope && typeof certificate.envelope === "object") {
     try {
       return getCertificateHash(certificate as FastTransactionCertificate);
@@ -237,7 +224,8 @@ async function settleEvmPayment(
  */
 async function settleFastPayment(
   paymentPayload: PaymentPayload,
-  paymentRequirement: PaymentRequirement
+  paymentRequirement: PaymentRequirement,
+  config: FacilitatorConfig,
 ): Promise<SettleResponse> {
   const payload = paymentPayload.payload as FastPayload;
   if (!payload?.transactionCertificate) {
@@ -245,6 +233,16 @@ async function settleFastPayment(
       success: false,
       errorReason: "invalid_payload",
       network: paymentPayload.network,
+    };
+  }
+
+  const verifyResult = await verify(paymentPayload, paymentRequirement, config);
+  if (!verifyResult.isValid) {
+    return {
+      success: false,
+      errorReason: verifyResult.invalidReason || "invalid_payment",
+      network: paymentPayload.network,
+      payer: verifyResult.payer,
     };
   }
 

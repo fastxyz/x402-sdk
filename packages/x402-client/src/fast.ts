@@ -18,10 +18,9 @@ import type {
   PaymentRequirement, 
   X402PayResult 
 } from './types.js';
+import { resolveFastRpcUrl } from './fast-rpc.js';
 
 export const FAST_NETWORKS = ['fast-testnet', 'fast-mainnet'];
-
-const DEFAULT_RPC_URL = 'https://testnet.api.fast.xyz/proxy';
 
 function toFastNetworkId(network: string): FastNetworkId {
   switch (network) {
@@ -207,7 +206,7 @@ export async function handleFastPayment(
   log(`  Amount: ${fastReq.maxAmountRequired} (raw)`);
   log(`  Recipient: ${fastReq.payTo}`);
 
-  const rpcUrl = wallet.rpcUrl || DEFAULT_RPC_URL;
+  const rpcUrl = resolveFastRpcUrl(fastReq.network, wallet.rpcUrl);
   log(`  RPC: ${rpcUrl}`);
   log(`  Payer: ${wallet.address}`);
 

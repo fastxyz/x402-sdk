@@ -453,6 +453,45 @@ describe("POST /settle", () => {
     expect(body.transaction).toBeDefined();
   });
 
+  it("rejects invalid Fast certificates during settlement", async () => {
+    const routes = createFacilitatorRoutes();
+    const settleRoute = routes.find(r => r.path === "/settle");
+
+    const req = createMockRequest("post", "/settle", {
+      paymentPayload: {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-testnet",
+        payload: {
+          transactionCertificate: {
+            envelope: "0x1234",
+            signatures: [
+              [new Array(32).fill(0xaa), new Array(64).fill(0xbb)],
+            ],
+          },
+        },
+      },
+      paymentRequirements: {
+        scheme: "exact",
+        network: "fast-testnet",
+        maxAmountRequired: "1000000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: "0x" + "ee".repeat(32),
+        maxTimeoutSeconds: 60,
+        asset: "0x" + "11".repeat(32),
+      },
+    });
+    const res = createMockResponse();
+
+    await settleRoute!.handler(req as any, res as any);
+
+    const body = res.getJson() as { success: boolean; errorReason?: string };
+    expect(body.success).toBe(false);
+    expect(body.errorReason).toBe("unsupported_fast_certificate_format");
+  });
+
   it("fails for EVM without private key configured", async () => {
     const routes = createFacilitatorRoutes(); // No evmPrivateKey
     const settleRoute = routes.find(r => r.path === "/settle");

@@ -5,7 +5,6 @@
 export const FAST_RPC_URLS: Record<string, string> = {
   "fast-testnet": "https://testnet.api.fast.xyz/proxy",
   "fast-mainnet": "https://api.fast.xyz/proxy",
-  fast: "https://testnet.api.fast.xyz/proxy",
 };
 
 export function resolveFastRpcUrl(network: string, override?: string): string {
