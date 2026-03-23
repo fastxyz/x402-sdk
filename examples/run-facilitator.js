@@ -1,28 +1,37 @@
 #!/usr/bin/env node
-/**
- * x402 Facilitator Server
- * Verifies and settles x402 payments
- */
-
 import express from 'express';
 import { createFacilitatorServer } from '@fastxyz/x402-facilitator';
-import fs from 'fs';
-import path from 'path';
 
-// Load facilitator key
-const keyPath = path.join(process.env.HOME, '.money/keys/evm.json');
-const keyData = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
-const evmPrivateKey = `0x${keyData.privateKey}`;
+// Facilitator needs an EVM private key with ETH for gas
+// Set via environment variable: EVM_PRIVATE_KEY=0x...
+const evmPrivateKey = process.env.EVM_PRIVATE_KEY;
+
+if (!evmPrivateKey) {
+  console.error('[facilitator] ERROR: EVM_PRIVATE_KEY environment variable required');
+  console.error('[facilitator] Export a private key with ETH for gas on target chains');
+  process.exit(1);
+}
 
 const app = express();
 app.use(express.json());
 
-// Add facilitator endpoints: /verify, /settle, /supported
-app.use(createFacilitatorServer({
-  evmPrivateKey,
-}));
+// Request logging with response body
+app.use((req, res, next) => {
+  const start = Date.now();
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms`);
+    if (body?.isValid !== undefined) {
+      console.log(`  → isValid: ${body.isValid}${body.invalidReason ? ', reason: ' + body.invalidReason : ''}`);
+    }
+    return originalJson(body);
+  };
+  next();
+});
 
-const PORT = process.env.PORT || 4020;
+app.use(createFacilitatorServer({ evmPrivateKey }));
+
+const PORT = 4020;
 app.listen(PORT, () => {
   console.log(`[facilitator] Running on http://localhost:${PORT}`);
   console.log(`[facilitator] Endpoints: /verify, /settle, /supported`);

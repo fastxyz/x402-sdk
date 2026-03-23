@@ -27,9 +27,11 @@ ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
 
 const FAST_RPC_URL = 'https://testnet.api.fast.xyz/proxy';
 
-/** fastUSDC token ID on Fast */
-// fastUSDC token ID
+/** fastUSDC token ID on Fast mainnet */
 const fastUSDC_TOKEN_ID = hexToBytes('b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5');
+
+/** testUSDC token ID on Fast testnet */
+const testUSDC_TOKEN_ID = hexToBytes('d73a0679a2be46981e2a8aedecd951c8b6690e7d5f8502b34ed3ff4cc2163b46');
 
 /** Bridge configuration per EVM chain */
 export interface BridgeChainConfig {
@@ -223,11 +225,14 @@ export async function getFastBalance(
     return 0n;
   }
 
-  // Find fastUSDC balance (token_balance is array of [token_id, hex_amount])
+  // Find fastUSDC or testUSDC balance (token_balance is array of [token_id, hex_amount])
+  // Check for both mainnet fastUSDC and testnet testUSDC
   const fastusdcHex = bytesToHex(fastUSDC_TOKEN_ID);
+  const testusdcHex = bytesToHex(testUSDC_TOKEN_ID);
+  
   for (const [tokenId, hexAmount] of result.result.token_balance) {
     const tokenHex = bytesToHex(new Uint8Array(tokenId));
-    if (tokenHex === fastusdcHex) {
+    if (tokenHex === fastusdcHex || tokenHex === testusdcHex) {
       // Amount is hex string like "5f5e100"
       const amount = BigInt('0x' + hexAmount);
       return amount;
@@ -535,22 +540,31 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
     return { success: false, error: `Unsupported network for bridging: ${network}` };
   }
 
+  // Determine if testnet or mainnet for token naming
+  const isTestnetNetwork = network.includes('sepolia') || network === 'fast-testnet';
+  const usdcTokenName = isTestnetNetwork ? 'testUSDC' : 'fastUSDC';
+  
   log(`━━━ AllSet Bridge START ━━━`);
-  log(`  Amount: ${Number(amount) / 1e6} fastUSDC`);
+  log(`  Amount: ${Number(amount) / 1e6} ${usdcTokenName}`);
   log(`  From: ${fastWallet.address}`);
   log(`  To: ${evmReceiverAddress} on ${network}`);
 
   try {
     const rpcUrl = fastWallet.rpcUrl || FAST_RPC_URL;
 
-    // Step 1: Transfer fastUSDC to Fast bridge account
-    log(`[Step 1] Transferring fastUSDC to Fast bridge...`);
+    // Step 1: Transfer fastUSDC/testUSDC to Fast bridge account
+    // Use testUSDC for testnet networks, fastUSDC for mainnet
+    const isTestnet = network.includes('sepolia') || network === 'fast-testnet';
+    const tokenId = isTestnet ? testUSDC_TOKEN_ID : fastUSDC_TOKEN_ID;
+    const tokenName = isTestnet ? 'testUSDC' : 'fastUSDC';
+    
+    log(`[Step 1] Transferring ${tokenName} to Fast bridge...`);
     const transferResult = await sendTokenTransfer(
       fastWallet,
       inferFastNetworkIdFromBridgeNetwork(network),
       bridgeConfig.fastBridgeAddress,
       amount,
-      fastUSDC_TOKEN_ID,
+      tokenId,
       rpcUrl
     );
     log(`  ✓ Transfer tx: ${transferResult.txHash}`);

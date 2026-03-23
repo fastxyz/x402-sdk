@@ -8,8 +8,13 @@ import { createFacilitatorServer } from '@fastxyz/x402-facilitator';
 const app = express();
 app.use(express.json());
 
-// Facilitator private key (has ETH for gas)
-const FACILITATOR_KEY = '0xd815c906df2ce8ec6213eef172bdfe1bd2370ffeb3a83ce7487b2ee54117e60b';
+// Facilitator private key (has ETH for gas) - set via environment variable
+const FACILITATOR_KEY = process.env.EVM_PRIVATE_KEY;
+
+if (!FACILITATOR_KEY) {
+  console.error('ERROR: EVM_PRIVATE_KEY environment variable required');
+  process.exit(1);
+}
 
 app.use(createFacilitatorServer({
   evmPrivateKey: FACILITATOR_KEY,
