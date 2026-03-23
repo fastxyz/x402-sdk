@@ -32,8 +32,8 @@
   },
   "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
-    "@fastxyz/allset-sdk": "^0.1.5",
-    "@fastxyz/sdk": "^0.2.2",
+    "@fastxyz/allset-sdk": "^0.1.6",
+    "@fastxyz/sdk": "^0.2.3",
     "@mysten/bcs": "^1.2.0",
     "viem": "^2.21.0"
   },
