@@ -86,9 +86,11 @@ interface FastWallet {
   privateKey: string;   // Hex-encoded Ed25519 key
   publicKey: string;    // Hex-encoded public key
   address: string;      // bech32m address (fast1...)
-  rpcUrl?: string;      // Optional custom RPC
+  rpcUrl?: string;      // Optional custom RPC override
 }
 ```
+
+If `rpcUrl` is omitted, the client uses the official Fast JSON-RPC proxy for the requested network. Auto-bridge helpers default to the Fast testnet proxy because the bundled bridge routes are testnet-only.
 
 ## How It Works
 

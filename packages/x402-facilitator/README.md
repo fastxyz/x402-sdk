@@ -37,7 +37,17 @@ app.listen(4020, () => {
 import { verify, settle } from '@fastxyz/x402-facilitator';
 
 // Verify a payment
-const verifyResult = await verify(paymentPayload, paymentRequirement);
+const verifyResult = await verify(paymentPayload, paymentRequirement, {
+  fastRpcUrl: process.env.FAST_RPC_URL,
+  committeePublicKeys: {
+    "fast-mainnet": [
+      "fast19g84suye87kz7gyenc37wcur3fq9jhr08kt37vn7ye9u23pwtxxq7p6cwt",
+      "fast1qdrnhs6j8cxzkr39nvtey5thgaj8sfrns4p30ageurska8th76qqca2xdk",
+      "fast1kn28706rjphn23qsmgw2qtyyx6342zz46yzmp55uzddk5fekzwrsmjr888",
+      "fast1pqsshd4wddrwa72a0q2aztgcyrpk3adxarrke3xa8qftvlx4gvjqgelxwk",
+    ],
+  },
+});
 if (!verifyResult.isValid) {
   console.error('Invalid:', verifyResult.invalidReason);
 }
@@ -66,15 +76,18 @@ const settleResult = await settle(paymentPayload, paymentRequirement, {
 ### Fast Payments
 
 1. **Verify**: Decode and validate transaction certificate
-   - Check envelope and signatures exist
-   - Decode BCS envelope to extract transaction details
+   - Require the Fast RPC object certificate shape
+   - Verify the sender Ed25519 signature against `Transaction::` + the serialized transaction
+   - Verify each committee Ed25519 signature against the serialized transaction
+   - Verify each committee signer is in the trusted committee for the selected network
+   - Cross-check the submitted certificate against the network certificate returned by `proxy_getAccountInfo` for the sender nonce
+   - Decode the canonical transaction bytes to extract transfer details
    - Verify recipient matches `paymentRequirement.payTo`
-   - Verify amount ≥ `maxAmountRequired` (with 18→6 decimal normalization)
+   - Verify amount ≥ `maxAmountRequired`
    - Verify token matches `paymentRequirement.asset`
 
 2. **Settle**: No-op — Fast transactions are already on-chain
-   - Certificate proves consensus was reached
-   - Returns success with transaction ID
+   - Returns success with the deterministic Fast transaction hash
 
 ## API
 
@@ -143,7 +156,7 @@ When using `createFacilitatorServer()`:
 import { verify, settle, createFacilitatorServer } from '@fastxyz/x402-facilitator';
 
 // Verify payment
-verify(paymentPayload, paymentRequirement): Promise<VerifyResponse>
+verify(paymentPayload, paymentRequirement, config?): Promise<VerifyResponse>
 
 // Settle payment
 settle(paymentPayload, paymentRequirement, config): Promise<SettleResponse>
@@ -158,10 +171,17 @@ createFacilitatorServer(config): ExpressMiddleware
 interface FacilitatorConfig {
   /** EVM private key for settling EIP-3009 authorizations */
   evmPrivateKey?: `0x${string}`;
-  /** Fast RPC endpoint (optional) */
+  /** Fast RPC endpoint override used for Fast verification */
   fastRpcUrl?: string;
+  /**
+   * Trusted Fast committee public keys by network.
+   * Values may be 32-byte hex strings or fast1.../set1... addresses.
+   */
+  committeePublicKeys?: Record<string, string[]>;
 }
 ```
+
+For the official `fast-testnet` and `fast-mainnet` networks, `x402-facilitator` ships with bundled committee snapshots. Use `committeePublicKeys` to override those defaults or to configure custom Fast deployments. In production, source these values from the official Fast deployment committee manifest and ship them with your application config rather than relying on a local checkout.
 
 ## Supported Networks
 
@@ -201,9 +221,22 @@ interface FacilitatorConfig {
 | Reason | Description |
 |--------|-------------|
 | `missing_envelope` | Certificate has no envelope |
+| `missing_transaction` | Certificate envelope has no transaction |
+| `missing_transaction_signature` | Certificate envelope has no sender signature |
 | `missing_signatures` | Certificate has no signatures |
 | `insufficient_signatures` | Not enough committee signatures |
-| `envelope_decode_failed` | Failed to decode BCS envelope |
+| `unsupported_fast_certificate_format` | Certificate is not in the supported Fast RPC object format |
+| `unsupported_fast_transaction_multisig` | MultiSig transaction envelopes are not supported |
+| `invalid_transaction` | Transaction payload could not be serialized canonically |
+| `fast_certificate_lookup_failed` | Fast proxy lookup failed |
+| `fast_certificate_not_found` | No settled Fast certificate was found for the sender nonce |
+| `fast_certificate_mismatch` | Submitted certificate does not match the network certificate |
+| `invalid_network_fast_certificate` | Fast proxy returned an invalid certificate |
+| `invalid_committee_configuration` | Trusted committee config could not be parsed |
+| `invalid_fast_transaction_signature` | Sender signature verification failed |
+| `invalid_fast_committee_signature` | Committee signature verification failed |
+| `duplicate_committee_signature` | The same committee public key appeared more than once |
+| `unknown_fast_committee_signer` | Committee signer is not in the trusted committee |
 | `not_a_token_transfer` | Transaction is not a TokenTransfer |
 | `recipient_mismatch` | Recipient doesn't match payTo |
 | `insufficient_amount` | Transfer amount too low |

@@ -2,9 +2,37 @@
  * Tests for facilitator server endpoints
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createFacilitatorRoutes, createFacilitatorServer } from "./server.js";
-import { TransactionBcs, bytesToHex } from "./fast-bcs.js";
+import {
+  bytesToHex,
+  createFastTransactionSigningMessage,
+  serializeFastTransaction,
+  unwrapFastTransaction,
+} from "./fast-bcs.js";
+import type { FacilitatorConfig, FastTransactionCertificate } from "./types.js";
+
+const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
+
+function rawPublicKey(key: KeyObject): Uint8Array {
+  const spki = key.export({ format: "der", type: "spki" });
+  if (!Buffer.from(spki).subarray(0, ED25519_SPKI_PREFIX.length).equals(ED25519_SPKI_PREFIX)) {
+    throw new Error("unexpected_ed25519_spki_prefix");
+  }
+
+  return new Uint8Array(Buffer.from(spki).subarray(ED25519_SPKI_PREFIX.length));
+}
+
+function certificateLookupKey(certificate: FastTransactionCertificate): string {
+  const transaction = unwrapFastTransaction(certificate.envelope.transaction);
+  const sender = Buffer.from(transaction.sender).toString("hex");
+  return `${sender}:${transaction.nonce.toString()}`;
+}
+
+function cloneCertificate(certificate: FastTransactionCertificate): FastTransactionCertificate {
+  return JSON.parse(JSON.stringify(certificate)) as FastTransactionCertificate;
+}
 
 // Mock Express request/response
 function createMockRequest(method: string, path: string, body?: unknown) {
@@ -32,7 +60,135 @@ function createMockResponse() {
   };
 }
 
+const proxyCertificates = new Map<string, FastTransactionCertificate>();
+let lastFetchUrl: string | undefined;
+
+function createFastCertificate(
+  recipient: Uint8Array,
+  amountHex: string,
+  tokenId: Uint8Array,
+  network: string = "fast-testnet"
+) : FastTransactionCertificate {
+  const { publicKey: senderPublicKey, privateKey: senderPrivateKey } = generateKeyPairSync("ed25519");
+  const sender = rawPublicKey(senderPublicKey);
+  const networkId = network === "fast-mainnet"
+    ? "fast:mainnet"
+    : network === "fast"
+      ? "fast:testnet"
+      : network.startsWith("fast-")
+        ? `fast:${network.slice("fast-".length)}`
+        : "fast:testnet";
+  const transaction = {
+    network_id: networkId,
+    sender: Array.from(sender),
+    nonce: 1,
+    timestamp_nanos: (BigInt(Date.now()) * 1_000_000n).toString(),
+    claim: {
+      TokenTransfer: {
+        token_id: Array.from(tokenId),
+        recipient: Array.from(recipient),
+        amount: amountHex,
+        user_data: null,
+      },
+    },
+    archival: false,
+    fee_token: null,
+  };
+
+  const transactionBytes = serializeFastTransaction(transaction);
+  const senderSignature = sign(
+    null,
+    Buffer.from(createFastTransactionSigningMessage(transactionBytes)),
+    senderPrivateKey
+  );
+
+  const signatures: Array<[number[], number[]]> = [];
+  for (let i = 0; i < 3; i++) {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    signatures.push([
+      Array.from(rawPublicKey(publicKey)),
+      Array.from(sign(null, Buffer.from(transactionBytes), privateKey)),
+    ]);
+  }
+
+const certificate: FastTransactionCertificate = {
+    envelope: {
+      transaction: {
+        Release20260319: transaction,
+      },
+      signature: {
+        Signature: Array.from(senderSignature),
+      },
+    },
+    signatures,
+  };
+  proxyCertificates.set(certificateLookupKey(certificate), cloneCertificate(certificate));
+  return certificate;
+}
+
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(async (_input: unknown, init?: { body?: unknown }) => {
+    lastFetchUrl = String(_input);
+    const body = JSON.parse(String(init?.body ?? "{}")) as {
+      id?: number;
+      method?: string;
+      params?: {
+        address?: number[];
+        certificate_by_nonce?: { start?: number; limit?: number };
+      };
+    };
+
+    if (body.method !== "proxy_getAccountInfo") {
+      throw new Error(`unexpected_method:${body.method}`);
+    }
+
+    const sender = Buffer.from(body.params?.address ?? []).toString("hex");
+    const nonce = body.params?.certificate_by_nonce?.start?.toString() ?? "";
+    const certificate = proxyCertificates.get(`${sender}:${nonce}`);
+
+    return new Response(JSON.stringify({
+      jsonrpc: "2.0",
+      id: body.id ?? 1,
+      result: {
+        requested_certificates: certificate ? [certificate] : [],
+      },
+    }), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+  }));
+});
+
+afterEach(() => {
+  lastFetchUrl = undefined;
+  proxyCertificates.clear();
+  vi.unstubAllGlobals();
+});
+
+function fastRouteConfig(
+  certificate: FastTransactionCertificate,
+  network: string,
+  extra: FacilitatorConfig = {}
+): FacilitatorConfig {
+  const trustedCertificate = proxyCertificates.get(certificateLookupKey(certificate)) ?? certificate;
+  const committeePublicKeys = trustedCertificate.signatures.map((signatureEntry) => {
+    const [publicKey] = signatureEntry as [number[], number[]];
+    return Buffer.from(publicKey).toString("hex");
+  });
+
+  return {
+    ...extra,
+    committeePublicKeys: {
+      ...(extra.committeePublicKeys ?? {}),
+      [network]: committeePublicKeys,
+    },
+  };
+}
+
 describe("createFacilitatorRoutes", () => {
+
   it("creates routes for /verify, /settle, /supported", () => {
     const routes = createFacilitatorRoutes();
     
@@ -104,42 +260,20 @@ describe("POST /verify", () => {
   });
 
   it("handles base64 encoded payload", async () => {
-    const routes = createFacilitatorRoutes();
-    const verifyRoute = routes.find(r => r.path === "/verify");
-    
     // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xbb);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-    
-    const transaction = {
-      sender: new Uint8Array(32).fill(0xaa),
-      recipient,
-      nonce: 1,
-      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-      claim: {
-        TokenTransfer: {
-          token_id: tokenId,
-          amount: "1000000000000000000",
-          user_data: null,
-        },
-      },
-      archival: false,
-    };
-    
-    const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
+    const certificate = createFastCertificate(recipient, "1000000000000000000", tokenId);
+    const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-testnet"));
+    const verifyRoute = routes.find(r => r.path === "/verify");
     
     const payloadObj = {
       x402Version: 1,
       scheme: "exact",
       network: "fast-testnet",
       payload: {
-        transactionCertificate: {
-          envelope,
-          signatures: [
-            { committee_member: 0, signature: "0x" + "aa".repeat(64) },
-          ],
-        },
+        transactionCertificate: certificate,
       },
     };
     
@@ -169,30 +303,13 @@ describe("POST /verify", () => {
   });
 
   it("handles decoded payload object", async () => {
-    const routes = createFacilitatorRoutes();
-    const verifyRoute = routes.find(r => r.path === "/verify");
-    
     // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xcc);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-    
-    const transaction = {
-      sender: new Uint8Array(32).fill(0xdd),
-      recipient,
-      nonce: 2,
-      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-      claim: {
-        TokenTransfer: {
-          token_id: tokenId,
-          amount: "2000000000000000000",
-          user_data: null,
-        },
-      },
-      archival: false,
-    };
-    
-    const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
+    const certificate = createFastCertificate(recipient, "2000000000000000000", tokenId);
+    const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-testnet"));
+    const verifyRoute = routes.find(r => r.path === "/verify");
     
     const req = createMockRequest("post", "/verify", {
       paymentPayload: {
@@ -200,12 +317,7 @@ describe("POST /verify", () => {
         scheme: "exact",
         network: "fast-testnet",
         payload: {
-          transactionCertificate: {
-            envelope,
-            signatures: [
-              { committee_member: 0, signature: "0x" + "aa".repeat(64) },
-            ],
-          },
+          transactionCertificate: certificate,
         },
       },
       paymentRequirements: {
@@ -226,6 +338,46 @@ describe("POST /verify", () => {
     
     const body = res.getJson() as { isValid: boolean };
     expect(body.isValid).toBe(true);
+  });
+
+  it("uses fastRpcUrl override when verifying through the server", async () => {
+    const recipient = new Uint8Array(32).fill(0xcc);
+    const tokenId = new Uint8Array(32);
+    tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
+    const certificate = createFastCertificate(recipient, "2000000000000000000", tokenId, "fast-mainnet");
+    const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-mainnet", {
+      fastRpcUrl: "https://custom.fast.example/proxy",
+    }));
+    const verifyRoute = routes.find(r => r.path === "/verify");
+
+    const req = createMockRequest("post", "/verify", {
+      paymentPayload: {
+        x402Version: 1,
+        scheme: "exact",
+        network: "fast-mainnet",
+        payload: {
+          transactionCertificate: certificate,
+        },
+      },
+      paymentRequirements: {
+        scheme: "exact",
+        network: "fast-mainnet",
+        maxAmountRequired: "1000000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: bytesToHex(recipient),
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      },
+    });
+    const res = createMockResponse();
+
+    await verifyRoute!.handler(req as any, res as any);
+
+    const body = res.getJson() as { isValid: boolean };
+    expect(body.isValid).toBe(true);
+    expect(lastFetchUrl).toBe("https://custom.fast.example/proxy");
   });
 
   it("returns 400 for invalid base64", async () => {
@@ -264,30 +416,13 @@ describe("POST /settle", () => {
   });
 
   it("succeeds for Fast (no-op settlement)", async () => {
-    const routes = createFacilitatorRoutes();
-    const settleRoute = routes.find(r => r.path === "/settle");
-    
     // Create a valid Fast certificate
     const recipient = new Uint8Array(32).fill(0xee);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-    
-    const transaction = {
-      sender: new Uint8Array(32).fill(0xff),
-      recipient,
-      nonce: 3,
-      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-      claim: {
-        TokenTransfer: {
-          token_id: tokenId,
-          amount: "3000000000000000000",
-          user_data: null,
-        },
-      },
-      archival: false,
-    };
-    
-    const envelope = bytesToHex(TransactionBcs.serialize(transaction).toBytes());
+    const certificate = createFastCertificate(recipient, "3000000000000000000", tokenId);
+    const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-testnet"));
+    const settleRoute = routes.find(r => r.path === "/settle");
     
     const req = createMockRequest("post", "/settle", {
       paymentPayload: {
@@ -295,12 +430,7 @@ describe("POST /settle", () => {
         scheme: "exact",
         network: "fast-testnet",
         payload: {
-          transactionCertificate: {
-            envelope,
-            signatures: [
-              { committee_member: 0, signature: "0x" + "aa".repeat(64) },
-            ],
-          },
+          transactionCertificate: certificate,
         },
       },
       paymentRequirements: {

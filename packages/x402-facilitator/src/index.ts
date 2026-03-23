@@ -14,7 +14,9 @@
  * import express from 'express';
  * 
  * // Use as a library
- * const result = await verify(paymentPayload, paymentRequirement);
+ * const result = await verify(paymentPayload, paymentRequirement, {
+ *   fastRpcUrl: process.env.FAST_RPC_URL,
+ * });
  * 
  * // Or create an Express server
  * const app = express();
@@ -44,6 +46,7 @@ export { getNetworkType } from "./types.js";
 export {
   EVM_CHAINS,
   FAST_RPC_URLS,
+  FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS,
   SUPPORTED_EVM_NETWORKS,
   SUPPORTED_FAST_NETWORKS,
   getEvmChainConfig,

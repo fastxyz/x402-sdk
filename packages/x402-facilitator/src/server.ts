@@ -64,7 +64,7 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
           decoded = paymentPayload;
         }
 
-        const result = await verify(decoded, paymentRequirements);
+        const result = await verify(decoded, paymentRequirements, config);
         res.json(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

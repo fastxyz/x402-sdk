@@ -4,6 +4,7 @@
  */
 
 import type { Chain } from "viem";
+import type { FastSerializableTransaction, FastVersionedTransaction } from "./fast-bcs.js";
 
 /**
  * Payment requirement from the server
@@ -39,14 +40,32 @@ export interface PaymentPayload {
 /**
  * Fast transaction certificate payload
  */
-export interface FastPayload {
-  transactionCertificate: {
-    envelope: string;
-    signatures: Array<{
-      committee_member: number;
-      signature: string;
-    }>;
+export interface FastTransactionEnvelope {
+  transaction: FastSerializableTransaction | FastVersionedTransaction;
+  signature: {
+    Signature?: number[] | Uint8Array | string;
+    MultiSig?: unknown;
   };
+}
+
+export type FastCommitteeSignature =
+  | [number[] | Uint8Array, number[] | Uint8Array]
+  | {
+      committee_member: number[] | Uint8Array;
+      signature: number[] | Uint8Array | string;
+    }
+  | {
+      validator: number[] | Uint8Array;
+      signature: number[] | Uint8Array | string;
+    };
+
+export interface FastTransactionCertificate {
+  envelope: FastTransactionEnvelope;
+  signatures: FastCommitteeSignature[];
+}
+
+export interface FastPayload {
+  transactionCertificate: FastTransactionCertificate;
 }
 
 /**
@@ -104,6 +123,11 @@ export interface FacilitatorConfig {
   evmPrivateKey?: `0x${string}`;
   /** Fast RPC endpoint */
   fastRpcUrl?: string;
+  /**
+   * Trusted Fast committee public keys by network.
+   * Entries may be 32-byte hex public keys (with or without 0x) or Fast bech32m addresses.
+   */
+  committeePublicKeys?: Record<string, string[]>;
   /** Custom chain configs */
   chains?: Record<string, Chain>;
 }
