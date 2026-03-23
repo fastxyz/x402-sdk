@@ -49,7 +49,7 @@ export const EVM_CHAINS: Record<string, EvmChainConfig> = {
   "ethereum-sepolia": {
     chain: sepolia,
     usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
-    usdcName: "USD Coin",
+    usdcName: "USDC",
     usdcVersion: "2",
   },
 };
