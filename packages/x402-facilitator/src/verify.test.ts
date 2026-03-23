@@ -162,12 +162,14 @@ describe("verify", () => {
 
       const canonicalCommitteeSignatures: Array<[number[], number[]]> = [];
       const committeeKeys: Uint8Array[] = [];
+      // Committee also signs with "VersionedTransaction::" prefix (same as sender)
+      const committeePayload = createFastTransactionSigningMessage(transactionBytes);
       for (let i = 0; i < 3; i++) {
         const { publicKey, privateKey } = generateKeyPairSync("ed25519");
         const committeePublicKey = rawPublicKey(publicKey);
         committeeKeys.push(committeePublicKey);
 
-        const signature = new Uint8Array(sign(null, Buffer.from(transactionBytes), privateKey));
+        const signature = new Uint8Array(sign(null, Buffer.from(committeePayload), privateKey));
         canonicalCommitteeSignatures.push([
           Array.from(committeePublicKey),
           Array.from(signature),

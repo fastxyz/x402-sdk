@@ -101,12 +101,14 @@ function createFastCertificate(
     senderPrivateKey
   );
 
+  // Committee also signs with "VersionedTransaction::" prefix (same as sender)
+  const committeePayload = createFastTransactionSigningMessage(transactionBytes);
   const signatures: Array<[number[], number[]]> = [];
   for (let i = 0; i < 3; i++) {
     const { publicKey, privateKey } = generateKeyPairSync("ed25519");
     signatures.push([
       Array.from(rawPublicKey(publicKey)),
-      Array.from(sign(null, Buffer.from(transactionBytes), privateKey)),
+      Array.from(sign(null, Buffer.from(committeePayload), privateKey)),
     ]);
   }
 
