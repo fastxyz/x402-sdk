@@ -92,7 +92,11 @@ interface FastWallet {
 }
 ```
 
-If `rpcUrl` is omitted, the client uses the official Fast JSON-RPC proxy for the requested network. Auto-bridge helpers default to the Fast testnet proxy because the bundled bridge routes are testnet-only.
+If `rpcUrl` is omitted, the client uses the official Fast JSON-RPC proxy for the requested network.
+
+### Auto-Bridge
+
+Auto-bridge functionality uses `@fastxyz/allset-sdk` for bridge configurations. Bridge routes are currently testnet-only (ethereum-sepolia, arbitrum-sepolia, base).
 
 ## How It Works
 

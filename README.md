@@ -19,6 +19,15 @@ x402 is a payment protocol built on HTTP status code `402 Payment Required`. It 
 | [x402-server](./packages/x402-server) | Server SDK - protect routes, verify payments | `npm i @fastxyz/x402-server` |
 | [x402-facilitator](./packages/x402-facilitator) | Facilitator - verify signatures, settle on-chain | `npm i @fastxyz/x402-facilitator` |
 
+## Dependencies
+
+Network and token configurations are imported from the canonical Fast SDKs:
+
+- **[@fastxyz/allset-sdk](https://www.npmjs.com/package/@fastxyz/allset-sdk)** — Bridge configs, USDC addresses, Fast token IDs
+- **[@fastxyz/sdk](https://www.npmjs.com/package/@fastxyz/sdk)** — Fast RPC endpoints, transaction encoding
+
+EIP-3009 metadata (`usdcName`, `usdcVersion`) is maintained locally in x402-sdk as it's specific to the x402 payment flow.
+
 ## Releasing
 
 Package publishing is handled by GitHub Actions via npm trusted publishing. See [RELEASING.md](./RELEASING.md) for the one-time npm setup and the coordinated tag-based release flow.
