@@ -9,6 +9,15 @@ import { paymentMiddleware } from '@fastxyz/x402-server';
 
 const app = express();
 
+// Request logging
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms`);
+  });
+  next();
+});
+
 // Merchant addresses
 const MERCHANT_EVM = '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372';
 const MERCHANT_FAST = 'fast1hjayqnp44xevxvw52jwkgfyrzvquld7eu4383adp3vht9msqtw0s2sz9mv';
