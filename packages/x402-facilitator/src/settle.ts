@@ -133,13 +133,13 @@ async function settleEvmPayment(
     const walletClient = createWalletClient({
       account,
       chain: chainConfig.chain,
-      transport: http(),
+      transport: http(chainConfig.rpcUrl),
     });
 
     // Create public client for waiting
     const publicClient = createPublicClient({
       chain: chainConfig.chain,
-      transport: http(),
+      transport: http(chainConfig.rpcUrl),
     });
 
     // Check if authorization was already used

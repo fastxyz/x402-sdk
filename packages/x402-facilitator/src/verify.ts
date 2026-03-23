@@ -142,7 +142,7 @@ async function verifyEvmPayment(
 
   const client = createPublicClient({
     chain: chainConfig.chain,
-    transport: http(),
+    transport: http(chainConfig.rpcUrl),
   });
 
   try {

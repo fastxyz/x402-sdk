@@ -26,6 +26,8 @@ interface Eip3009Metadata {
   usdcVersion: string;
   /** Fallback USDC address for chains not in allset-sdk */
   fallbackUsdcAddress?: string;
+  /** Custom RPC URL (env var name) */
+  rpcEnvVar?: string;
 }
 
 const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
@@ -61,6 +63,7 @@ const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
     chain: sepolia,
     usdcName: "USDC",
     usdcVersion: "2",
+    rpcEnvVar: "ETH_SEPOLIA_RPC",
   },
 };
 
@@ -84,8 +87,12 @@ function buildEvmChains(): Record<string, EvmChainConfig> {
       continue;
     }
 
+    // Get RPC URL from environment variable if specified
+    const rpcUrl = metadata.rpcEnvVar ? process.env[metadata.rpcEnvVar] : undefined;
+
     chains[network] = {
       chain: metadata.chain,
+      rpcUrl,
       usdcAddress: usdcAddress as `0x${string}`,
       usdcName: metadata.usdcName,
       usdcVersion: metadata.usdcVersion,
