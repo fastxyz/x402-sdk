@@ -63,6 +63,29 @@ export const FAST_RPC_URLS: Record<string, string> = {
 };
 
 /**
+ * Convert an x402 Fast network name to the CAIP-2 network id used inside
+ * signed Fast transactions.
+ */
+export function getExpectedFastNetworkId(network: string): string | null {
+  if (network.startsWith("fast-")) {
+    return `fast:${network.slice("fast-".length)}`;
+  }
+
+  return null;
+}
+
+/**
+ * Convert a signed Fast CAIP-2 network id to the x402 Fast network name.
+ */
+export function getFastNetworkFromNetworkId(networkId: string): string | null {
+  if (!networkId.startsWith("fast:")) {
+    return null;
+  }
+
+  return `fast-${networkId.slice("fast:".length)}`;
+}
+
+/**
  * Bundled trusted Fast validator committees for the official networks.
  * These values are derived from the Fast deployment committee manifests.
  */

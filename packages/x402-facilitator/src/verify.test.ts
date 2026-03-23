@@ -9,6 +9,7 @@ import {
   bytesToHex,
   createFastTransactionSigningMessage,
   serializeFastTransaction,
+  unwrapFastTransaction,
 } from "./fast-bcs.js";
 import type {
   FacilitatorConfig,
@@ -29,8 +30,9 @@ function rawPublicKey(key: KeyObject): Uint8Array {
 }
 
 function certificateLookupKey(certificate: FastTransactionCertificate): string {
-  const sender = Buffer.from(certificate.envelope.transaction.sender).toString("hex");
-  return `${sender}:${certificate.envelope.transaction.nonce.toString()}`;
+  const transaction = unwrapFastTransaction(certificate.envelope.transaction);
+  const sender = Buffer.from(transaction.sender).toString("hex");
+  return `${sender}:${transaction.nonce.toString()}`;
 }
 
 function cloneCertificate(certificate: FastTransactionCertificate): FastTransactionCertificate {
@@ -127,23 +129,33 @@ describe("verify", () => {
         duplicateCommitteeSigner?: boolean;
         forgeCommitteeSigners?: boolean;
         signSenderWithRawTransaction?: boolean;
+        network?: string;
       } = {}
     ) {
       const { publicKey: senderPublicKey, privateKey: senderPrivateKey } = generateKeyPairSync("ed25519");
       const sender = rawPublicKey(senderPublicKey);
+      const networkId = options.network === "fast-mainnet"
+        ? "fast:mainnet"
+        : options.network === "fast"
+          ? "fast:testnet"
+          : options.network?.startsWith("fast-")
+            ? `fast:${options.network.slice("fast-".length)}`
+            : "fast:testnet";
       const transaction = {
+        network_id: networkId,
         sender: Array.from(sender),
-        recipient: Array.from(recipient),
         nonce: 1,
         timestamp_nanos: (BigInt(Date.now()) * 1_000_000n).toString(),
         claim: {
           TokenTransfer: {
             token_id: Array.from(tokenId),
+            recipient: Array.from(recipient),
             amount: amountHex,
             user_data: null,
           },
         },
         archival: false,
+        fee_token: null,
       };
 
       const transactionBytes = serializeFastTransaction(transaction);
@@ -170,7 +182,9 @@ describe("verify", () => {
 
       const canonicalCertificate: FastTransactionCertificate = {
         envelope: {
-          transaction,
+          transaction: {
+            Release20260319: transaction,
+          },
           signature: {
             Signature: Array.from(senderSignature),
           },
@@ -315,7 +329,9 @@ describe("verify", () => {
     });
 
     it("uses the official Fast mainnet proxy by default", async () => {
-      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId);
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        network: "fast-mainnet",
+      });
       const payload = createFastPayload(certificate, "fast-mainnet");
 
       const requirement: PaymentRequirement = {
@@ -336,7 +352,9 @@ describe("verify", () => {
     });
 
     it("uses fastRpcUrl override for network certificate lookup", async () => {
-      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId);
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        network: "fast-mainnet",
+      });
       const payload = createFastPayload(certificate, "fast-mainnet");
 
       const requirement: PaymentRequirement = {
@@ -356,6 +374,52 @@ describe("verify", () => {
       });
       expect(result.isValid).toBe(true);
       expect(lastFetchUrl).toBe("https://custom.fast.example/proxy");
+    });
+
+    it("rejects certificate network_id mismatches", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        network: "fast-testnet",
+      });
+      const payload = createFastPayload(certificate, "fast-mainnet");
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast-mainnet",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verifyFastFixture(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("invalid_network: expected fast:mainnet, got fast:testnet");
+    });
+
+    it("derives the concrete network from network_id when payload network is fast", async () => {
+      const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId, {
+        network: "fast-mainnet",
+      });
+      const payload = createFastPayload(certificate, "fast");
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "fast",
+        maxAmountRequired: oneUsdcUnits.toString(),
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: recipientHex,
+        maxTimeoutSeconds: 60,
+        asset: bytesToHex(tokenId),
+      };
+
+      const result = await verifyFastFixture(payload, requirement);
+      expect(result.isValid).toBe(true);
+      expect(lastFetchUrl).toBe("https://api.fast.xyz/proxy");
     });
 
     it("rejects payment with an invalid committee signature", async () => {
@@ -751,7 +815,9 @@ describe("verify", () => {
       const certificate = createFastCertificate(recipient, oneUsdcHex, tokenId);
       const trustedCommitteePublicKeys = committeePublicKeysForCertificate(certificate);
       const forgedCertificate = cloneCertificate(certificate);
-      const transactionBytes = serializeFastTransaction(forgedCertificate.envelope.transaction);
+      const transactionBytes = serializeFastTransaction(
+        unwrapFastTransaction(forgedCertificate.envelope.transaction)
+      );
 
       forgedCertificate.signatures = forgedCertificate.signatures.map(() => {
         const { publicKey, privateKey } = generateKeyPairSync("ed25519");

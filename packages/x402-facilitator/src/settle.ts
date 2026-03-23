@@ -27,6 +27,7 @@ import {
   getTransferDetails,
   hashFastTransaction,
   serializeFastTransaction,
+  unwrapFastTransaction,
 } from "./fast-bcs.js";
 import { verify } from "./verify.js";
 
@@ -221,7 +222,10 @@ async function settleFastPayment(
   let payer: string | undefined;
 
   try {
-    const transaction = payload.transactionCertificate.envelope?.transaction;
+    const wrappedTransaction = payload.transactionCertificate.envelope?.transaction;
+    const transaction = wrappedTransaction
+      ? unwrapFastTransaction(wrappedTransaction)
+      : null;
     if (!transaction) {
       return {
         success: false,

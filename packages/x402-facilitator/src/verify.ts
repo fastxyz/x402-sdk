@@ -25,6 +25,8 @@ import { getNetworkType, getNetworkId } from "./types.js";
 import {
   FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS,
   getEvmChainConfig,
+  getFastNetworkFromNetworkId,
+  getExpectedFastNetworkId,
   getFastRpcUrl,
 } from "./chains.js";
 import {
@@ -32,6 +34,7 @@ import {
   decodeEnvelope,
   getTransferDetails,
   serializeFastTransaction,
+  unwrapFastTransaction,
 } from "./fast-bcs.js";
 
 /**
@@ -527,7 +530,7 @@ async function fetchFastCertificateByNonce(
  * 
  * Verifies:
  * 1. Certificate structure matches Fast RPC output
- * 2. Sender signature verifies against "Transaction::" + serialized transaction
+ * 2. Sender signature verifies against "VersionedTransaction::" + serialized transaction
  * 3. Committee signatures verify against the serialized transaction
  * 4. Verify recipient matches payTo
  * 5. Verify amount >= maxAmountRequired
@@ -563,21 +566,6 @@ async function verifyFastPayment(
       invalidReason: "invalid_payload",
       network: paymentPayload.network,
     };
-  }
-
-  let trustedCommittee: ResolvedTrustedCommittee | null;
-  try {
-    trustedCommittee = resolveTrustedCommittee(paymentPayload.network, config);
-  } catch (error) {
-    return {
-      isValid: false,
-      invalidReason: `invalid_committee_configuration: ${error instanceof Error ? error.message : String(error)}`,
-      network: paymentPayload.network,
-    };
-  }
-
-  if (!trustedCommittee) {
-    warnUntrustedCommittee(paymentPayload.network, config.fastRpcUrl);
   }
 
   const certificate = payload.transactionCertificate;
@@ -616,6 +604,17 @@ async function verifyFastPayment(
     };
   }
 
+  let transaction;
+  try {
+    transaction = unwrapFastTransaction(envelope.transaction);
+  } catch {
+    return {
+      isValid: false,
+      invalidReason: "unsupported_fast_certificate_format",
+      network: paymentPayload.network,
+    };
+  }
+
   if (envelope.signature?.MultiSig) {
     return {
       isValid: false,
@@ -633,18 +632,9 @@ async function verifyFastPayment(
     };
   }
 
-  const minSignatures = trustedCommittee?.minSignatures ?? 3;
-  if (signatures.length < minSignatures) {
-    return {
-      isValid: false,
-      invalidReason: `insufficient_signatures: need ${minSignatures}, got ${signatures.length}`,
-      network: paymentPayload.network,
-    };
-  }
-
   let transactionBytes: Uint8Array;
   try {
-    transactionBytes = serializeFastTransaction(envelope.transaction);
+    transactionBytes = serializeFastTransaction(transaction);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return {
@@ -673,8 +663,70 @@ async function verifyFastPayment(
   tokenIdHex = transferDetails.tokenId;
   amountBigInt = transferDetails.amount;
 
+  const resolvedCertificateNetwork = getFastNetworkFromNetworkId(decoded.network_id);
+  if (!resolvedCertificateNetwork) {
+    return {
+      isValid: false,
+      invalidReason: `invalid_network: unsupported fast network_id ${decoded.network_id}`,
+      payer: senderHex,
+      network: paymentPayload.network,
+    };
+  }
+
+  const expectedNetworkId = getExpectedFastNetworkId(paymentPayload.network);
+  if (expectedNetworkId && decoded.network_id !== expectedNetworkId) {
+    return {
+      isValid: false,
+      invalidReason: `invalid_network: expected ${expectedNetworkId}, got ${decoded.network_id}`,
+      payer: senderHex,
+      network: paymentPayload.network,
+    };
+  }
+
+  const effectiveFastNetwork = paymentPayload.network === "fast"
+    ? resolvedCertificateNetwork
+    : paymentPayload.network;
+
+  const effectiveCommitteeConfig = (
+    paymentPayload.network !== effectiveFastNetwork &&
+    config.committeePublicKeys?.[paymentPayload.network] &&
+    !config.committeePublicKeys?.[effectiveFastNetwork]
+  )
+    ? {
+        ...config,
+        committeePublicKeys: {
+          ...config.committeePublicKeys,
+          [effectiveFastNetwork]: config.committeePublicKeys[paymentPayload.network],
+        },
+      }
+    : config;
+
+  let trustedCommittee: ResolvedTrustedCommittee | null;
+  try {
+    trustedCommittee = resolveTrustedCommittee(effectiveFastNetwork, effectiveCommitteeConfig);
+  } catch (error) {
+    return {
+      isValid: false,
+      invalidReason: `invalid_committee_configuration: ${error instanceof Error ? error.message : String(error)}`,
+      network: paymentPayload.network,
+    };
+  }
+
+  if (!trustedCommittee) {
+    warnUntrustedCommittee(effectiveFastNetwork, config.fastRpcUrl);
+  }
+
+  const minSignatures = trustedCommittee?.minSignatures ?? 3;
+  if (signatures.length < minSignatures) {
+    return {
+      isValid: false,
+      invalidReason: `insufficient_signatures: need ${minSignatures}, got ${signatures.length}`,
+      network: paymentPayload.network,
+    };
+  }
+
   const senderSigningMessage = createFastTransactionSigningMessage(transactionBytes);
-  const senderPublicKey = toByteArray(envelope.transaction.sender);
+  const senderPublicKey = toByteArray(transaction.sender);
   if (!senderPublicKey) {
     return {
       isValid: false,
@@ -737,7 +789,7 @@ async function verifyFastPayment(
   let networkCertificate: FastTransactionCertificate | null;
   try {
     networkCertificate = await fetchFastCertificateByNonce(
-      paymentPayload.network,
+      effectiveFastNetwork,
       senderPublicKey,
       decoded.nonce,
       config.fastRpcUrl
@@ -761,8 +813,10 @@ async function verifyFastPayment(
   }
 
   let networkTransactionBytes: Uint8Array;
+  let networkTransaction;
   try {
-    networkTransactionBytes = serializeFastTransaction(networkCertificate.envelope.transaction);
+    networkTransaction = unwrapFastTransaction(networkCertificate.envelope.transaction);
+    networkTransactionBytes = serializeFastTransaction(networkTransaction);
   } catch (error) {
     return {
       isValid: false,

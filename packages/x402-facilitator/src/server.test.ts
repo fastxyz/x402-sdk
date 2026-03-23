@@ -9,6 +9,7 @@ import {
   bytesToHex,
   createFastTransactionSigningMessage,
   serializeFastTransaction,
+  unwrapFastTransaction,
 } from "./fast-bcs.js";
 import type { FacilitatorConfig, FastTransactionCertificate } from "./types.js";
 
@@ -24,8 +25,9 @@ function rawPublicKey(key: KeyObject): Uint8Array {
 }
 
 function certificateLookupKey(certificate: FastTransactionCertificate): string {
-  const sender = Buffer.from(certificate.envelope.transaction.sender).toString("hex");
-  return `${sender}:${certificate.envelope.transaction.nonce.toString()}`;
+  const transaction = unwrapFastTransaction(certificate.envelope.transaction);
+  const sender = Buffer.from(transaction.sender).toString("hex");
+  return `${sender}:${transaction.nonce.toString()}`;
 }
 
 function cloneCertificate(certificate: FastTransactionCertificate): FastTransactionCertificate {
@@ -64,23 +66,33 @@ let lastFetchUrl: string | undefined;
 function createFastCertificate(
   recipient: Uint8Array,
   amountHex: string,
-  tokenId: Uint8Array
+  tokenId: Uint8Array,
+  network: string = "fast-testnet"
 ) : FastTransactionCertificate {
   const { publicKey: senderPublicKey, privateKey: senderPrivateKey } = generateKeyPairSync("ed25519");
   const sender = rawPublicKey(senderPublicKey);
+  const networkId = network === "fast-mainnet"
+    ? "fast:mainnet"
+    : network === "fast"
+      ? "fast:testnet"
+      : network.startsWith("fast-")
+        ? `fast:${network.slice("fast-".length)}`
+        : "fast:testnet";
   const transaction = {
+    network_id: networkId,
     sender: Array.from(sender),
-    recipient: Array.from(recipient),
     nonce: 1,
     timestamp_nanos: (BigInt(Date.now()) * 1_000_000n).toString(),
     claim: {
       TokenTransfer: {
         token_id: Array.from(tokenId),
+        recipient: Array.from(recipient),
         amount: amountHex,
         user_data: null,
       },
     },
     archival: false,
+    fee_token: null,
   };
 
   const transactionBytes = serializeFastTransaction(transaction);
@@ -101,7 +113,9 @@ function createFastCertificate(
 
 const certificate: FastTransactionCertificate = {
     envelope: {
-      transaction,
+      transaction: {
+        Release20260319: transaction,
+      },
       signature: {
         Signature: Array.from(senderSignature),
       },
@@ -330,7 +344,7 @@ describe("POST /verify", () => {
     const recipient = new Uint8Array(32).fill(0xcc);
     const tokenId = new Uint8Array(32);
     tokenId.set([0x1b, 0x48, 0x76, 0x61], 0);
-    const certificate = createFastCertificate(recipient, "2000000000000000000", tokenId);
+    const certificate = createFastCertificate(recipient, "2000000000000000000", tokenId, "fast-mainnet");
     const routes = createFacilitatorRoutes(fastRouteConfig(certificate, "fast-mainnet", {
       fastRpcUrl: "https://custom.fast.example/proxy",
     }));

@@ -4,6 +4,7 @@
  */
 
 import type { Chain } from "viem";
+import type { FastSerializableTransaction, FastVersionedTransaction } from "./fast-bcs.js";
 
 /**
  * Payment requirement from the server
@@ -40,21 +41,7 @@ export interface PaymentPayload {
  * Fast transaction certificate payload
  */
 export interface FastTransactionEnvelope {
-  transaction: {
-    sender: number[] | Uint8Array;
-    recipient: number[] | Uint8Array;
-    nonce: number | string | bigint;
-    timestamp_nanos: number | string | bigint;
-    claim: {
-      TokenTransfer?: {
-        token_id: number[] | Uint8Array;
-        amount: string | number | bigint;
-        user_data?: number[] | Uint8Array | null;
-      };
-      [key: string]: unknown;
-    };
-    archival?: boolean;
-  };
+  transaction: FastSerializableTransaction | FastVersionedTransaction;
   signature: {
     Signature?: number[] | Uint8Array | string;
     MultiSig?: unknown;
