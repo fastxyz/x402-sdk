@@ -57,7 +57,6 @@ interface FacilitatorConfig {
   evmPrivateKey?: `0x${string}`;             // Needed for EVM settlement
   fastRpcUrl?: string;                       // Override Fast verification RPC
   committeePublicKeys?: Record<string, string[]>;
-  chains?: Record<string, Chain>;            // Advanced chain overrides
 }
 ```
 
