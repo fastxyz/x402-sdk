@@ -186,9 +186,6 @@ When payment is required:
 | `ethereum-sepolia` | EVM | USDC |
 | `base-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |
-| `fast-testnet` | Fast | testUSDC |
-| `ethereum-sepolia` | EVM | USDC |
-| `arbitrum-sepolia` | EVM | USDC |
 
 ---
 
