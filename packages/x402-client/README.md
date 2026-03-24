@@ -146,14 +146,21 @@ interface X402PayResult {
 
 ## Supported Networks
 
+### Mainnet
+
 | Network | Type | Token |
 |---------|------|-------|
-| `fast-testnet` | Fast | fastUSDC |
-| `fast-mainnet` | Fast | fastUSDC |
-| `ethereum-sepolia` | EVM | USDC |
-| `arbitrum-sepolia` | EVM | USDC |
+| `fast-mainnet` | Fast | USDC |
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
+
+### Testnet
+
+| Network | Type | Token |
+|---------|------|-------|
+| `fast-testnet` | Fast | testUSDC |
+| `ethereum-sepolia` | EVM | USDC |
+| `arbitrum-sepolia` | EVM | USDC |
 
 ---
 

@@ -335,14 +335,21 @@ The facilitator wallet needs:
 
 ## Supported Networks
 
+### Mainnet
+
 | Network | Type | Chain ID | Token | Settlement |
 |---------|------|----------|-------|------------|
-| `fast-testnet` | Fast | — | fastUSDC | ~300ms |
-| `fast-mainnet` | Fast | — | fastUSDC | ~300ms |
-| `ethereum-sepolia` | EVM | 11155111 | USDC | ~15s |
-| `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
+| `fast-mainnet` | Fast | — | USDC | ~300ms |
 | `arbitrum` | EVM | 42161 | USDC | ~15s |
 | `base` | EVM | 8453 | USDC | ~15s |
+
+### Testnet
+
+| Network | Type | Chain ID | Token | Settlement |
+|---------|------|----------|-------|------------|
+| `fast-testnet` | Fast | — | testUSDC | ~300ms |
+| `ethereum-sepolia` | EVM | 11155111 | USDC | ~15s |
+| `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
 
 ---
 

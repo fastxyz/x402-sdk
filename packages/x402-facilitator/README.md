@@ -115,12 +115,12 @@ List supported networks.
 ```json
 {
   "networks": [
-    "fast-testnet",
     "fast-mainnet",
-    "ethereum-sepolia",
-    "arbitrum-sepolia",
     "arbitrum",
-    "base"
+    "base",
+    "fast-testnet",
+    "ethereum-sepolia",
+    "arbitrum-sepolia"
   ]
 }
 ```
@@ -166,14 +166,21 @@ No-op — transaction already on-chain when certificate was created.
 
 ## Supported Networks
 
+### Mainnet
+
+| Network | Type | Chain ID |
+|---------|------|----------|
+| `fast-mainnet` | Fast | — |
+| `arbitrum` | EVM | 42161 |
+| `base` | EVM | 8453 |
+
+### Testnet
+
 | Network | Type | Chain ID |
 |---------|------|----------|
 | `fast-testnet` | Fast | — |
-| `fast-mainnet` | Fast | — |
 | `ethereum-sepolia` | EVM | 11155111 |
 | `arbitrum-sepolia` | EVM | 421614 |
-| `arbitrum` | EVM | 42161 |
-| `base` | EVM | 8453 |
 
 ---
 
