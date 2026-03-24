@@ -8,6 +8,9 @@
 import { AllSetProvider } from "@fastxyz/allset-sdk/node";
 import type { NetworkConfig } from "./types.js";
 
+const FAST_MAINNET_USDC_TOKEN_ID =
+  "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5";
+
 /**
  * EIP-3009 metadata for USDC contracts (x402-specific, not in SDKs)
  */
@@ -62,13 +65,10 @@ function buildNetworkConfigs(): Record<string, NetworkConfig> {
     };
   }
 
-  if (baseToken) {
-    // fastUSDC for mainnet (Base USDC on Fast)
-    configs["fast-mainnet"] = {
-      asset: `0x${baseToken.fastTokenId}`,
-      decimals: baseToken.decimals,
-    };
-  }
+  configs["fast-mainnet"] = {
+    asset: FAST_MAINNET_USDC_TOKEN_ID,
+    decimals: baseToken?.decimals ?? 6,
+  };
 
   // EVM networks from allset-sdk
   const evmNetworks = ["ethereum-sepolia", "arbitrum-sepolia", "base"];

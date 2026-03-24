@@ -29,6 +29,18 @@ describe('x402-server utils', () => {
     it('should have correct decimals for USDC', () => {
       assert.strictEqual(NETWORK_CONFIGS['arbitrum-sepolia'].decimals, 6);
       assert.strictEqual(NETWORK_CONFIGS['fast-testnet'].decimals, 6);
+      assert.strictEqual(NETWORK_CONFIGS['fast-mainnet'].decimals, 6);
+    });
+
+    it('should keep the canonical Fast token ids for both Fast networks', () => {
+      assert.strictEqual(
+        NETWORK_CONFIGS['fast-testnet'].asset,
+        '0xd73a0679a2be46981e2a8aedecd951c8b6690e7d5f8502b34ed3ff4cc2163b46'
+      );
+      assert.strictEqual(
+        NETWORK_CONFIGS['fast-mainnet'].asset,
+        '0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5'
+      );
     });
 
     it('should include EIP-712 extra for EVM networks', () => {

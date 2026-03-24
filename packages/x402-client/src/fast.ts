@@ -5,6 +5,7 @@
  */
 
 import { FastProvider, FastWallet as SdkFastWallet } from '@fastxyz/sdk';
+import { toHuman } from '@fastxyz/sdk/core';
 import type { 
   FastWallet, 
   PaymentRequired, 
@@ -122,10 +123,8 @@ export async function handleFastPayment(
   log(`[Fast] Determining token...`);
   let token: string;
   if (fastReq.asset) {
-    // Asset is the token ID - convert to token name for SDK
-    // For now, assume testUSDC on testnet, fastUSDC on mainnet
-    token = fastReq.network === 'fast-mainnet' ? 'fastUSDC' : 'testUSDC';
-    log(`  Token: ${token} (from network)`);
+    token = fastReq.asset;
+    log(`  Token: ${token} (from payment requirement)`);
   } else {
     token = 'FAST';
     log(`  Token: FAST (default)`);
@@ -133,7 +132,7 @@ export async function handleFastPayment(
 
   // Send payment using SDK's send() method
   // Convert raw amount to human-readable (FastWallet.send expects human-readable)
-  const amountHuman = (Number(fastReq.maxAmountRequired) / 1e6).toString();
+  const amountHuman = toHuman(fastReq.maxAmountRequired, 6);
   log(`[Fast] Sending payment via FastWallet.send()...`);
   log(`  Amount: ${fastReq.maxAmountRequired} raw → ${amountHuman} USDC`);
   const txStartTime = Date.now();
