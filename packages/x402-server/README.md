@@ -150,6 +150,8 @@ interface FacilitatorConfig {
 | `base` | 8453 |
 | `ethereum` | 1 |
 
+Network configurations (USDC addresses, Fast token IDs) are imported from `@fastxyz/allset-sdk` where available. EIP-3009 metadata (`name`, `version`) is maintained locally.
+
 ## Response Headers
 
 On successful payment:

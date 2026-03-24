@@ -59,6 +59,12 @@ This monorepo contains three packages, each with its own skill file:
 | `base` | EVM | USDC | ~15s |
 | `ethereum` | EVM | USDC | ~15s |
 
+## Dependencies
+
+Network configs are imported from canonical Fast SDKs:
+- `@fastxyz/allset-sdk` — Bridge configs, USDC addresses, Fast token IDs  
+- `@fastxyz/sdk` — Fast RPC endpoints, transaction encoding
+
 ## Which Skill To Read
 
 - **"Pay for an API"** → [skills/client-skill.md](./skills/client-skill.md)

@@ -15,6 +15,29 @@ import { settle } from "./settle.js";
 import { EVM_CHAINS, SUPPORTED_EVM_NETWORKS, SUPPORTED_FAST_NETWORKS } from "./chains.js";
 
 /**
+ * JSON.parse reviver that converts numeric strings to BigInt when they look like
+ * large integers (used for timestamp_nanos and other BigInt fields in Fast transactions)
+ */
+function bigIntReviver(_key: string, value: unknown): unknown {
+  // Only convert string values that look like large integers
+  if (typeof value === 'string' && /^-?\d+$/.test(value)) {
+    const num = BigInt(value);
+    // Only use BigInt for values that would lose precision as Number
+    if (num > Number.MAX_SAFE_INTEGER || num < Number.MIN_SAFE_INTEGER) {
+      return num;
+    }
+  }
+  return value;
+}
+
+/**
+ * Parse JSON with BigInt support for x402 payloads
+ */
+function parseX402Payload(json: string): PaymentPayload {
+  return JSON.parse(json, bigIntReviver) as PaymentPayload;
+}
+
+/**
  * Create facilitator Express routes
  * 
  * Endpoints:
@@ -52,7 +75,7 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
         let decoded: PaymentPayload;
         if (typeof paymentPayload === "string") {
           try {
-            decoded = JSON.parse(Buffer.from(paymentPayload, "base64").toString());
+            decoded = parseX402Payload(Buffer.from(paymentPayload, "base64").toString());
           } catch {
             res.status(400).json({
               isValid: false,
@@ -96,7 +119,7 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
         let decoded: PaymentPayload;
         if (typeof paymentPayload === "string") {
           try {
-            decoded = JSON.parse(Buffer.from(paymentPayload, "base64").toString());
+            decoded = parseX402Payload(Buffer.from(paymentPayload, "base64").toString());
           } catch {
             res.status(400).json({
               success: false,

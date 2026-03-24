@@ -1,17 +1,11 @@
 /**
  * Fast payment handler for x402
  * 
- * Uses the actual Fast protocol with proper BCS serialization and signing.
+ * Uses @fastxyz/sdk for Fast network operations.
  */
 
-import {
-  FAST_NETWORK_IDS,
-  fastAddressToBytes,
-  hashTransaction,
-  serializeVersionedTransaction,
-  type FastNetworkId,
-  type FastTransaction,
-} from '@fastxyz/sdk/core';
+import { FastProvider, FastWallet as SdkFastWallet } from '@fastxyz/sdk';
+import { toHuman } from '@fastxyz/sdk/core';
 import type { 
   FastWallet, 
   PaymentRequired, 
@@ -22,35 +16,47 @@ import { resolveFastRpcUrl } from './fast-rpc.js';
 
 export const FAST_NETWORKS = ['fast-testnet', 'fast-mainnet'];
 
-function toFastNetworkId(network: string): FastNetworkId {
-  switch (network) {
-    case 'fast-testnet':
-      return FAST_NETWORK_IDS.TESTNET;
-    case 'fast-mainnet':
-      return FAST_NETWORK_IDS.MAINNET;
-    default:
-      throw new Error(`Unsupported Fast network: ${network}. Supported: ${FAST_NETWORKS.join(', ')}`);
+// ─── Cached Providers ─────────────────────────────────────────────────────────
+
+const fastProviders: Record<string, FastProvider> = {};
+
+function getFastProvider(network: string, rpcUrl?: string): FastProvider {
+  const cacheKey = rpcUrl || network;
+  if (!fastProviders[cacheKey]) {
+    const resolvedRpcUrl = rpcUrl || (network === 'fast-mainnet' 
+      ? 'https://api.fast.xyz/proxy'
+      : 'https://testnet.api.fast.xyz/proxy');
+    const networkType = network === 'fast-mainnet' ? 'mainnet' : 'testnet';
+    
+    fastProviders[cacheKey] = new FastProvider({ 
+      rpcUrl: resolvedRpcUrl,
+      network: networkType,
+    });
   }
+  return fastProviders[cacheKey];
 }
 
-function serializeFastRpcJsonValue(value: unknown): string | undefined {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function serializeFastRpcJsonValue(value: unknown, quoteBigInt = false): string | undefined {
   if (value === null) return 'null';
   if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return JSON.stringify(value);
   }
   if (typeof value === 'bigint') {
-    return value.toString();
+    // quoteBigInt: wrap in quotes to preserve precision through JSON.parse
+    return quoteBigInt ? `"${value.toString()}"` : value.toString();
   }
   if (value instanceof Uint8Array) {
-    return serializeFastRpcJsonValue(Array.from(value));
+    return serializeFastRpcJsonValue(Array.from(value), quoteBigInt);
   }
   if (Array.isArray(value)) {
-    return `[${value.map((item) => serializeFastRpcJsonValue(item) ?? 'null').join(',')}]`;
+    return `[${value.map((item) => serializeFastRpcJsonValue(item, quoteBigInt) ?? 'null').join(',')}]`;
   }
   if (typeof value === 'object') {
     const entries = Object.entries(value as Record<string, unknown>)
       .flatMap(([key, entryValue]) => {
-        const serialized = serializeFastRpcJsonValue(entryValue);
+        const serialized = serializeFastRpcJsonValue(entryValue, quoteBigInt);
         return serialized === undefined ? [] : [`${JSON.stringify(key)}:${serialized}`];
       });
     return `{${entries.join(',')}}`;
@@ -58,130 +64,17 @@ function serializeFastRpcJsonValue(value: unknown): string | undefined {
   return undefined;
 }
 
-function toFastRpcJson(data: unknown): string {
-  const serialized = serializeFastRpcJsonValue(data);
+function serializeX402Payload(data: unknown): string {
+  const serialized = serializeFastRpcJsonValue(data, true); // Quote BigInts for precision
   if (serialized === undefined) {
-    throw new TypeError('Fast RPC payload must be JSON-serializable');
+    throw new TypeError('x402 payload must be JSON-serializable');
   }
   return serialized;
 }
 
 /**
- * Create a Fast transaction executor
- */
-async function createTxExecutor(wallet: FastWallet, rpcUrl: string) {
-  const ed = await import('@noble/ed25519');
-  const { sha512 } = await import('@noble/hashes/sha512');
-  
-  // Configure ed25519 to use sha512
-  ed.etc.sha512Sync = (...m) => sha512(ed.etc.concatBytes(...m));
-
-  const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
-  const publicKeyBytes = new Uint8Array(Buffer.from(wallet.publicKey, 'hex'));
-
-  // RPC call helper
-  async function rpcCall(method: string, params: unknown): Promise<unknown> {
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method,
-        params,
-      }),
-    });
-    const result = await response.json() as { result?: unknown; error?: { message: string } };
-    if (result.error) {
-      throw new Error(`Fast RPC error: ${result.error.message}`);
-    }
-    return result.result;
-  }
-
-  async function sendTokenTransfer(
-    network: string,
-    recipientAddress: string,
-    amount: string,
-    tokenId: Uint8Array
-  ): Promise<{ txHash: string; certificate: unknown }> {
-    // Convert amount to hex for BCS
-    const hexAmount = BigInt(amount).toString(16);
-
-    // Get nonce
-    const accountInfo = await rpcCall('proxy_getAccountInfo', {
-      address: Array.from(publicKeyBytes),
-      token_balances_filter: [],
-      state_key_filter: null,
-      certificate_by_nonce: null,
-    }) as { next_nonce: number } | null;
-
-    const nonce = accountInfo?.next_nonce ?? 0;
-
-    // Build transaction
-    const transaction: FastTransaction = {
-      network_id: toFastNetworkId(network),
-      sender: publicKeyBytes,
-      nonce,
-      timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-      claim: {
-        TokenTransfer: {
-          token_id: tokenId,
-          recipient: fastAddressToBytes(recipientAddress),
-          amount: hexAmount,
-          user_data: null,
-        },
-      },
-      archival: false,
-      fee_token: null,
-    };
-
-    // Sign: ed25519("VersionedTransaction::" + BCS(versioned_transaction))
-    const msgHead = new TextEncoder().encode('VersionedTransaction::');
-    const msgBody = serializeVersionedTransaction(transaction);
-    const msg = new Uint8Array(msgHead.length + msgBody.length);
-    msg.set(msgHead, 0);
-    msg.set(msgBody, msgHead.length);
-    const signature = await ed.signAsync(msg, privateKeyBytes.slice(0, 32));
-
-    const txHash = hashTransaction(transaction);
-
-    // Submit transaction (use custom serializer for BigInt)
-    const submitPayload = {
-      transaction: {
-        Release20260319: transaction,
-      },
-      signature: { Signature: Array.from(signature) },
-    };
-
-    const response = await fetch(rpcUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: toFastRpcJson({
-        jsonrpc: '2.0',
-        id: Date.now(),
-        method: 'proxy_submitTransaction',
-        params: submitPayload,
-      }),
-    });
-    const result = await response.json() as { result?: { Success?: unknown }; error?: { message: string } };
-    if (result.error) {
-      throw new Error(`Fast RPC error (submit): ${result.error.message}`);
-    }
-    const submitResult = result.result as { Success?: unknown };
-
-    const certificate = submitResult?.Success ?? submitResult;
-    if (!certificate) {
-      throw new Error('proxy_submitTransaction returned empty result');
-    }
-
-    return { txHash, certificate };
-  }
-
-  return { sendTokenTransfer };
-}
-
-/**
  * Handle x402 payment on Fast network
+ * Uses @fastxyz/sdk's FastWallet.send() for token transfers.
  */
 export async function handleFastPayment(
   url: string,
@@ -210,42 +103,50 @@ export async function handleFastPayment(
   log(`  RPC: ${rpcUrl}`);
   log(`  Payer: ${wallet.address}`);
 
-  // Create transaction executor
-  log(`[Fast] Creating transaction executor...`);
-  const txExecutor = await createTxExecutor(wallet, rpcUrl);
+  // Get Fast provider
+  log(`[Fast] Getting FastProvider...`);
+  const provider = getFastProvider(fastReq.network, rpcUrl);
 
-  // Determine token ID
-  log(`[Fast] Determining token ID...`);
-  let tokenId: Uint8Array;
-  if (fastReq.asset) {
-    // Handle both hex (0x...) and base64 formats
-    if (fastReq.asset.startsWith('0x')) {
-      tokenId = new Uint8Array(Buffer.from(fastReq.asset.slice(2), 'hex'));
-      log(`  Token from asset (hex): ${fastReq.asset}`);
-    } else {
-      tokenId = new Uint8Array(Buffer.from(fastReq.asset, 'base64'));
-      log(`  Token from asset (base64): ${fastReq.asset}`);
-    }
-  } else {
-    tokenId = new Uint8Array(32);
-    tokenId.set([0xfa, 0x57, 0x5e, 0x70], 0); // Default FAST token
-    log(`  Using default token ID`);
+  // Create FastWallet from private key using @fastxyz/sdk
+  log(`[Fast] Creating FastWallet from private key...`);
+  const sdkWallet = await SdkFastWallet.fromPrivateKey(wallet.privateKey, provider);
+  log(`  Wallet address: ${sdkWallet.address}`);
+
+  // Verify address matches
+  if (sdkWallet.address !== wallet.address) {
+    throw new Error(
+      `Address mismatch: expected ${wallet.address}, got ${sdkWallet.address}`
+    );
   }
-  log(`  Token ID bytes: ${tokenId.length}`);
 
-  // Send TokenTransfer
-  log(`[Fast] Sending TokenTransfer transaction...`);
+  // Determine token
+  log(`[Fast] Determining token...`);
+  let token: string;
+  if (fastReq.asset) {
+    token = fastReq.asset;
+    log(`  Token: ${token} (from payment requirement)`);
+  } else {
+    token = 'FAST';
+    log(`  Token: FAST (default)`);
+  }
+
+  // Send payment using SDK's send() method
+  // Convert raw amount to human-readable (FastWallet.send expects human-readable)
+  const amountHuman = toHuman(fastReq.maxAmountRequired, 6);
+  log(`[Fast] Sending payment via FastWallet.send()...`);
+  log(`  Amount: ${fastReq.maxAmountRequired} raw → ${amountHuman} USDC`);
   const txStartTime = Date.now();
-  const { txHash, certificate } = await txExecutor.sendTokenTransfer(
-    fastReq.network,
-    fastReq.payTo,
-    fastReq.maxAmountRequired,
-    tokenId
-  );
+  
+  const result = await sdkWallet.send({
+    to: fastReq.payTo,
+    amount: amountHuman,
+    token,
+  });
+  
   log(`  Transaction complete in ${Date.now() - txStartTime}ms`);
-  log(`  txHash: ${txHash}`);
+  log(`  txHash: ${result.txHash}`);
 
-  // Build x402 payment payload
+  // Build x402 payment payload with the certificate
   log(`[Fast] Building x402 payment payload...`);
   const paymentPayload = {
     x402Version: paymentRequired.x402Version ?? 1,
@@ -253,11 +154,11 @@ export async function handleFastPayment(
     network: fastReq.network,
     payload: {
       type: 'signAndSendTransaction',
-      transactionCertificate: certificate,
+      transactionCertificate: result.certificate,
     },
   };
 
-  const payloadBase64 = Buffer.from(JSON.stringify(paymentPayload)).toString('base64');
+  const payloadBase64 = Buffer.from(serializeX402Payload(paymentPayload)).toString('base64');
   log(`  Payload base64 length: ${payloadBase64.length}`);
 
   // Retry request with X-PAYMENT header
@@ -275,8 +176,6 @@ export async function handleFastPayment(
   let resBody: unknown;
   try { resBody = await paidRes.json(); } catch { resBody = await paidRes.text(); }
 
-  const amountHuman = (Number(fastReq.maxAmountRequired) / 1e6).toString();
-
   log(`━━━ Fast Payment Handler END ━━━`);
   log(`  Success: ${paidRes.ok}`);
   log(`  Amount: ${amountHuman}`);
@@ -290,11 +189,11 @@ export async function handleFastPayment(
       network: fastReq.network,
       amount: amountHuman,
       recipient: fastReq.payTo,
-      txHash,
+      txHash: result.txHash,
     },
     note: paidRes.ok
       ? `Fast payment of ${amountHuman} successful. Content delivered.`
-      : `Payment submitted (tx: ${txHash}) but server returned ${paidRes.status}.`,
+      : `Payment submitted (tx: ${result.txHash}) but server returned ${paidRes.status}.`,
     logs: verbose ? logs : undefined,
   };
 }

@@ -1,37 +1,54 @@
 /**
  * AllSet bridge integration for x402-client
  * 
- * Bridges fastUSDC from Fast to USDC on EVM chains when needed.
+ * Bridges fastUSDC/testUSDC from Fast to USDC on EVM chains when needed.
+ * Uses @fastxyz/allset-sdk for bridge operations.
  */
 
-import * as ed from '@noble/ed25519';
-import { sha512 } from '@noble/hashes/sha512';
-import { encodeAbiParameters, keccak256 } from 'viem';
-import {
-  FAST_NETWORK_IDS,
-  fastAddressToBytes,
-  getCertificateHash,
-  serializeVersionedTransaction,
-  type FastNetworkId,
-  type FastTransaction,
-  type FastTransactionCertificate,
-} from '@fastxyz/sdk/core';
-import type { FastWallet } from './types.js';
-
-// Configure ed25519
-ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
+import { AllSetProvider } from '@fastxyz/allset-sdk/node';
+import { FastProvider, FastWallet } from '@fastxyz/sdk';
+import type { FastWallet as X402FastWallet } from './types.js';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CROSS_SIGN_URL = 'https://testnet.cross-sign.allset.fast.xyz';
-const FAST_RPC_URL = 'https://testnet.api.fast.xyz/proxy';
+/** Fast RPC URLs */
+const FAST_RPC_URLS = {
+  testnet: 'https://testnet.api.fast.xyz/proxy',
+  mainnet: 'https://api.fast.xyz/proxy',
+} as const;
 
-/** fastUSDC token ID on Fast */
-// fastUSDC token ID
-const fastUSDC_TOKEN_ID = hexToBytes('b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5');
+/** fastUSDC token ID on Fast mainnet */
+const fastUSDC_TOKEN_ID = 'b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5';
+
+/** testUSDC token ID on Fast testnet */
+const testUSDC_TOKEN_ID = 'd73a0679a2be46981e2a8aedecd951c8b6690e7d5f8502b34ed3ff4cc2163b46';
+
+// ─── Cached Providers ─────────────────────────────────────────────────────────
+
+const allsetProviders: Record<string, AllSetProvider> = {};
+const fastProviders: Record<string, FastProvider> = {};
+
+function getAllSetProvider(network: 'testnet' | 'mainnet' = 'testnet'): AllSetProvider {
+  if (!allsetProviders[network]) {
+    allsetProviders[network] = new AllSetProvider({ network });
+  }
+  return allsetProviders[network];
+}
+
+function getFastProvider(network: 'testnet' | 'mainnet' = 'testnet'): FastProvider {
+  if (!fastProviders[network]) {
+    fastProviders[network] = new FastProvider({ 
+      rpcUrl: FAST_RPC_URLS[network],
+      network,
+    });
+  }
+  return fastProviders[network];
+}
+
+// ─── Public Types ─────────────────────────────────────────────────────────────
 
 /** Bridge configuration per EVM chain */
-interface BridgeChainConfig {
+export interface BridgeChainConfig {
   chainId: number;
   usdcAddress: string;
   fastBridgeAddress: string;
@@ -39,449 +56,14 @@ interface BridgeChainConfig {
   bridgeContract?: string;
 }
 
-const BRIDGE_CONFIGS: Record<string, BridgeChainConfig> = {
-  'ethereum-sepolia': {
-    chainId: 11155111,
-    usdcAddress: '0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238',
-    fastBridgeAddress: 'fast1fxtkgpwcy7hnakw96gg7relph4wxx7ghrukm723p3l9adxuxljzsc6f958',
-    relayerUrl: 'https://testnet.allset.fast.xyz/ethereum-sepolia/relayer',
-    bridgeContract: '0xb53600976275D6f541a3B929328d07714EFA581F',
-  },
-  'arbitrum-sepolia': {
-    chainId: 421614,
-    usdcAddress: '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-    fastBridgeAddress: 'fast1tkmtqxulhnzeeg9zhuwxy3x95wr7waytm9cq40ndf7tkuwwcc6jseg24j8',
-    relayerUrl: 'https://testnet.allset.fast.xyz/arbitrum-sepolia/relayer',
-    bridgeContract: '0xb53600976275D6f541a3B929328d07714EFA581F',
-  },
-  'base': {
-    chainId: 8453,
-    usdcAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    fastBridgeAddress: 'fast1a4fza9xc8jcm7jp64a0ugtuyw3hkkmje02e8af9aaer4r0je4dpqz4uf58',
-    relayerUrl: 'https://testnet.allset.fast.xyz/base/relayer',
-    bridgeContract: '0x83f0644FF860423539Dc6b6cA6d3b05a6F03337B',
-  },
-};
-
-export function getBridgeConfig(network: string): BridgeChainConfig | null {
-  return BRIDGE_CONFIGS[network] ?? null;
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const bytes = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function inferFastNetworkIdFromBridgeNetwork(network: string): FastNetworkId {
-  return network.includes('sepolia')
-    ? FAST_NETWORK_IDS.TESTNET
-    : FAST_NETWORK_IDS.MAINNET;
-}
-
-function serializeFastRpcJsonValue(value: unknown): string | undefined {
-  if (value === null) return 'null';
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return JSON.stringify(value);
-  }
-  if (typeof value === 'bigint') {
-    return value.toString();
-  }
-  if (value instanceof Uint8Array) {
-    return serializeFastRpcJsonValue(Array.from(value));
-  }
-  if (Array.isArray(value)) {
-    return `[${value.map((item) => serializeFastRpcJsonValue(item) ?? 'null').join(',')}]`;
-  }
-  if (typeof value === 'object') {
-    const entries = Object.entries(value as Record<string, unknown>)
-      .flatMap(([key, entryValue]) => {
-        const serialized = serializeFastRpcJsonValue(entryValue);
-        return serialized === undefined ? [] : [`${JSON.stringify(key)}:${serialized}`];
-      });
-    return `{${entries.join(',')}}`;
-  }
-  return undefined;
-}
-
-function toFastRpcJson(data: unknown): string {
-  const serialized = serializeFastRpcJsonValue(data);
-  if (serialized === undefined) {
-    throw new TypeError('Fast RPC payload must be JSON-serializable');
-  }
-  return serialized;
-}
-
-// ─── Fast Operations ───────────────────────────────────────────────────────
-
-interface TransactionResult {
-  txHash: string;
-  certificate: {
-    envelope: string;
-    signatures: Array<{ committee_member: number[]; signature: number[] }>;
-  };
-  /** Transaction details for building TransferClaim hash */
-  transferDetails?: {
-    from: string;      // Fast address (bech32m)
-    nonce: number;
-    asset: string;     // Token ID as hex with 0x prefix
-    amount: bigint;
-    to: string;        // Recipient Fast address (bech32m)
-  };
-}
-
-/**
- * Build TransferClaim hash the same way AllSetPortal does it.
- * This is keccak256 of ABI-encoded (from, nonce, asset, amount, to).
- */
-function buildTransferClaimHash(details: NonNullable<TransactionResult['transferDetails']>): `0x${string}` {
-  const hashData = encodeAbiParameters(
-    [
-      { name: 'from', type: 'string' },
-      { name: 'nonce', type: 'uint256' },
-      { name: 'asset', type: 'string' },
-      { name: 'amount', type: 'uint256' },
-      { name: 'to', type: 'string' },
-    ],
-    [
-      details.from.toLowerCase(),
-      BigInt(details.nonce),
-      details.asset,
-      details.amount,
-      details.to,
-    ]
-  );
-  return keccak256(hashData);
-}
-
-/**
- * Get fastUSDC balance on Fast
- */
-export async function getFastBalance(
-  wallet: FastWallet
-): Promise<bigint> {
-  const rpcUrl = wallet.rpcUrl || FAST_RPC_URL;
-  const publicKeyBytes = Buffer.from(wallet.publicKey, 'hex');
-  
-  const payload = {
-    jsonrpc: '2.0',
-    id: Date.now(),
-    method: 'proxy_getAccountInfo',
-    params: {
-      address: Array.from(publicKeyBytes),
-      token_balances_filter: [],
-      state_key_filter: null,
-      certificate_by_nonce: null,
-    },
-  };
-
-  const response = await fetch(rpcUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-
-  const result = await response.json() as {
-    result?: { token_balance?: Array<[number[], string]> };
-    error?: { message: string };
-  };
-
-  if (result.error) {
-    throw new Error(`Fast RPC error: ${result.error.message}`);
-  }
-
-  if (!result.result?.token_balance) {
-    return 0n;
-  }
-
-  // Find fastUSDC balance (token_balance is array of [token_id, hex_amount])
-  const fastusdcHex = bytesToHex(fastUSDC_TOKEN_ID);
-  for (const [tokenId, hexAmount] of result.result.token_balance) {
-    const tokenHex = bytesToHex(new Uint8Array(tokenId));
-    if (tokenHex === fastusdcHex) {
-      // Amount is hex string like "5f5e100"
-      const amount = BigInt('0x' + hexAmount);
-      return amount;
-    }
-  }
-
-  return 0n;
-}
-
-/**
- * Send TokenTransfer on Fast
- */
-async function sendTokenTransfer(
-  wallet: FastWallet,
-  fastNetworkId: FastNetworkId,
-  recipientAddress: string,
-  amount: bigint,
-  tokenId: Uint8Array,
-  rpcUrl: string = FAST_RPC_URL
-): Promise<TransactionResult> {
-  const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
-  const publicKeyBytes = new Uint8Array(Buffer.from(wallet.publicKey, 'hex'));
-
-  // Get nonce
-  const noncePayload = {
-    jsonrpc: '2.0',
-    id: Date.now(),
-    method: 'proxy_getAccountInfo',
-    params: {
-      address: Array.from(publicKeyBytes),
-      token_balances_filter: [],
-      state_key_filter: null,
-      certificate_by_nonce: null,
-    },
-  };
-  const nonceResponse = await fetch(rpcUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(noncePayload),
-  });
-  const nonceResult = await nonceResponse.json() as { result?: { next_nonce: number } };
-  const nonce = nonceResult.result?.next_nonce ?? 0;
-
-  // Convert amount to hex for BCS
-  const hexAmount = amount.toString(16);
-
-  // Build proper transaction structure
-  const transaction: FastTransaction = {
-    network_id: fastNetworkId,
-    sender: publicKeyBytes,
-    nonce,
-    timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-    claim: {
-      TokenTransfer: {
-        token_id: tokenId,
-        recipient: fastAddressToBytes(recipientAddress),
-        amount: hexAmount,
-        user_data: null,
-      },
-    },
-    archival: false,
-    fee_token: null,
-  };
-
-  // Sign: ed25519("VersionedTransaction::" + BCS(versioned_transaction))
-  const msgHead = new TextEncoder().encode('VersionedTransaction::');
-  const msgBody = serializeVersionedTransaction(transaction);
-  const msg = new Uint8Array(msgHead.length + msgBody.length);
-  msg.set(msgHead, 0);
-  msg.set(msgBody, msgHead.length);
-  const signatureBytes = await ed.signAsync(msg, privateKeyBytes.slice(0, 32));
-
-  // Submit to RPC
-  const payload = {
-    jsonrpc: '2.0',
-    id: Date.now(),
-    method: 'proxy_submitTransaction',
-    params: {
-      transaction: {
-        Release20260319: transaction,
-      },
-      signature: { Signature: Array.from(signatureBytes) },
-    },
-  };
-
-  const response = await fetch(rpcUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: toFastRpcJson(payload),
-  });
-
-  const result = await response.json() as {
-    result?: { Success?: unknown } | unknown;
-    error?: { message: string };
-  };
-
-  if (result.error) {
-    throw new Error(`Fast RPC error: ${result.error.message}`);
-  }
-
-  const submitResult = result.result as { Success?: unknown };
-  const certificate = submitResult?.Success ?? submitResult;
-
-  if (!certificate) {
-    throw new Error('No result from Fast RPC');
-  }
-  const txHash = getCertificateHash(certificate as FastTransactionCertificate);
-
-  return {
-    txHash,
-    certificate: certificate as TransactionResult['certificate'],
-    transferDetails: {
-      from: wallet.address,
-      nonce,
-      asset: '0x' + bytesToHex(tokenId),
-      amount,
-      to: recipientAddress,
-    },
-  };
-}
-
-/**
- * Submit ExternalClaim on Fast
- */
-async function submitExternalClaim(
-  wallet: FastWallet,
-  fastNetworkId: FastNetworkId,
-  intentPayload: Uint8Array,
-  rpcUrl: string = FAST_RPC_URL
-): Promise<TransactionResult> {
-  const privateKeyBytes = Buffer.from(wallet.privateKey, 'hex');
-  const publicKeyBytes = new Uint8Array(Buffer.from(wallet.publicKey, 'hex'));
-
-  // Get nonce
-  const noncePayload = {
-    jsonrpc: '2.0',
-    id: Date.now(),
-    method: 'proxy_getAccountInfo',
-    params: {
-      address: Array.from(publicKeyBytes),
-      token_balances_filter: [],
-      state_key_filter: null,
-      certificate_by_nonce: null,
-    },
-  };
-  const nonceResponse = await fetch(rpcUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(noncePayload),
-  });
-  const nonceResult = await nonceResponse.json() as { result?: { next_nonce: number } };
-  const nonce = nonceResult.result?.next_nonce ?? 0;
-
-  // Build ExternalClaim structure
-  // For bridging, we create a minimal ExternalClaim with the intent payload
-  const externalClaimData = {
-    claim: {
-      verifier_committee: [],  // Will be filled by validators
-      verifier_quorum: 0,
-      claim_data: Array.from(intentPayload),
-    },
-    signatures: [],  // Will be filled by validators
-  };
-
-  // Build proper transaction structure
-  const transaction: FastTransaction = {
-    network_id: fastNetworkId,
-    sender: publicKeyBytes,
-    nonce,
-    timestamp_nanos: BigInt(Date.now()) * 1_000_000n,
-    claim: {
-      ExternalClaim: externalClaimData,
-    },
-    archival: false,
-    fee_token: null,
-  };
-
-  // Sign: ed25519("VersionedTransaction::" + BCS(versioned_transaction))
-  const msgHead = new TextEncoder().encode('VersionedTransaction::');
-  const msgBody = serializeVersionedTransaction(transaction);
-  const msg = new Uint8Array(msgHead.length + msgBody.length);
-  msg.set(msgHead, 0);
-  msg.set(msgBody, msgHead.length);
-  const signatureBytes = await ed.signAsync(msg, privateKeyBytes.slice(0, 32));
-
-  // Submit to RPC
-  const payload = {
-    jsonrpc: '2.0',
-    id: Date.now(),
-    method: 'proxy_submitTransaction',
-    params: {
-      transaction: {
-        Release20260319: transaction,
-      },
-      signature: { Signature: Array.from(signatureBytes) },
-    },
-  };
-
-  const response = await fetch(rpcUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: toFastRpcJson(payload),
-  });
-
-  const result = await response.json() as {
-    result?: { Success?: unknown } | unknown;
-    error?: { message: string };
-  };
-
-  if (result.error) {
-    throw new Error(`Fast ExternalClaim error: ${result.error.message}`);
-  }
-
-  const submitResult = result.result as { Success?: unknown };
-  const certificate = submitResult?.Success ?? submitResult;
-
-  if (!certificate) {
-    throw new Error('No result from Fast ExternalClaim');
-  }
-  const txHash = getCertificateHash(certificate as FastTransactionCertificate);
-
-  return {
-    txHash,
-    certificate: certificate as TransactionResult['certificate'],
-  };
-}
-
-/**
- * Cross-sign a certificate via AllSet
- */
-async function crossSignCertificate(
-  certificate: TransactionResult['certificate']
-): Promise<{ transaction: number[]; signature: string }> {
-  const res = await fetch(CROSS_SIGN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'crossSign_evmSignCertificate',
-      params: { certificate },
-    }),
-  });
-
-  if (!res.ok) {
-    throw new Error(`Cross-sign request failed: ${res.status}`);
-  }
-
-  const json = await res.json() as {
-    result?: { transaction: number[]; signature: string };
-    error?: { message: string };
-  };
-
-  if (json.error) {
-    throw new Error(`Cross-sign error: ${json.error.message}`);
-  }
-
-  if (!json.result?.transaction || !json.result?.signature) {
-    throw new Error('Cross-sign returned invalid response');
-  }
-
-  return json.result;
-}
-
-// ─── Main Bridge Function ─────────────────────────────────────────────────────
-
 export interface BridgeParams {
-  /** Fast wallet with fastUSDC */
-  fastWallet: FastWallet;
+  /** Fast wallet with fastUSDC/testUSDC */
+  fastWallet: X402FastWallet;
   /** EVM address to receive USDC */
   evmReceiverAddress: string;
   /** Amount to bridge (raw, 6 decimals) */
   amount: bigint;
-  /** Target EVM network */
+  /** Target EVM network (e.g., 'arbitrum-sepolia') */
   network: string;
   /** Verbose logging */
   verbose?: boolean;
@@ -495,8 +77,66 @@ export interface BridgeResult {
   error?: string;
 }
 
+// ─── Public Functions ─────────────────────────────────────────────────────────
+
 /**
- * Bridge fastUSDC from Fast to USDC on EVM via AllSet
+ * Get bridge configuration for a network.
+ * Configurations are loaded from @fastxyz/allset-sdk.
+ */
+export function getBridgeConfig(network: string): BridgeChainConfig | null {
+  // Determine which AllSet network to use based on chain name
+  const isTestnet = network.includes('sepolia') || network === 'base';
+  const allset = getAllSetProvider(isTestnet ? 'testnet' : 'mainnet');
+  
+  // Map x402 network names to allset-sdk chain names
+  const chainName = network === 'ethereum-sepolia' ? 'ethereum-sepolia'
+    : network === 'arbitrum-sepolia' ? 'arbitrum-sepolia'
+    : network === 'base' ? 'base'
+    : network;
+  
+  const chainConfig = allset.getChainConfig(chainName);
+  if (!chainConfig) return null;
+  
+  const tokenConfig = allset.getTokenConfig(chainName, 'USDC');
+  if (!tokenConfig) return null;
+  
+  return {
+    chainId: chainConfig.chainId,
+    usdcAddress: tokenConfig.evmAddress,
+    fastBridgeAddress: chainConfig.fastBridgeAddress,
+    relayerUrl: chainConfig.relayerUrl,
+    bridgeContract: chainConfig.bridgeContract,
+  };
+}
+
+/**
+ * Get fastUSDC/testUSDC balance on Fast network.
+ * Uses @fastxyz/sdk's FastProvider.
+ */
+export async function getFastBalance(wallet: X402FastWallet): Promise<bigint> {
+  const isTestnet = !wallet.rpcUrl || wallet.rpcUrl.includes('testnet');
+  const provider = getFastProvider(isTestnet ? 'testnet' : 'mainnet');
+  
+  try {
+    const accountInfo = await provider.getAccountInfo(wallet.address);
+    if (!accountInfo?.token_balance) return 0n;
+
+    // Check for both mainnet fastUSDC and testnet testUSDC
+    for (const [tokenId, hexAmount] of accountInfo.token_balance) {
+      const tokenHex = Buffer.from(tokenId).toString('hex');
+      if (tokenHex === fastUSDC_TOKEN_ID || tokenHex === testUSDC_TOKEN_ID) {
+        return BigInt('0x' + hexAmount);
+      }
+    }
+    return 0n;
+  } catch {
+    return 0n;
+  }
+}
+
+/**
+ * Bridge fastUSDC/testUSDC from Fast to USDC on EVM via AllSet.
+ * Uses @fastxyz/allset-sdk's sendToExternal().
  */
 export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
   const { fastWallet, evmReceiverAddress, amount, network, verbose = false, logs = [] } = params;
@@ -508,138 +148,58 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
     }
   };
 
-  const bridgeConfig = getBridgeConfig(network);
-  if (!bridgeConfig) {
-    return { success: false, error: `Unsupported network for bridging: ${network}` };
-  }
-
+  // Determine network type
+  const isTestnet = network.includes('sepolia') || network === 'base';
+  const allsetNetwork = isTestnet ? 'testnet' : 'mainnet';
+  const tokenName = isTestnet ? 'testUSDC' : 'fastUSDC';
+  
   log(`━━━ AllSet Bridge START ━━━`);
-  log(`  Amount: ${Number(amount) / 1e6} fastUSDC`);
+  log(`  Amount: ${Number(amount) / 1e6} ${tokenName}`);
   log(`  From: ${fastWallet.address}`);
   log(`  To: ${evmReceiverAddress} on ${network}`);
+  log(`  Using: @fastxyz/allset-sdk sendToExternal()`);
 
   try {
-    const rpcUrl = fastWallet.rpcUrl || FAST_RPC_URL;
-
-    // Step 1: Transfer fastUSDC to Fast bridge account
-    log(`[Step 1] Transferring fastUSDC to Fast bridge...`);
-    const transferResult = await sendTokenTransfer(
-      fastWallet,
-      inferFastNetworkIdFromBridgeNetwork(network),
-      bridgeConfig.fastBridgeAddress,
-      amount,
-      fastUSDC_TOKEN_ID,
-      rpcUrl
-    );
-    log(`  ✓ Transfer tx: ${transferResult.txHash}`);
-
-    // Step 2: Cross-sign the transfer certificate
-    log(`[Step 2] Cross-signing transfer certificate...`);
-    const transferCrossSign = await crossSignCertificate(transferResult.certificate);
-    log(`  ✓ Transfer cross-signed`);
-
-    // Step 3: Build IntentClaim for DynamicTransfer
-    log(`[Step 3] Building IntentClaim...`);
+    // Get AllSet provider
+    const allset = getAllSetProvider(allsetNetwork);
     
-    // transferFastTxId is the BCS transaction hash (keccak256 of BCS-serialized transaction)
-    // This matches AllSetPortal's hashTransaction() function
-    const transferFastTxId = transferResult.txHash as `0x${string}`;
-    log(`  Transfer tx hash: ${transferFastTxId}`);
+    // Get Fast provider for the wallet
+    const fastProvider = getFastProvider(allsetNetwork);
     
-    // DynamicTransfer payload: (tokenAddress, recipient)
-    const dynamicTransferPayload = encodeAbiParameters(
-      [{ type: 'address' }, { type: 'address' }],
-      [
-        bridgeConfig.usdcAddress as `0x${string}`,
-        evmReceiverAddress as `0x${string}`,
-      ]
+    // Create a FastWallet from raw keys using @fastxyz/sdk
+    log(`[Step 1] Creating FastWallet from keys...`);
+    const sdkFastWallet = await FastWallet.fromPrivateKey(
+      fastWallet.privateKey,
+      fastProvider
     );
-
-    // Deadline: 1 hour from now
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
-
-    // IntentClaim struct
-    const intentClaimEncoded = encodeAbiParameters(
-      [{
-        type: 'tuple',
-        components: [
-          { name: 'transferFastTxId', type: 'bytes32' },
-          { name: 'deadline', type: 'uint256' },
-          {
-            name: 'intents',
-            type: 'tuple[]',
-            components: [
-              { name: 'action', type: 'uint8' },
-              { name: 'payload', type: 'bytes' },
-              { name: 'value', type: 'uint256' },
-            ],
-          },
-        ],
-      }],
-      [{
-        transferFastTxId: transferFastTxId,
-        deadline,
-        intents: [{
-          action: 1,  // DynamicTransfer
-          payload: dynamicTransferPayload,
-          value: 0n,
-        }],
-      }]
-    );
-
-    const intentBytes = hexToBytes(intentClaimEncoded);
-    log(`  ✓ IntentClaim built (${intentBytes.length} bytes)`);
-
-    // Step 4: Submit ExternalClaim on Fast
-    log(`[Step 4] Submitting ExternalClaim...`);
-    const intentResult = await submitExternalClaim(
-      fastWallet,
-      inferFastNetworkIdFromBridgeNetwork(network),
-      intentBytes,
-      rpcUrl
-    );
-    log(`  ✓ ExternalClaim tx: ${intentResult.txHash}`);
-
-    // Step 5: Cross-sign the intent certificate
-    log(`[Step 5] Cross-signing intent certificate...`);
-    const intentCrossSign = await crossSignCertificate(intentResult.certificate);
-    log(`  ✓ Intent cross-signed`);
-
-    // Step 6: POST to relayer
-    log(`[Step 6] Posting to relayer...`);
-    // AllSet relayer requires transfer_fast_tx_id and intent_fast_tx_id fields
-    const relayerBody = {
-      encoded_transfer_claim: Array.from(new Uint8Array(transferCrossSign.transaction.map(Number))),
-      transfer_proof: transferCrossSign.signature,
-      transfer_fast_tx_id: transferResult.txHash,
-      transfer_claim_id: transferResult.txHash,
-      fastset_address: fastWallet.address,
-      external_address: evmReceiverAddress,
-      encoded_intent_claim: Array.from(new Uint8Array(intentCrossSign.transaction.map(Number))),
-      intent_proof: intentCrossSign.signature,
-      intent_fast_tx_id: intentResult.txHash,
-      intent_claim_id: intentResult.txHash,
-      external_token_address: bridgeConfig.usdcAddress,
-    };
-
-    const relayRes = await fetch(`${bridgeConfig.relayerUrl}/relay`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(relayerBody),
-    });
-
-    if (!relayRes.ok) {
-      const text = await relayRes.text();
-      throw new Error(`Relayer request failed (${relayRes.status}): ${text}`);
+    log(`  ✓ FastWallet created: ${sdkFastWallet.address}`);
+    
+    // Verify address matches
+    if (sdkFastWallet.address !== fastWallet.address) {
+      throw new Error(
+        `Address mismatch: expected ${fastWallet.address}, got ${sdkFastWallet.address}`
+      );
     }
 
-    const relayResult = await relayRes.json();
-    log(`  ✓ Relayer accepted`);
+    // Call allset-sdk's sendToExternal
+    log(`[Step 2] Calling allset.sendToExternal()...`);
+    const result = await allset.sendToExternal({
+      chain: network,
+      token: tokenName,
+      amount: amount.toString(),
+      from: fastWallet.address,
+      to: evmReceiverAddress,
+      fastWallet: sdkFastWallet,
+    });
+    
+    log(`  ✓ Bridge submitted: ${result.txHash}`);
+    log(`  Order ID: ${result.orderId}`);
+    log(`  Estimated time: ${result.estimatedTime}`);
     log(`━━━ AllSet Bridge END ━━━`);
 
     return {
       success: true,
-      txHash: transferResult.txHash,
+      txHash: result.txHash,
     };
 
   } catch (error) {

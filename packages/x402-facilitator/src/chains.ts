@@ -1,7 +1,11 @@
 /**
  * Chain configurations for x402-facilitator
+ *
+ * USDC addresses are imported from allset-sdk where available.
+ * EIP-3009 metadata (usdcName, usdcVersion) stays local as it's x402-specific.
  */
 
+import { AllSetProvider } from "@fastxyz/allset-sdk/node";
 import {
   arbitrum,
   arbitrumSepolia,
@@ -10,49 +14,98 @@ import {
   mainnet,
   sepolia,
 } from "viem/chains";
+import type { Chain } from "viem";
 import type { EvmChainConfig } from "./types.js";
 
 /**
- * EVM chain configurations with USDC addresses
+ * EIP-3009 metadata for USDC contracts (x402-specific, not in SDKs)
  */
-export const EVM_CHAINS: Record<string, EvmChainConfig> = {
+interface Eip3009Metadata {
+  chain: Chain;
+  usdcName: string;
+  usdcVersion: string;
+  /** Fallback USDC address for chains not in allset-sdk */
+  fallbackUsdcAddress?: string;
+  /** Custom RPC URL (env var name) */
+  rpcEnvVar?: string;
+}
+
+const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
   "arbitrum-sepolia": {
     chain: arbitrumSepolia,
-    usdcAddress: "0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d",
     usdcName: "USD Coin",
     usdcVersion: "2",
   },
   arbitrum: {
     chain: arbitrum,
-    usdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
     usdcName: "USD Coin",
     usdcVersion: "2",
+    fallbackUsdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
   },
   "base-sepolia": {
     chain: baseSepolia,
-    usdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
     usdcName: "USDC",
     usdcVersion: "2",
+    fallbackUsdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
   },
   base: {
     chain: base,
-    usdcAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     usdcName: "USD Coin",
     usdcVersion: "2",
   },
   ethereum: {
     chain: mainnet,
-    usdcAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     usdcName: "USD Coin",
     usdcVersion: "2",
+    fallbackUsdcAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
   },
   "ethereum-sepolia": {
     chain: sepolia,
-    usdcAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
     usdcName: "USDC",
     usdcVersion: "2",
+    rpcEnvVar: "ETH_SEPOLIA_RPC",
   },
 };
+
+/**
+ * Build EVM chain configs by combining allset-sdk data with local EIP-3009 metadata
+ */
+function buildEvmChains(): Record<string, EvmChainConfig> {
+  const allset = new AllSetProvider({ network: "testnet" });
+  const chains: Record<string, EvmChainConfig> = {};
+
+  for (const [network, metadata] of Object.entries(EIP3009_METADATA)) {
+    // Try to get USDC address from allset-sdk
+    const tokenConfig = allset.getTokenConfig(network, "USDC");
+    const usdcAddress =
+      tokenConfig?.evmAddress ?? metadata.fallbackUsdcAddress ?? "";
+
+    if (!usdcAddress) {
+      console.warn(
+        `[x402-facilitator] No USDC address for ${network} in allset-sdk or fallback`
+      );
+      continue;
+    }
+
+    // Get RPC URL from environment variable if specified
+    const rpcUrl = metadata.rpcEnvVar ? process.env[metadata.rpcEnvVar] : undefined;
+
+    chains[network] = {
+      chain: metadata.chain,
+      rpcUrl,
+      usdcAddress: usdcAddress as `0x${string}`,
+      usdcName: metadata.usdcName,
+      usdcVersion: metadata.usdcVersion,
+    };
+  }
+
+  return chains;
+}
+
+/**
+ * EVM chain configurations with USDC addresses
+ */
+export const EVM_CHAINS: Record<string, EvmChainConfig> = buildEvmChains();
 
 /**
  * Fast RPC endpoints

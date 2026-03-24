@@ -4,13 +4,22 @@
 import { x402Pay } from '@fastxyz/x402-client';
 import { bech32m } from '@scure/base';
 
-// Buyer EVM wallet
-const EVM_PRIVATE_KEY = '0xb88b23e5b66a8739d8a4446d503c33f9817f53930f439a0394d9acc02d51be00';
-const EVM_ADDRESS = '0x4e94048ab8fD1A0f5D81ff458CA566198ce4C650';
+// Buyer EVM wallet - set via environment variables
+const EVM_PRIVATE_KEY = process.env.EVM_PRIVATE_KEY;
+const EVM_ADDRESS = process.env.EVM_ADDRESS;
 
-// Buyer Fast wallet (for auto-bridge)
-const FAST_PRIVATE_KEY = 'a7d4fa67fcf408d1154e22c4c83c6e1f8d4420b6dfb5a3c2f0417c509bd069b3';
-const FAST_PUBLIC_KEY = 'a60102d0078ab3a8f5440e33f670596791431d6f662b66901ce6dcdbb1cf259b';
+// Buyer Fast wallet (for auto-bridge) - set via environment variables
+const FAST_PRIVATE_KEY = process.env.FAST_PRIVATE_KEY;
+const FAST_PUBLIC_KEY = process.env.FAST_PUBLIC_KEY;
+
+if (!EVM_PRIVATE_KEY || !EVM_ADDRESS) {
+  console.error('ERROR: EVM_PRIVATE_KEY and EVM_ADDRESS environment variables required');
+  process.exit(1);
+}
+if (!FAST_PRIVATE_KEY || !FAST_PUBLIC_KEY) {
+  console.error('ERROR: FAST_PRIVATE_KEY and FAST_PUBLIC_KEY environment variables required');
+  process.exit(1);
+}
 
 // Derive Fast address
 function deriveFastAddress(pubKeyHex) {

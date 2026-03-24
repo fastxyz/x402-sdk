@@ -7,8 +7,13 @@ import { x402Pay } from '@fastxyz/x402-client';
 const SERVER_URL = 'http://localhost:3000';
 const ENDPOINT = '/api/fast-weather';
 
-// Buyer Fast wallet
-const BUYER_FAST_PRIVATE = 'a7d4fa67fcf408d1154e22c4c83c6e1f8d4420b6dfb5a3c2f0417c509bd069b3';
+// Buyer Fast wallet - set via environment variable
+const BUYER_FAST_PRIVATE = process.env.FAST_PRIVATE_KEY;
+
+if (!BUYER_FAST_PRIVATE) {
+  console.error('ERROR: FAST_PRIVATE_KEY environment variable required');
+  process.exit(1);
+}
 
 async function main() {
   console.log('═══════════════════════════════════════════════════════════════');

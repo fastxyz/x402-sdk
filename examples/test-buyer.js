@@ -4,9 +4,14 @@
 import { x402Pay } from '@fastxyz/x402-client';
 import { bech32m } from '@scure/base';
 
-// Buyer Fast wallet (has SETUSDC balance)
-const FAST_PRIVATE_KEY = 'a7d4fa67fcf408d1154e22c4c83c6e1f8d4420b6dfb5a3c2f0417c509bd069b3';
-const FAST_PUBLIC_KEY = 'a60102d0078ab3a8f5440e33f670596791431d6f662b66901ce6dcdbb1cf259b';
+// Buyer Fast wallet - set via environment variables
+const FAST_PRIVATE_KEY = process.env.FAST_PRIVATE_KEY;
+const FAST_PUBLIC_KEY = process.env.FAST_PUBLIC_KEY;
+
+if (!FAST_PRIVATE_KEY || !FAST_PUBLIC_KEY) {
+  console.error('ERROR: FAST_PRIVATE_KEY and FAST_PUBLIC_KEY environment variables required');
+  process.exit(1);
+}
 
 // Derive Fast address from public key
 function deriveFastAddress(pubKeyHex) {

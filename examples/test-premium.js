@@ -7,10 +7,19 @@ import { x402Pay } from '@fastxyz/x402-client';
 const SERVER_URL = 'http://localhost:3000';
 const ENDPOINT = '/api/premium/forecast';
 
-// Buyer wallets
-const BUYER_FAST_PRIVATE = 'a7d4fa67fcf408d1154e22c4c83c6e1f8d4420b6dfb5a3c2f0417c509bd069b3';
-const BUYER_EVM_PRIVATE = '0xb88b23e5b66a8739d8a4446d503c33f9817f53930f439a0394d9acc02d51be00';
-const BUYER_EVM_ADDRESS = '0x4e94048ab8fD1A0f5D81ff458CA566198ce4C650';
+// Buyer wallets - set via environment variables
+const BUYER_FAST_PRIVATE = process.env.FAST_PRIVATE_KEY;
+const BUYER_EVM_PRIVATE = process.env.EVM_PRIVATE_KEY;
+const BUYER_EVM_ADDRESS = process.env.EVM_ADDRESS;
+
+if (!BUYER_FAST_PRIVATE) {
+  console.error('ERROR: FAST_PRIVATE_KEY environment variable required');
+  process.exit(1);
+}
+if (!BUYER_EVM_PRIVATE || !BUYER_EVM_ADDRESS) {
+  console.error('ERROR: EVM_PRIVATE_KEY and EVM_ADDRESS environment variables required');
+  process.exit(1);
+}
 
 async function main() {
   console.log('═══════════════════════════════════════════════════════════════');
