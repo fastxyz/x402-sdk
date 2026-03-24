@@ -1,14 +1,14 @@
 # x402-facilitator
 
-Facilitator SDK for the [x402 HTTP payment protocol](https://github.com/Pi-Squared-Inc/x402-sdk).
-
-Verify and settle x402 payments on-chain. Supports EVM (EIP-3009) and Fast networks.
+Facilitator SDK for the [x402 HTTP payment protocol](https://github.com/fastxyz/x402-sdk) — verify signatures and settle payments on-chain.
 
 ## Install
 
 ```bash
 npm install @fastxyz/x402-facilitator
 ```
+
+---
 
 ## Quick Start
 
@@ -19,11 +19,10 @@ import express from 'express';
 import { createFacilitatorServer } from '@fastxyz/x402-facilitator';
 
 const app = express();
-app.use(express.json());
+app.use(express.json());  // Required!
 
-// Add facilitator endpoints: /verify, /settle, /supported
 app.use(createFacilitatorServer({
-  evmPrivateKey: process.env.FACILITATOR_PRIVATE_KEY as `0x${string}`,
+  evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
 }));
 
 app.listen(4020, () => {
@@ -31,23 +30,13 @@ app.listen(4020, () => {
 });
 ```
 
-### As a Library
+### As Library
 
 ```typescript
 import { verify, settle } from '@fastxyz/x402-facilitator';
 
 // Verify a payment
-const verifyResult = await verify(paymentPayload, paymentRequirement, {
-  fastRpcUrl: process.env.FAST_RPC_URL,
-  committeePublicKeys: {
-    "fast-mainnet": [
-      "fast19g84suye87kz7gyenc37wcur3fq9jhr08kt37vn7ye9u23pwtxxq7p6cwt",
-      "fast1qdrnhs6j8cxzkr39nvtey5thgaj8sfrns4p30ageurska8th76qqca2xdk",
-      "fast1kn28706rjphn23qsmgw2qtyyx6342zz46yzmp55uzddk5fekzwrsmjr888",
-      "fast1pqsshd4wddrwa72a0q2aztgcyrpk3adxarrke3xa8qftvlx4gvjqgelxwk",
-    ],
-  },
-});
+const verifyResult = await verify(paymentPayload, paymentRequirement);
 if (!verifyResult.isValid) {
   console.error('Invalid:', verifyResult.invalidReason);
 }
@@ -56,195 +45,195 @@ if (!verifyResult.isValid) {
 const settleResult = await settle(paymentPayload, paymentRequirement, {
   evmPrivateKey: '0x...',
 });
+console.log('Settled:', settleResult.txHash);
 ```
 
-## How It Works
+---
 
-### EVM Payments (EIP-3009)
-
-1. **Verify**: Validate the EIP-3009 signature using `verifyTypedData`
-   - Check signature recovers to claimed payer
-   - Verify recipient matches payment requirement
-   - Check timing (validAfter/validBefore)
-   - Verify on-chain USDC balance
-
-2. **Settle**: Submit `transferWithAuthorization` on-chain
-   - Re-verify payment before settling
-   - Check authorization nonce not already used
-   - Submit transaction and wait for confirmation
-
-### Fast Payments
-
-1. **Verify**: Decode and validate transaction certificate
-   - Require the Fast RPC object certificate shape
-   - Verify the sender Ed25519 signature against `Transaction::` + the serialized transaction
-   - Verify each committee Ed25519 signature against the serialized transaction
-   - Verify each committee signer is in the trusted committee for the selected network
-   - Cross-check the submitted certificate against the network certificate returned by `proxy_getAccountInfo` for the sender nonce
-   - Decode the canonical transaction bytes to extract transfer details
-   - Verify recipient matches `paymentRequirement.payTo`
-   - Verify amount ≥ `maxAmountRequired`
-   - Verify token matches `paymentRequirement.asset`
-
-2. **Settle**: No-op — Fast transactions are already on-chain
-   - Returns success with the deterministic Fast transaction hash
-
-## API
-
-### Endpoints
-
-When using `createFacilitatorServer()`:
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/verify` | POST | Verify a payment signature/certificate |
-| `/settle` | POST | Settle a payment on-chain (EVM) |
-| `/supported` | GET | List supported payment kinds |
-
-### Request Format
+## Configuration
 
 ```typescript
-// POST /verify, /settle
+interface FacilitatorConfig {
+  evmPrivateKey?: `0x${string}`;             // Needed for EVM settlement
+  fastRpcUrl?: string;                       // Override Fast verification RPC
+  committeePublicKeys?: Record<string, string[]>;
+}
+```
+
+For Ethereum Sepolia verification, you can also override the default RPC with the `ETH_SEPOLIA_RPC` environment variable.
+
+---
+
+## API Endpoints
+
+### POST /verify
+
+Verify a payment signature or certificate.
+
+**Request:**
+```json
 {
-  "paymentPayload": "base64-encoded-payload",  // or decoded object
+  "paymentPayload": "base64-or-object",
   "paymentRequirements": {
     "scheme": "exact",
-    "network": "arbitrum-sepolia",
+    "network": "base",
     "maxAmountRequired": "100000",
-    "payTo": "0x...",
-    "asset": "0x...",
-    // ...
+    "payTo": "0x..."
   }
 }
 ```
 
-### Response Format
-
-```typescript
-// /verify response
+**Response:**
+```json
 {
   "isValid": true,
   "payer": "0x...",
-  "network": "arbitrum-sepolia"
+  "network": "base"
 }
+```
 
-// /settle response
+### POST /settle
+
+Settle an EVM payment on-chain. Not needed for Fast payments.
+
+**Response (success):**
+```json
 {
   "success": true,
-  "transaction": "0x...",
   "txHash": "0x...",
-  "network": "arbitrum-sepolia",
+  "network": "base",
   "payer": "0x..."
 }
+```
 
-// /supported response
+### GET /supported
+
+List supported payment kinds.
+
+**Response:**
+```json
 {
   "paymentKinds": [
     {
       "x402Version": 1,
       "scheme": "exact",
-      "network": "arbitrum-sepolia",
-      "extra": { "asset": "0x...", "name": "USD Coin", "version": "2" }
+      "network": "base",
+      "extra": {
+        "asset": "0x...",
+        "name": "USD Coin",
+        "version": "2"
+      }
+    },
+    {
+      "x402Version": 1,
+      "scheme": "exact",
+      "network": "fast-mainnet"
     }
   ]
 }
 ```
 
-### Functions
+---
 
-```typescript
-import { verify, settle, createFacilitatorServer } from '@fastxyz/x402-facilitator';
+## Verification Logic
 
-// Verify payment
-verify(paymentPayload, paymentRequirement, config?): Promise<VerifyResponse>
+### EVM Payments (EIP-3009)
 
-// Settle payment
-settle(paymentPayload, paymentRequirement, config): Promise<SettleResponse>
+1. Recover signer from EIP-712 signature
+2. Check `from` matches recovered signer
+3. Check `to` matches `paymentRequirement.payTo`
+4. Check `value` >= `maxAmountRequired`
+5. Check `validAfter <= now < validBefore`
+6. Verify on-chain USDC balance
 
-// Create Express middleware
-createFacilitatorServer(config): ExpressMiddleware
-```
+### Fast Payments
 
-### Configuration
+1. Validate certificate structure
+2. Verify sender signature
+3. Verify committee signatures
+4. Check recipient, amount, token match
+5. No settlement needed (already on-chain)
 
-```typescript
-interface FacilitatorConfig {
-  /** EVM private key for settling EIP-3009 authorizations */
-  evmPrivateKey?: `0x${string}`;
-  /** Fast RPC endpoint override used for Fast verification */
-  fastRpcUrl?: string;
-  /**
-   * Trusted Fast committee public keys by network.
-   * Values may be 32-byte hex strings or fast1.../set1... addresses.
-   */
-  committeePublicKeys?: Record<string, string[]>;
-}
-```
+---
 
-For the official `fast-testnet` and `fast-mainnet` networks, `x402-facilitator` ships with bundled committee snapshots. Use `committeePublicKeys` to override those defaults or to configure custom Fast deployments. In production, source these values from the official Fast deployment committee manifest and ship them with your application config rather than relying on a local checkout.
+## Settlement Logic
+
+### EVM Payments
+
+1. Re-verify payment
+2. Check nonce not already used
+3. Call `transferWithAuthorization()` on USDC
+4. Wait for confirmation
+5. Return transaction hash
+
+### Fast Payments
+
+No-op — transaction already on-chain when certificate was created.
+
+---
 
 ## Supported Networks
 
-### EVM
-| Network | Chain ID | USDC |
-|---------|----------|------|
-| `arbitrum-sepolia` | 421614 | ✓ |
-| `arbitrum` | 42161 | ✓ |
-| `base-sepolia` | 84532 | ✓ |
-| `base` | 8453 | ✓ |
-| `ethereum` | 1 | ✓ |
+### Mainnet
 
-USDC addresses are imported from `@fastxyz/allset-sdk` where available, with local fallbacks for chains not yet in allset-sdk.
+| Network | Type | Chain ID |
+|---------|------|----------|
+| `fast-mainnet` | Fast | — |
+| `arbitrum` | EVM | 42161 |
+| `base` | EVM | 8453 |
 
-### Fast
-| Network | Description |
-|---------|-------------|
-| `fast-testnet` | Fast testnet |
-| `fast-mainnet` | Fast mainnet |
+### Testnet
 
-Fast token IDs are imported from `@fastxyz/allset-sdk` (testUSDC, fastUSDC).
+| Network | Type | Chain ID |
+|---------|------|----------|
+| `fast-testnet` | Fast | — |
+| `ethereum-sepolia` | EVM | 11155111 |
+| `arbitrum-sepolia` | EVM | 421614 |
 
-## Error Reasons
+---
 
-### EVM Errors
-| Reason | Description |
-|--------|-------------|
-| `unsupported_scheme` | Scheme is not "exact" |
-| `invalid_network` | Network not supported or mismatch |
-| `invalid_payload` | Missing required fields |
-| `invalid_exact_evm_payload_signature` | Signature verification failed |
-| `invalid_exact_evm_payload_recipient_mismatch` | Payment recipient doesn't match |
-| `invalid_exact_evm_payload_authorization_value` | Amount too low |
-| `invalid_exact_evm_payload_authorization_valid_before` | Authorization expired |
-| `invalid_exact_evm_payload_authorization_valid_after` | Authorization not yet valid |
-| `insufficient_funds` | Payer doesn't have enough USDC |
-| `authorization_already_used` | Nonce already used |
-| `facilitator_not_configured` | Missing evmPrivateKey |
+## Wallet Setup
 
-### Fast Errors
-| Reason | Description |
-|--------|-------------|
-| `missing_envelope` | Certificate has no envelope |
-| `missing_transaction` | Certificate envelope has no transaction |
-| `missing_transaction_signature` | Certificate envelope has no sender signature |
-| `missing_signatures` | Certificate has no signatures |
-| `insufficient_signatures` | Not enough committee signatures |
-| `unsupported_fast_certificate_format` | Certificate is not in the supported Fast RPC object format |
-| `unsupported_fast_transaction_multisig` | MultiSig transaction envelopes are not supported |
-| `invalid_transaction` | Transaction payload could not be serialized canonically |
-| `fast_certificate_lookup_failed` | Fast proxy lookup failed |
-| `fast_certificate_not_found` | No settled Fast certificate was found for the sender nonce |
-| `fast_certificate_mismatch` | Submitted certificate does not match the network certificate |
-| `invalid_network_fast_certificate` | Fast proxy returned an invalid certificate |
-| `invalid_committee_configuration` | Trusted committee config could not be parsed |
-| `invalid_fast_transaction_signature` | Sender signature verification failed |
-| `invalid_fast_committee_signature` | Committee signature verification failed |
-| `duplicate_committee_signature` | The same committee public key appeared more than once |
-| `unknown_fast_committee_signer` | Committee signer is not in the trusted committee |
-| `not_a_token_transfer` | Transaction is not a TokenTransfer |
-| `recipient_mismatch` | Recipient doesn't match payTo |
-| `insufficient_amount` | Transfer amount too low |
-| `token_mismatch` | Token doesn't match asset |
+The facilitator wallet needs:
+- **ETH for gas** on each supported EVM chain
+- **No USDC needed** (uses `transferWithAuthorization`)
+
+```bash
+# Get facilitator address
+npx ts-node -e "
+  import { privateKeyToAccount } from 'viem/accounts';
+  console.log(privateKeyToAccount(process.env.FACILITATOR_KEY).address);
+"
+
+# Fund on Base mainnet
+cast send --rpc-url https://mainnet.base.org \
+  --private-key $FUNDER_KEY \
+  $FACILITATOR_ADDRESS \
+  --value 0.05ether
+```
+
+---
+
+## Troubleshooting
+
+### Verification Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `invalid_signature` | Signature verification failed | Check client wallet |
+| `recipient_mismatch` | Wrong payTo address | Check server config |
+| `insufficient_amount` | Payment too low | Check price config |
+| `insufficient_funds` | Payer has no USDC | Client needs to fund |
+
+### Settlement Errors
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `authorization_already_used` | Nonce reused | Client must use fresh nonce |
+| `facilitator_not_configured` | Missing evmPrivateKey | Add key to config |
+| `settlement_failed` | On-chain tx failed | Check facilitator has gas |
+
+---
 
 ## License
 

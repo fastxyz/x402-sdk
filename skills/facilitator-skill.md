@@ -3,61 +3,201 @@ name: x402-facilitator
 description: >
   Facilitator service for verifying and settling x402 payments. Use when the user wants to run
   a facilitator, verify EIP-3009 signatures, settle EVM payments on-chain, or validate Fast
-  transaction certificates. Trigger on facilitator setup, payment verification, or settlement.
+  transaction certificates.
 metadata:
   package: "@fastxyz/x402-facilitator"
-  version: 0.1.0
+  short-description: Verify signatures and settle payments on-chain.
 ---
 
-# x402-facilitator
+# x402-facilitator Skill
 
-Verify payment signatures and settle EVM payments on-chain. Required infrastructure for x402 servers.
+## When to Use This Skill
 
-## Install
+**USE this skill when the user wants to:**
+- Run a payment verification/settlement service
+- Verify EIP-3009 signatures (EVM payments)
+- Validate Fast transaction certificates
+- Settle EVM payments on-chain
+- Integrate verification into custom flow
 
-```bash
-npm install @fastxyz/x402-facilitator
+**DO NOT use this skill for:**
+- Paying for content → use `x402-client`
+- Protecting API routes → use `x402-server`
+- General blockchain operations → use `@fastxyz/sdk` or `@fastxyz/allset-sdk`
+
+---
+
+## Decision Tree: Usage Mode
+
+```
+How do you want to use the facilitator?
+│
+├── Run as standalone service
+│   └── Use createFacilitatorServer() with Express
+│
+├── Integrate into existing Express app
+│   └── Use createFacilitatorServer() as middleware
+│
+└── Use verification/settlement in custom logic
+    └── Import verify() and settle() functions directly
 ```
 
-## Quick Start
+---
 
-```typescript
-import express from 'express';
-import { createFacilitatorServer } from '@fastxyz/x402-facilitator';
+## Workflows
 
-const app = express();
-app.use(express.json());
+### 1. Run Standalone Facilitator
 
-app.use(createFacilitatorServer({
-  evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
-}));
+**When:** Need a dedicated facilitator service.
 
-app.listen(4020, () => console.log('Facilitator on :4020'));
-```
+**Prerequisites:** EVM private key with ETH for gas on each chain.
 
-## Files To Read
+**Steps:**
 
-- `packages/x402-facilitator/src/index.ts` - Public exports
-- `packages/x402-facilitator/src/server.ts` - Express server factory
-- `packages/x402-facilitator/src/verify.ts` - Signature verification
-- `packages/x402-facilitator/src/settle.ts` - On-chain settlement
-- `packages/x402-facilitator/src/chains.ts` - Chain configurations
+1. Install package:
+   ```bash
+   npm install @fastxyz/x402-facilitator express
+   ```
 
-## Configuration
+2. Create server:
+   ```typescript
+   import express from 'express';
+   import { createFacilitatorServer } from '@fastxyz/x402-facilitator';
 
-```typescript
-interface FacilitatorConfig {
-  // Required: Private key for settling EVM payments (pays gas)
-  evmPrivateKey: `0x${string}`;
-  
-  // Optional: Custom RPC URLs
-  rpcUrls?: {
-    'arbitrum-sepolia'?: string;
-    'base-sepolia'?: string;
-    // ...
-  };
-}
-```
+   const app = express();
+   app.use(express.json());  // Required!
+
+   app.use(createFacilitatorServer({
+     evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
+   }));
+
+   app.listen(4020, () => {
+     console.log('Facilitator running on http://localhost:4020');
+   });
+   ```
+
+3. Fund facilitator wallet with ETH on each supported chain.
+
+4. Test health:
+   ```bash
+   curl http://localhost:4020/supported
+   ```
+
+---
+
+### 2. Add to Existing Express App
+
+**When:** Want facilitator endpoints on existing server.
+
+**Steps:**
+
+1. Add middleware:
+   ```typescript
+   import { createFacilitatorServer } from '@fastxyz/x402-facilitator';
+
+   // Existing Express app
+   app.use(express.json());
+   
+   // Add facilitator endpoints at /facilitator/*
+   app.use('/facilitator', createFacilitatorServer({
+     evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
+   }));
+   ```
+
+2. Endpoints available at:
+   - `POST /facilitator/verify`
+   - `POST /facilitator/settle`
+   - `GET /facilitator/supported`
+
+---
+
+### 3. Use as Library
+
+**When:** Need custom verification/settlement logic.
+
+**Steps:**
+
+1. Import functions:
+   ```typescript
+   import { verify, settle } from '@fastxyz/x402-facilitator';
+   ```
+
+2. Verify a payment:
+   ```typescript
+   const verifyResult = await verify(paymentPayload, paymentRequirement);
+   
+   if (!verifyResult.isValid) {
+     console.error('Invalid:', verifyResult.invalidReason);
+     return;
+   }
+   
+   console.log('Valid payment from:', verifyResult.payer);
+   ```
+
+3. Settle an EVM payment:
+   ```typescript
+   const settleResult = await settle(paymentPayload, paymentRequirement, {
+     evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
+   });
+   
+   if (settleResult.success) {
+     console.log('Settled:', settleResult.txHash);
+   } else {
+     console.error('Failed:', settleResult.errorReason);
+   }
+   ```
+
+---
+
+### 4. Configure Verification Overrides
+
+**When:** You need to override Fast verification settings.
+
+**Steps:**
+
+1. Pass supported overrides in config:
+   ```typescript
+   createFacilitatorServer({
+     evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
+     fastRpcUrl: 'https://my-fast-rpc.example.com/proxy',
+     committeePublicKeys: {
+       'fast-mainnet': ['0xvalidator1', '0xvalidator2'],
+     },
+   });
+   ```
+
+2. For Ethereum Sepolia, set `ETH_SEPOLIA_RPC` before starting the facilitator.
+
+---
+
+### 5. Fund Facilitator Wallet
+
+**When:** Facilitator needs gas for EVM settlements.
+
+**Steps:**
+
+1. Get facilitator address from private key:
+   ```typescript
+   import { privateKeyToAccount } from 'viem/accounts';
+   
+   const account = privateKeyToAccount(process.env.FACILITATOR_KEY as `0x${string}`);
+   console.log('Fund this address:', account.address);
+   ```
+
+2. Send ETH to facilitator on each chain:
+   ```bash
+   # Example: Base mainnet
+   cast send --rpc-url https://mainnet.base.org \
+     --private-key $FUNDER_KEY \
+     $FACILITATOR_ADDRESS \
+     --value 0.01ether
+   ```
+
+3. Recommended amounts:
+   - Testnets: 0.01 ETH
+   - Mainnets: 0.05-0.1 ETH (depends on usage)
+
+---
 
 ## API Endpoints
 
@@ -68,13 +208,12 @@ Verify a payment signature or certificate.
 **Request:**
 ```json
 {
-  "paymentPayload": { ... },
-  "paymentRequirement": {
+  "paymentPayload": "base64-or-object",
+  "paymentRequirements": {
     "scheme": "exact",
-    "network": "arbitrum-sepolia",
+    "network": "base",
     "maxAmountRequired": "100000",
-    "payTo": "0x1234...",
-    "maxTimeoutSeconds": 60
+    "payTo": "0x..."
   }
 }
 ```
@@ -82,7 +221,9 @@ Verify a payment signature or certificate.
 **Response (valid):**
 ```json
 {
-  "isValid": true
+  "isValid": true,
+  "payer": "0x...",
+  "network": "base"
 }
 ```
 
@@ -90,7 +231,7 @@ Verify a payment signature or certificate.
 ```json
 {
   "isValid": false,
-  "reason": "Insufficient amount"
+  "invalidReason": "Insufficient amount"
 }
 ```
 
@@ -98,20 +239,15 @@ Verify a payment signature or certificate.
 
 Settle an EVM payment on-chain. Not needed for Fast payments.
 
-**Request:**
-```json
-{
-  "paymentPayload": { ... },
-  "paymentRequirement": { ... }
-}
-```
+**Request:** Same as /verify
 
 **Response (success):**
 ```json
 {
   "success": true,
   "txHash": "0x...",
-  "network": "arbitrum-sepolia"
+  "network": "base",
+  "payer": "0x..."
 }
 ```
 
@@ -119,35 +255,103 @@ Settle an EVM payment on-chain. Not needed for Fast payments.
 ```json
 {
   "success": false,
-  "error": "Settlement failed: nonce already used"
+  "errorReason": "authorization_already_used"
 }
 ```
 
 ### GET /supported
 
-List supported networks.
+List supported payment kinds.
 
 **Response:**
 ```json
 {
-  "networks": [
-    "fast-testnet",
-    "fast-mainnet", 
-    "arbitrum-sepolia",
-    "arbitrum",
-    "base-sepolia",
-    "base",
-    "ethereum"
+  "paymentKinds": [
+    {
+      "x402Version": 1,
+      "scheme": "exact",
+      "network": "base",
+      "extra": {
+        "asset": "0x...",
+        "name": "USD Coin",
+        "version": "2"
+      }
+    },
+    {
+      "x402Version": 1,
+      "scheme": "exact",
+      "network": "fast-mainnet"
+    }
   ]
 }
 ```
+
+---
+
+## Common Mistakes (DO NOT)
+
+1. **DO NOT** forget express.json() middleware:
+   ```typescript
+   // WRONG
+   app.use(createFacilitatorServer({ ... }));
+   
+   // CORRECT
+   app.use(express.json());
+   app.use(createFacilitatorServer({ ... }));
+   ```
+
+2. **DO NOT** expose private key in logs or errors:
+   ```typescript
+   // WRONG
+   console.log('Using key:', process.env.FACILITATOR_KEY);
+   
+   // CORRECT
+   console.log('Facilitator address:', account.address);
+   ```
+
+3. **DO NOT** forget to fund facilitator wallet:
+   - Facilitator needs ETH for gas on each EVM chain
+   - No USDC needed (uses transferWithAuthorization)
+
+4. **DO NOT** reuse nonces:
+   ```typescript
+   // Each EIP-3009 authorization has a unique nonce
+   // Facilitator checks nonce hasn't been used before settling
+   // If you see "authorization_already_used", client sent stale payment
+   ```
+
+---
+
+## Error Handling
+
+### Verification Errors
+
+| Error | Meaning | Fix |
+|-------|---------|-----|
+| `unsupported_scheme` | Scheme not "exact" | Check payment format |
+| `invalid_network` | Network not supported | Check supported networks |
+| `invalid_payload` | Missing required fields | Check payment structure |
+| `invalid_signature` | Signature verification failed | Check client wallet |
+| `recipient_mismatch` | Wrong payTo address | Check server config |
+| `insufficient_amount` | Payment too low | Check price config |
+| `insufficient_funds` | Payer has no USDC | Client needs to fund |
+
+### Settlement Errors
+
+| Error | Meaning | Fix |
+|-------|---------|-----|
+| `authorization_already_used` | Nonce reused | Client must use fresh nonce |
+| `facilitator_not_configured` | Missing evmPrivateKey | Add private key to config |
+| `settlement_failed` | On-chain tx failed | Check facilitator has gas |
+
+---
 
 ## Verification Logic
 
 ### EVM Payments (EIP-3009)
 
 1. Extract authorization params from payload
-2. Recover signer from EIP-712 signature (`verifyTypedData`)
+2. Recover signer from EIP-712 signature
 3. Check `from` matches recovered signer
 4. Check `to` matches `paymentRequirement.payTo`
 5. Check `value` >= `paymentRequirement.maxAmountRequired`
@@ -157,88 +361,50 @@ List supported networks.
 ### Fast Payments
 
 1. Check certificate structure (envelope + signatures)
-2. Validate scheme matches (`fast`)
-3. Validate network matches (`fast-testnet` or `fast-mainnet`)
-4. *(Future: Query Fast RPC for on-chain verification)*
+2. Verify sender signature over transaction
+3. Verify committee signatures
+4. Check recipient, amount, and token match requirements
+5. No settlement needed (already on-chain)
 
-## Settlement Logic
+---
 
-### EVM Payments
+## Supported Networks
 
-1. Re-verify payment (same as /verify)
-2. Check nonce not already used on-chain
-3. Call `transferWithAuthorization()` on USDC contract
-4. Wait for transaction confirmation
-5. Return transaction hash
+### Mainnet
 
-### Fast Payments
+| Network | Type | Chain ID |
+|---------|------|----------|
+| `fast-mainnet` | Fast | — |
+| `arbitrum` | EVM | 42161 |
+| `base` | EVM | 8453 |
 
-No settlement needed — transaction already on-chain when certificate was created.
+### Testnet
 
-## Using as a Library
+| Network | Type | Chain ID |
+|---------|------|----------|
+| `fast-testnet` | Fast | — |
+| `ethereum-sepolia` | EVM | 11155111 |
+| `arbitrum-sepolia` | EVM | 421614 |
+
+---
+
+## Quick Reference
 
 ```typescript
-import { verify, settle } from '@fastxyz/x402-facilitator';
+import express from 'express';
+import { createFacilitatorServer, verify, settle } from '@fastxyz/x402-facilitator';
 
-// Verify a payment
+// Standalone server
+const app = express();
+app.use(express.json());
+app.use(createFacilitatorServer({
+  evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
+}));
+app.listen(4020);
+
+// Library usage
 const verifyResult = await verify(paymentPayload, paymentRequirement);
-if (!verifyResult.isValid) {
-  console.log('Invalid:', verifyResult.reason);
-}
-
-// Settle an EVM payment
-const settleResult = await settle(
-  paymentPayload, 
-  paymentRequirement,
-  evmPrivateKey,
-);
-console.log('Settled:', settleResult.txHash);
-```
-
-## Chain Configuration
-
-Default RPC URLs and USDC contract addresses are configured in `src/chains.ts`.
-
-```typescript
-const EVM_CHAINS = {
-  'arbitrum-sepolia': {
-    chainId: 421614,
-    rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-    usdc: '0x75faf114eafb1bdbe2f0316df893fd58ce46aa4d',
-  },
-  // ...
-};
-```
-
-## Troubleshooting
-
-### `INVALID_SIGNATURE`
-- Check EIP-712 domain matches (name: "USD Coin", version: "2", chainId, verifyingContract)
-- Verify signature was created by the `from` address
-
-### `INSUFFICIENT_BALANCE`
-- Client doesn't have enough USDC on-chain
-- Check balance before signing authorization
-
-### `NONCE_ALREADY_USED`
-- Each EIP-3009 nonce can only be used once
-- Client must generate fresh random nonce for each payment
-
-### `SETTLEMENT_FAILED`
-- Facilitator wallet needs ETH for gas
-- Check RPC URL is working
-- Verify USDC contract address is correct
-
-### Facilitator wallet setup
-
-The facilitator wallet needs:
-- ETH for gas on each supported EVM chain
-- No USDC needed (it calls transferWithAuthorization, not transfer)
-
-```bash
-# Example: Fund facilitator on Arbitrum Sepolia
-cast send --rpc-url $ARBITRUM_SEPOLIA_RPC \
-  --private-key $FUNDER_KEY \
-  $FACILITATOR_ADDRESS \
-  --value 0.01ether
+const settleResult = await settle(paymentPayload, paymentRequirement, {
+  evmPrivateKey: '0x...',
+});
 ```

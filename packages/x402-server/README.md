@@ -1,14 +1,14 @@
 # x402-server
 
-Server SDK for the [x402 HTTP payment protocol](https://github.com/Pi-Squared-Inc/x402-sdk).
-
-Protect API routes with crypto payments — works with Express and compatible frameworks.
+Server SDK for the [x402 HTTP payment protocol](https://github.com/fastxyz/x402-sdk) — protect API routes with crypto payments.
 
 ## Install
 
 ```bash
 npm install @fastxyz/x402-server
 ```
+
+---
 
 ## Quick Start
 
@@ -18,14 +18,12 @@ import { paymentMiddleware } from '@fastxyz/x402-server';
 
 const app = express();
 
-// Protect routes with payment requirements
 app.use(paymentMiddleware(
-  "0x1234567890abcdef...",  // Your payment address
+  '0xYourPaymentAddress...',
   {
-    "GET /api/premium/*": { price: "$0.10", network: "arbitrum-sepolia" },
-    "POST /api/generate": { price: "$0.50", network: "base-sepolia" },
+    'GET /api/premium/*': { price: '$0.10', network: 'base' },
   },
-  { url: "http://localhost:4020" }  // Facilitator URL
+  { url: 'http://localhost:4020' }
 ));
 
 app.get('/api/premium/data', (req, res) => {
@@ -35,197 +33,170 @@ app.get('/api/premium/data', (req, res) => {
 app.listen(3000);
 ```
 
-## Multi-Network Support (EVM + Fast)
+---
 
-Accept payments on both EVM and Fast networks:
+## Payment Address Setup
+
+### Single Network
+
+```typescript
+app.use(paymentMiddleware(
+  '0xYourAddress...',  // EVM address
+  routes,
+  { url: 'http://localhost:4020' }
+));
+```
+
+### Multi-Network (EVM + Fast)
 
 ```typescript
 app.use(paymentMiddleware(
   {
-    evm: "0x1234567890abcdef...",     // Receives EVM payments
-    fast: "fast1abc123xyz...",      // Receives Fast payments
+    evm: '0xYourEvmAddress...',
+    fast: 'fast1YourFastAddress...',
   },
   {
-    "GET /api/evm/data": { price: "$0.10", network: "arbitrum-sepolia" },
-    "GET /api/fast/data": { price: "$0.01", network: "fast-testnet" },
+    'GET /api/evm/*': { price: '$0.10', network: 'base' },
+    'GET /api/fast/*': { price: '$0.01', network: 'fast-testnet' },
   },
-  { url: "http://localhost:4020" }
+  { url: 'http://localhost:4020' }
 ));
 ```
 
-## How It Works
+---
 
-The middleware intercepts requests and handles payment verification:
+## Route Configuration
 
-### Fast Payments (Already On-Chain)
-```
-Client signs & submits TokenTransfer → Gets certificate
-                    ↓
-Request with X-PAYMENT (certificate) → Server
-                    ↓
-Server calls Facilitator /verify → Certificate valid?
-                    ↓
-              ✅ Serve Content
-```
-Fast payments are submitted by the client before the request. The server only verifies the transaction certificate — no settlement step needed.
+### Route Patterns
 
-### EVM Payments (Authorization Only)
-```
-Client signs EIP-3009 authorization
-                    ↓
-Request with X-PAYMENT (signature) → Server
-                    ↓
-Server calls Facilitator /verify → Signature valid?
-                    ↓
-Server calls Facilitator /settle → Submit on-chain
-                    ↓
-              ✅ Serve Content
-```
-EVM payments use EIP-3009 `transferWithAuthorization`. The client signs an authorization, but the facilitator must submit it on-chain before content is served.
+| Pattern | Matches |
+|---------|---------|
+| `/api/data` | Exact path, any method |
+| `GET /api/data` | Exact path, GET only |
+| `/api/*` | Any path under /api/ |
+| `GET /api/*` | Any path under /api/, GET only |
 
-## API
-
-### paymentMiddleware
-
-```typescript
-import { paymentMiddleware } from '@fastxyz/x402-server';
-
-paymentMiddleware(payTo, routes, facilitator)
-```
-
-**Parameters:**
-
-| Name | Type | Description |
-|------|------|-------------|
-| `payTo` | `string \| { evm?: string, fast?: string }` | Payment address(es) |
-| `routes` | `Record<string, RouteConfig>` | Route patterns → payment config |
-| `facilitator` | `FacilitatorConfig` | Facilitator service config |
-
-### RouteConfig
+### Route Options
 
 ```typescript
 interface RouteConfig {
-  price: string;      // "$0.10", "0.1 USDC", or "100000" (raw units)
-  network: string;    // "arbitrum-sepolia", "fast-testnet", etc.
+  price: string;         // '$0.10', '0.1', or '100000' (raw units)
+  network: string;       // Network identifier
   config?: {
-    description?: string;
-    mimeType?: string;
-    asset?: string;   // Custom token address (defaults to USDC)
+    description?: string;  // Human-readable description
+    mimeType?: string;     // Response MIME type hint
+    asset?: string;        // Custom token address (default: USDC)
   };
 }
 ```
 
-**Route patterns:**
-- `"/api/data"` — matches any HTTP method
-- `"GET /api/data"` — matches GET only
-- `"/api/*"` — wildcard matching
-- `"/api/:id"` — path parameters
+### Price Formats
 
-### FacilitatorConfig
+All equivalent ($0.10 USDC):
 
 ```typescript
-interface FacilitatorConfig {
-  url: string;  // Facilitator service URL
-  createAuthHeaders?: () => Promise<{
-    verify?: Record<string, string>;
-    settle?: Record<string, string>;
-  }>;
-}
+{ price: '$0.10' }      // Dollar notation
+{ price: '0.1' }        // Decimal USDC
+{ price: '100000' }     // Raw units (6 decimals)
 ```
 
-## Supported Networks
+---
 
-### Fast
-| Network | Description |
-|---------|-------------|
-| `fast-testnet` | Fast testnet |
-| `fast-mainnet` | Fast mainnet |
+## API
 
-### EVM
-| Network | Chain ID |
-|---------|----------|
-| `arbitrum-sepolia` | 421614 |
-| `arbitrum` | 42161 |
-| `base-sepolia` | 84532 |
-| `base` | 8453 |
-| `ethereum` | 1 |
+### paymentMiddleware(payTo, routes, facilitator)
 
-Network configurations (USDC addresses, Fast token IDs) are imported from `@fastxyz/allset-sdk` where available. EIP-3009 metadata (`name`, `version`) is maintained locally.
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `payTo` | `string \| { evm?: string, fast?: string }` | Payment address(es) |
+| `routes` | `Record<string, RouteConfig>` | Route patterns → payment config |
+| `facilitator` | `{ url: string, createAuthHeaders?: Function }` | Facilitator config |
 
-## Response Headers
+### Facilitator Config
 
-On successful payment:
-
-```
-X-PAYMENT-RESPONSE: <base64-encoded JSON>
-```
-
-Decoded:
-```json
+```typescript
 {
-  "success": true,
-  "txHash": "0x...",
-  "network": "arbitrum-sepolia",
-  "payer": "0x..."
+  url: 'http://localhost:4020',
+  createAuthHeaders?: async () => ({
+    verify: { 'Authorization': 'Bearer ...' },
+    settle: { 'Authorization': 'Bearer ...' },
+  }),
 }
 ```
 
-Note: `txHash` is only present for EVM payments (settlement transaction).
+---
 
-## Error Responses
+## Payment Flows
 
-### 402 Payment Required (No Payment Header)
+### Fast Payments (Already On-Chain)
+
+```
+Client submits tx → Gets certificate → Sends to server → Server verifies → Content
+```
+
+Fast payments are settled by the client before the request. Server only verifies the certificate.
+
+### EVM Payments (Authorization)
+
+```
+Client signs auth → Sends to server → Server verifies → Facilitator settles → Content
+```
+
+EVM payments use EIP-3009. The facilitator submits the transaction on-chain.
+
+---
+
+## 402 Response Format
+
+When payment is required:
+
 ```json
 {
   "error": "X-PAYMENT header is required",
   "accepts": [{
     "scheme": "exact",
-    "network": "arbitrum-sepolia",
+    "network": "base",
     "maxAmountRequired": "100000",
     "payTo": "0x...",
     "asset": "0x...",
+    "maxTimeoutSeconds": 60,
     "extra": { "name": "USD Coin", "version": "2" }
   }]
 }
 ```
 
-### 402 Verification Failed
-```json
-{
-  "error": "Invalid signature",
-  "accepts": [...],
-  "payer": "0x..."
-}
-```
+---
 
-### 402 Settlement Failed
-```json
-{
-  "error": "Insufficient balance for transfer",
-  "accepts": [...],
-  "payer": "0x..."
-}
-```
+## Supported Networks
 
-## Facilitator
+### Mainnet
 
-This package requires a facilitator service to verify and settle payments.
+| Network | Type | Token |
+|---------|------|-------|
+| `fast-mainnet` | Fast | USDC |
+| `arbitrum` | EVM | USDC |
+| `base` | EVM | USDC |
 
-```typescript
-// Local facilitator
-{ url: "http://localhost:4020" }
+### Testnet
 
-// With authentication
-{
-  url: "https://facilitator.example.com",
-  createAuthHeaders: async () => ({
-    verify: { "Authorization": "Bearer ..." },
-    settle: { "Authorization": "Bearer ..." },
-  }),
-}
-```
+| Network | Type | Token |
+|---------|------|-------|
+| `fast-testnet` | Fast | testUSDC |
+| `ethereum-sepolia` | EVM | USDC |
+| `arbitrum-sepolia` | EVM | USDC |
 
-Use `x402-facilitator` to run your own facilitator service.
+---
+
+## Troubleshooting
+
+| Error | Cause | Fix |
+|-------|-------|-----|
+| `X-PAYMENT header required` | No payment provided | Client needs to pay |
+| `Invalid signature` | Verification failed | Check client wallet |
+| `Settlement failed` | On-chain issue | Check facilitator has gas |
+| `Facilitator unreachable` | Connection failed | Check facilitator URL |
+
+---
 
 ## License
 
