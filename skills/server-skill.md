@@ -1,189 +1,342 @@
 ---
 name: x402-server
 description: >
-  Server SDK for protecting API routes with payment requirements. Use when the user wants to add
-  pay-per-request to an Express API, create 402 Payment Required responses, or verify payments
-  via a facilitator. Trigger on paymentMiddleware, route protection, or payment verification.
+  Server SDK for protecting API routes with payment requirements. Use when the user wants to
+  add pay-per-request to an Express API, create 402 Payment Required responses, or verify
+  payments via a facilitator.
 metadata:
   package: "@fastxyz/x402-server"
-  version: 0.1.0
+  short-description: Protect API routes with crypto payments.
 ---
 
-# x402-server
+# x402-server Skill
 
-Protect API routes with payment requirements. Returns 402 Payment Required for unpaid requests.
+## When to Use This Skill
 
-## Install
+**USE this skill when the user wants to:**
+- Protect API routes with payment requirements
+- Return 402 Payment Required responses
+- Accept payments on EVM or Fast networks
+- Configure payment pricing and routes
+- Integrate with a facilitator for verification
 
-```bash
-npm install @fastxyz/x402-server
+**DO NOT use this skill for:**
+- Paying for content → use `x402-client`
+- Running a facilitator → use `x402-facilitator`
+- Custom payment verification logic → use facilitator directly
+
+---
+
+## Decision Tree: Payment Address Setup
+
+```
+How many networks will you accept payments on?
+│
+├── Single network (EVM or Fast)
+│   └── Use single address string
+│       paymentMiddleware('0x...', routes, facilitator)
+│
+└── Multiple networks (both EVM and Fast)
+    └── Use address object
+        paymentMiddleware({ evm: '0x...', fast: 'fast1...' }, routes, facilitator)
 ```
 
-## Quick Start
+---
 
-```typescript
-import express from 'express';
-import { paymentMiddleware } from '@fastxyz/x402-server';
+## Workflows
 
-const app = express();
+### 1. Basic Route Protection
 
-app.use(paymentMiddleware(
-  '0x1234...',  // Your payment address
-  {
-    'GET /api/premium/*': { price: '$0.10', network: 'arbitrum-sepolia' },
-  },
-  { url: 'http://localhost:4020' }  // Facilitator URL
-));
+**When:** Protect a single route with payment.
 
-app.get('/api/premium/data', (req, res) => {
-  res.json({ data: 'Premium content!' });
-});
+**Steps:**
 
-app.listen(3000);
-```
+1. Install package:
+   ```bash
+   npm install @fastxyz/x402-server
+   ```
 
-## Files To Read
+2. Add middleware to Express app:
+   ```typescript
+   import express from 'express';
+   import { paymentMiddleware } from '@fastxyz/x402-server';
 
-- `packages/x402-server/src/index.ts` - Public exports
-- `packages/x402-server/src/middleware.ts` - `paymentMiddleware()` implementation
-- `packages/x402-server/src/payment.ts` - Payment verification helpers
-- `packages/x402-server/src/types.ts` - Route config types
+   const app = express();
 
-## Middleware Configuration
+   app.use(paymentMiddleware(
+     '0xYourPaymentAddress...',
+     {
+       'GET /api/premium': { price: '$0.10', network: 'base' },
+     },
+     { url: 'http://localhost:4020' }  // Facilitator URL
+   ));
 
-### Single Payment Address
+   app.get('/api/premium', (req, res) => {
+     res.json({ data: 'Premium content!' });
+   });
 
-```typescript
-app.use(paymentMiddleware(
-  '0x1234...',  // EVM address or fast1... address
-  routes,
-  facilitatorConfig,
-));
-```
+   app.listen(3000);
+   ```
 
-### Multi-Network Addresses
+3. Unpaid requests receive 402 Payment Required.
 
-```typescript
-app.use(paymentMiddleware(
-  {
-    evm: '0x1234...',        // For EVM payments
-    fast: 'fast1abc...',     // For Fast payments
-  },
-  routes,
-  facilitatorConfig,
-));
-```
+---
+
+### 2. Multi-Route Protection
+
+**When:** Protect multiple routes with different prices.
+
+**Steps:**
+
+1. Configure route patterns:
+   ```typescript
+   app.use(paymentMiddleware(
+     '0xYourAddress...',
+     {
+       // Exact match
+       'GET /api/premium': { price: '$0.10', network: 'base' },
+       
+       // Wildcard match
+       'GET /api/premium/*': { price: '$0.05', network: 'base' },
+       
+       // POST with higher price
+       'POST /api/generate': { price: '$1.00', network: 'arbitrum' },
+       
+       // Any method
+       '/api/expensive': { price: '$5.00', network: 'base' },
+     },
+     { url: 'http://localhost:4020' }
+   ));
+   ```
+
+2. Routes match in order: exact first, then wildcards.
+
+---
+
+### 3. Multi-Network Setup
+
+**When:** Accept payments on both EVM and Fast networks.
+
+**Steps:**
+
+1. Provide both addresses:
+   ```typescript
+   app.use(paymentMiddleware(
+     {
+       evm: '0xYourEvmAddress...',
+       fast: 'fast1YourFastAddress...',
+     },
+     {
+       'GET /api/evm/*': { price: '$0.10', network: 'base' },
+       'GET /api/fast/*': { price: '$0.01', network: 'fast-testnet' },
+     },
+     { url: 'http://localhost:4020' }
+   ));
+   ```
+
+2. Server uses correct address based on route's network.
+
+---
+
+### 4. Custom Facilitator Auth
+
+**When:** Facilitator requires authentication headers.
+
+**Steps:**
+
+1. Provide createAuthHeaders function:
+   ```typescript
+   app.use(paymentMiddleware(
+     '0xYourAddress...',
+     routes,
+     {
+       url: 'https://facilitator.example.com',
+       createAuthHeaders: async () => ({
+         verify: { 'Authorization': `Bearer ${await getToken()}` },
+         settle: { 'Authorization': `Bearer ${await getToken()}` },
+       }),
+     }
+   ));
+   ```
+
+---
+
+### 5. Manual Payment Handling
+
+**When:** Need custom payment flow without middleware.
+
+**Steps:**
+
+1. Use helper functions directly:
+   ```typescript
+   import { 
+     createPaymentRequired, 
+     verifyPayment, 
+     settlePayment 
+   } from '@fastxyz/x402-server';
+
+   app.get('/api/custom', async (req, res) => {
+     const paymentHeader = req.headers['x-payment'];
+     
+     if (!paymentHeader) {
+       // Return 402 response
+       const requirement = createPaymentRequired({
+         payTo: '0xYourAddress...',
+         price: '$0.10',
+         network: 'base',
+         resource: req.url,
+       });
+       return res.status(402).json(requirement);
+     }
+
+     // Verify payment
+     const verification = await verifyPayment(
+       paymentHeader,
+       requirement,
+       'http://localhost:4020'
+     );
+
+     if (!verification.isValid) {
+       return res.status(402).json({ error: verification.reason });
+     }
+
+     // Settle (EVM only)
+     const settlement = await settlePayment(
+       paymentHeader,
+       requirement,
+       'http://localhost:4020'
+     );
+
+     if (!settlement.success) {
+       return res.status(402).json({ error: settlement.error });
+     }
+
+     // Serve content
+     res.json({ data: 'Premium content!' });
+   });
+   ```
+
+---
 
 ## Route Configuration
 
-```typescript
-const routes = {
-  // Exact match
-  'GET /api/premium': { 
-    price: '$0.10', 
-    network: 'arbitrum-sepolia' 
-  },
-  
-  // Wildcard match
-  'GET /api/premium/*': { 
-    price: '$0.05', 
-    network: 'fast-testnet' 
-  },
-  
-  // Multiple methods
-  'POST /api/generate': { 
-    price: '$1.00', 
-    network: 'arbitrum' 
-  },
-};
-```
+### Route Patterns
+
+| Pattern | Matches |
+|---------|---------|
+| `/api/data` | Exact path, any method |
+| `GET /api/data` | Exact path, GET only |
+| `/api/*` | Any path under /api/ |
+| `GET /api/*` | Any path under /api/, GET only |
+| `/api/:id` | Path with parameter |
 
 ### Route Options
 
 ```typescript
 interface RouteConfig {
-  price: string;           // e.g., '$0.10', '0.1', '100000' (raw units)
-  network: string;         // Network identifier
+  price: string;           // Required: '$0.10', '0.1', or '100000'
+  network: string;         // Required: Network identifier
   description?: string;    // Human-readable description
   mimeType?: string;       // Response MIME type hint
-  outputSchema?: object;   // JSON schema for response
+  asset?: string;          // Custom token address (default: USDC)
 }
 ```
 
-## Facilitator Configuration
+### Price Formats
+
+All equivalent ($0.10 USDC):
 
 ```typescript
-const facilitatorConfig = {
-  url: 'http://localhost:4020',  // Facilitator base URL
-  timeout?: 30000,               // Request timeout (ms)
-};
+{ price: '$0.10' }      // Dollar notation
+{ price: '0.1' }        // Decimal USDC
+{ price: '100000' }     // Raw units (6 decimals)
 ```
+
+---
+
+## Common Mistakes (DO NOT)
+
+1. **DO NOT** forget facilitator URL:
+   ```typescript
+   // WRONG
+   paymentMiddleware('0x...', routes);
+   
+   // CORRECT
+   paymentMiddleware('0x...', routes, { url: 'http://localhost:4020' });
+   ```
+
+2. **DO NOT** use wrong address type for network:
+   ```typescript
+   // WRONG: EVM address for Fast network
+   paymentMiddleware('0x...', {
+     '/api/fast': { network: 'fast-testnet', ... }
+   }, ...);
+   
+   // CORRECT: Use address object
+   paymentMiddleware({ evm: '0x...', fast: 'fast1...' }, {
+     '/api/fast': { network: 'fast-testnet', ... }
+   }, ...);
+   ```
+
+3. **DO NOT** mismatch route method:
+   ```typescript
+   // WRONG: Route requires GET but handler is POST
+   app.use(paymentMiddleware('0x...', {
+     'GET /api/data': { price: '$0.10', network: 'base' }
+   }, ...));
+   app.post('/api/data', handler);  // Won't be protected!
+   
+   // CORRECT: Match methods
+   app.use(paymentMiddleware('0x...', {
+     'POST /api/data': { price: '$0.10', network: 'base' }
+   }, ...));
+   app.post('/api/data', handler);
+   ```
+
+4. **DO NOT** add middleware after routes:
+   ```typescript
+   // WRONG: Middleware after route
+   app.get('/api/data', handler);
+   app.use(paymentMiddleware(...));
+   
+   // CORRECT: Middleware before routes
+   app.use(paymentMiddleware(...));
+   app.get('/api/data', handler);
+   ```
+
+---
+
+## Error Handling
+
+| Error | Meaning | Fix |
+|-------|---------|-----|
+| `X-PAYMENT header required` | No payment provided | Client needs to pay |
+| `Invalid signature` | Payment verification failed | Check client wallet config |
+| `Settlement failed` | On-chain settlement failed | Check facilitator has gas |
+| `Facilitator unreachable` | Can't connect to facilitator | Check facilitator URL/status |
+
+---
 
 ## 402 Response Format
 
-When a route requires payment, the middleware returns:
+When payment is required:
 
 ```json
 {
-  "error": "Payment Required",
+  "error": "X-PAYMENT header is required",
   "accepts": [{
     "scheme": "exact",
-    "network": "arbitrum-sepolia",
+    "network": "base",
     "maxAmountRequired": "100000",
-    "resource": "https://api.example.com/api/premium/data",
-    "payTo": "0x1234...",
+    "payTo": "0x...",
+    "asset": "0x...",
     "maxTimeoutSeconds": 60,
-    "mimeType": "application/json",
-    "outputSchema": null,
-    "extra": null
+    "extra": { "name": "USD Coin", "version": "2" }
   }]
 }
 ```
 
-## Payment Verification Flow
-
-1. Client sends request with `X-PAYMENT` header
-2. Middleware extracts and decodes payment payload
-3. Middleware calls facilitator `/verify` endpoint
-4. If valid, middleware calls facilitator `/settle` (EVM only)
-5. If settlement succeeds, request proceeds to handler
-6. If any step fails, returns 402 or error
-
-## Manual Payment Handling
-
-For custom flows without middleware:
-
-```typescript
-import { 
-  createPaymentRequired, 
-  verifyPayment, 
-  settlePayment 
-} from '@fastxyz/x402-server';
-
-// Create 402 response
-const paymentRequired = createPaymentRequired({
-  payTo: '0x1234...',
-  price: '$0.10',
-  network: 'arbitrum-sepolia',
-  resource: req.url,
-});
-
-// Verify payment header
-const verification = await verifyPayment(
-  req.headers['x-payment'],
-  paymentRequired,
-  facilitatorUrl,
-);
-
-// Settle payment (EVM only)
-if (verification.isValid) {
-  const settlement = await settlePayment(
-    req.headers['x-payment'],
-    paymentRequired,
-    facilitatorUrl,
-  );
-}
-```
+---
 
 ## Supported Networks
 
@@ -196,17 +349,36 @@ if (verification.isValid) {
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
 
-## Troubleshooting
+---
 
-### Payments not being verified
-- Check facilitator URL is correct and reachable
-- Check facilitator is running and healthy (`GET /supported`)
+## Quick Reference
 
-### Wrong payment amount
-- Price can be `$0.10` (parsed), `0.1` (decimal), or `100000` (raw units)
-- USDC uses 6 decimals: `$0.10` = `100000` raw units
+```typescript
+import express from 'express';
+import { paymentMiddleware } from '@fastxyz/x402-server';
 
-### Route not matching
-- Routes use exact match first, then wildcard
-- Method must match (GET, POST, etc.)
-- Path matching is case-sensitive
+const app = express();
+
+// Single network
+app.use(paymentMiddleware(
+  '0xYourAddress...',
+  { 'GET /api/*': { price: '$0.10', network: 'base' } },
+  { url: 'http://localhost:4020' }
+));
+
+// Multi-network
+app.use(paymentMiddleware(
+  { evm: '0x...', fast: 'fast1...' },
+  {
+    'GET /api/evm/*': { price: '$0.10', network: 'base' },
+    'GET /api/fast/*': { price: '$0.01', network: 'fast-testnet' },
+  },
+  { url: 'http://localhost:4020' }
+));
+
+app.get('/api/premium', (req, res) => {
+  res.json({ data: 'Paid content!' });
+});
+
+app.listen(3000);
+```
