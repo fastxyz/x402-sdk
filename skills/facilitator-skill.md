@@ -52,8 +52,8 @@ interface FacilitatorConfig {
   
   // Optional: Custom RPC URLs
   rpcUrls?: {
+    'ethereum-sepolia'?: string;
     'arbitrum-sepolia'?: string;
-    'base-sepolia'?: string;
     // ...
   };
 }
@@ -132,12 +132,11 @@ List supported networks.
 {
   "networks": [
     "fast-testnet",
-    "fast-mainnet", 
+    "fast-mainnet",
+    "ethereum-sepolia",
     "arbitrum-sepolia",
     "arbitrum",
-    "base-sepolia",
-    "base",
-    "ethereum"
+    "base"
   ]
 }
 ```

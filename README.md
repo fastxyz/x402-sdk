@@ -339,11 +339,10 @@ The facilitator wallet needs:
 |---------|------|----------|-------|------------|
 | `fast-testnet` | Fast | — | fastUSDC | ~300ms |
 | `fast-mainnet` | Fast | — | fastUSDC | ~300ms |
+| `ethereum-sepolia` | EVM | 11155111 | USDC | ~15s |
 | `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
 | `arbitrum` | EVM | 42161 | USDC | ~15s |
-| `base-sepolia` | EVM | 84532 | USDC | ~15s |
 | `base` | EVM | 8453 | USDC | ~15s |
-| `ethereum` | EVM | 1 | USDC | ~15s |
 
 ---
 

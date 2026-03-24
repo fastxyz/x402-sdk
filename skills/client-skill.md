@@ -200,8 +200,7 @@ const result = await x402Pay({
 |---------|------|-------|
 | `fast-testnet` | Fast | fastUSDC |
 | `fast-mainnet` | Fast | fastUSDC |
+| `ethereum-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |
 | `arbitrum` | EVM | USDC |
-| `base-sepolia` | EVM | USDC |
 | `base` | EVM | USDC |
-| `ethereum` | EVM | USDC |
