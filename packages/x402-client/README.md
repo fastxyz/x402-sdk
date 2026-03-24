@@ -33,7 +33,7 @@ if (result.success) {
 
 ## Wallet Types
 
-### EVM Wallet (Arbitrum, Base, Ethereum)
+### EVM Wallet (Ethereum Sepolia, Arbitrum, Base)
 
 ```typescript
 const result = await x402Pay({
@@ -158,6 +158,10 @@ interface X402PayResult {
 
 | Network | Type | Token |
 |---------|------|-------|
+| `fast-testnet` | Fast | testUSDC |
+| `ethereum-sepolia` | EVM | USDC |
+| `base-sepolia` | EVM | USDC |
+| `arbitrum-sepolia` | EVM | USDC |
 | `fast-testnet` | Fast | testUSDC |
 | `ethereum-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |

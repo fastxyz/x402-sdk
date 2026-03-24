@@ -170,6 +170,7 @@ How many networks will you accept payments on?
 1. Use helper functions directly:
    ```typescript
    import { 
+     createPaymentRequirement,
      createPaymentRequired, 
      verifyPayment, 
      settlePayment 
@@ -177,38 +178,40 @@ How many networks will you accept payments on?
 
    app.get('/api/custom', async (req, res) => {
      const paymentHeader = req.headers['x-payment'];
+     const payTo = '0xYourAddress...';
+     const routeConfig = { price: '$0.10', network: 'base' };
+     const requirement = createPaymentRequirement(payTo, routeConfig, req.path);
      
      if (!paymentHeader) {
        // Return 402 response
-       const requirement = createPaymentRequired({
-         payTo: '0xYourAddress...',
-         price: '$0.10',
-         network: 'base',
-         resource: req.url,
-       });
-       return res.status(402).json(requirement);
+       return res.status(402).json(
+         createPaymentRequired(payTo, routeConfig, req.path)
+       );
      }
 
      // Verify payment
      const verification = await verifyPayment(
        paymentHeader,
        requirement,
-       'http://localhost:4020'
+       { url: 'http://localhost:4020' }
      );
 
      if (!verification.isValid) {
-       return res.status(402).json({ error: verification.reason });
+       return res.status(402).json({
+         error: verification.invalidReason,
+         accepts: [requirement],
+       });
      }
 
      // Settle (EVM only)
      const settlement = await settlePayment(
        paymentHeader,
        requirement,
-       'http://localhost:4020'
+       { url: 'http://localhost:4020' }
      );
 
      if (!settlement.success) {
-       return res.status(402).json({ error: settlement.error });
+       return res.status(402).json({ error: settlement.errorReason });
      }
 
      // Serve content
@@ -236,9 +239,11 @@ How many networks will you accept payments on?
 interface RouteConfig {
   price: string;           // Required: '$0.10', '0.1', or '100000'
   network: string;         // Required: Network identifier
-  description?: string;    // Human-readable description
-  mimeType?: string;       // Response MIME type hint
-  asset?: string;          // Custom token address (default: USDC)
+  config?: {
+    description?: string;  // Human-readable description
+    mimeType?: string;     // Response MIME type hint
+    asset?: string;        // Custom token address (default: USDC)
+  };
 }
 ```
 
@@ -345,6 +350,7 @@ When payment is required:
 | Network | Type | Token |
 |---------|------|-------|
 | `fast-mainnet` | Fast | USDC |
+| `ethereum` | EVM | USDC |
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
 
@@ -352,6 +358,10 @@ When payment is required:
 
 | Network | Type | Token |
 |---------|------|-------|
+| `fast-testnet` | Fast | testUSDC |
+| `ethereum-sepolia` | EVM | USDC |
+| `base-sepolia` | EVM | USDC |
+| `arbitrum-sepolia` | EVM | USDC |
 | `fast-testnet` | Fast | testUSDC |
 | `ethereum-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |

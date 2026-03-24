@@ -8,7 +8,7 @@ x402 uses HTTP status code `402 Payment Required` to enable pay-per-request APIs
 
 - **No accounts needed** — just sign and pay
 - **Instant settlement** — ~300ms on Fast, ~15s on EVM
-- **Multi-chain** — Fast, Arbitrum, Base, Ethereum
+- **Multi-chain** — Fast plus Arbitrum, Base, and Ethereum variants
 - **Auto-bridge** — fastUSDC → USDC when needed
 
 ## Packages
@@ -265,8 +265,11 @@ const routes = {
 interface RouteConfig {
   price: string;           // '$0.10', '0.1', or '100000' (raw units)
   network: string;         // Network identifier
-  description?: string;    // Human-readable description
-  mimeType?: string;       // Response MIME type hint
+  config?: {
+    description?: string;  // Human-readable description
+    mimeType?: string;     // Response MIME type hint
+    asset?: string;        // Custom token address (default: USDC)
+  };
 }
 ```
 
@@ -323,7 +326,7 @@ console.log('Settled:', settleResult.txHash);
 |----------|--------|-------------|
 | `/verify` | POST | Verify payment signature/certificate |
 | `/settle` | POST | Settle payment on-chain (EVM only) |
-| `/supported` | GET | List supported networks |
+| `/supported` | GET | List supported payment kinds |
 
 ### Facilitator Wallet Setup
 
@@ -340,6 +343,7 @@ The facilitator wallet needs:
 | Network | Type | Chain ID | Token | Settlement |
 |---------|------|----------|-------|------------|
 | `fast-mainnet` | Fast | — | USDC | ~300ms |
+| `ethereum` | EVM | 1 | USDC | ~15s |
 | `arbitrum` | EVM | 42161 | USDC | ~15s |
 | `base` | EVM | 8453 | USDC | ~15s |
 
@@ -349,7 +353,9 @@ The facilitator wallet needs:
 |---------|------|----------|-------|------------|
 | `fast-testnet` | Fast | — | testUSDC | ~300ms |
 | `ethereum-sepolia` | EVM | 11155111 | USDC | ~15s |
+| `base-sepolia` | EVM | 84532 | USDC | ~15s |
 | `arbitrum-sepolia` | EVM | 421614 | USDC | ~15s |
+`@fastxyz/x402-client` currently supports `fast-testnet`, `fast-mainnet`, `ethereum-sepolia`, `base-sepolia`, `arbitrum-sepolia`, `arbitrum`, and `base`. `@fastxyz/x402-server` and `@fastxyz/x402-facilitator` also support `ethereum`.
 
 ---
 

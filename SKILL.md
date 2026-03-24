@@ -66,7 +66,7 @@ What is the user trying to do?
 
 3. Choose wallet type:
 
-   **Option A: EVM wallet (Arbitrum, Base, Ethereum)**
+   **Option A: EVM wallet (Ethereum Sepolia, Arbitrum, Base)**
    ```typescript
    const result = await x402Pay({
      url: 'https://api.example.com/premium',
@@ -200,7 +200,7 @@ app.use(paymentMiddleware(
 **Endpoints available:**
 - `POST /verify` — Verify payment signature/certificate
 - `POST /settle` — Settle EVM payment on-chain
-- `GET /supported` — List supported networks
+- `GET /supported` — List supported payment kinds
 
 ---
 
@@ -247,6 +247,7 @@ app.use(paymentMiddleware(
 | Network | Type | Token |
 |---------|------|-------|
 | `fast-mainnet` | Fast | USDC |
+| `ethereum` | EVM | USDC |
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
 
@@ -256,7 +257,9 @@ app.use(paymentMiddleware(
 |---------|------|-------|
 | `fast-testnet` | Fast | testUSDC |
 | `ethereum-sepolia` | EVM | USDC |
+| `base-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |
+`@fastxyz/x402-client` supports `fast-testnet`, `fast-mainnet`, `ethereum-sepolia`, `base-sepolia`, `arbitrum-sepolia`, `arbitrum`, and `base`. `@fastxyz/x402-server` and `@fastxyz/x402-facilitator` also support `ethereum`.
 
 ---
 

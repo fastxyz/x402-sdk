@@ -82,8 +82,11 @@ app.use(paymentMiddleware(
 interface RouteConfig {
   price: string;         // '$0.10', '0.1', or '100000' (raw units)
   network: string;       // Network identifier
-  description?: string;  // Human-readable description
-  mimeType?: string;     // Response MIME type hint
+  config?: {
+    description?: string;  // Human-readable description
+    mimeType?: string;     // Response MIME type hint
+    asset?: string;        // Custom token address (default: USDC)
+  };
 }
 ```
 
@@ -171,6 +174,7 @@ When payment is required:
 | Network | Type | Token |
 |---------|------|-------|
 | `fast-mainnet` | Fast | USDC |
+| `ethereum` | EVM | USDC |
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
 
@@ -178,6 +182,10 @@ When payment is required:
 
 | Network | Type | Token |
 |---------|------|-------|
+| `fast-testnet` | Fast | testUSDC |
+| `ethereum-sepolia` | EVM | USDC |
+| `base-sepolia` | EVM | USDC |
+| `arbitrum-sepolia` | EVM | USDC |
 | `fast-testnet` | Fast | testUSDC |
 | `ethereum-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |

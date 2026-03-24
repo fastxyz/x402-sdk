@@ -143,28 +143,30 @@ How do you want to use the facilitator?
    if (settleResult.success) {
      console.log('Settled:', settleResult.txHash);
    } else {
-     console.error('Failed:', settleResult.error);
+     console.error('Failed:', settleResult.errorReason);
    }
    ```
 
 ---
 
-### 4. Configure Custom RPC URLs
+### 4. Configure Verification Overrides
 
-**When:** Default RPCs are slow or you need custom endpoints.
+**When:** You need to override Fast verification settings.
 
 **Steps:**
 
-1. Pass rpcUrls in config:
+1. Pass supported overrides in config:
    ```typescript
    createFacilitatorServer({
      evmPrivateKey: process.env.FACILITATOR_KEY as `0x${string}`,
-     rpcUrls: {
-       'base': 'https://my-base-node.example.com',
-       'arbitrum': 'https://my-arb-node.example.com',
+     fastRpcUrl: 'https://my-fast-rpc.example.com/proxy',
+     committeePublicKeys: {
+       'fast-mainnet': ['0xvalidator1', '0xvalidator2'],
      },
    });
    ```
+
+2. For Ethereum Sepolia, set `ETH_SEPOLIA_RPC` before starting the facilitator.
 
 ---
 
@@ -253,24 +255,33 @@ Settle an EVM payment on-chain. Not needed for Fast payments.
 ```json
 {
   "success": false,
-  "error": "Nonce already used"
+  "errorReason": "authorization_already_used"
 }
 ```
 
 ### GET /supported
 
-List supported networks.
+List supported payment kinds.
 
 **Response:**
 ```json
 {
-  "networks": [
-    "fast-mainnet",
-    "arbitrum",
-    "base",
-    "fast-testnet",
-    "ethereum-sepolia",
-    "arbitrum-sepolia"
+  "paymentKinds": [
+    {
+      "x402Version": 1,
+      "scheme": "exact",
+      "network": "base",
+      "extra": {
+        "asset": "0x...",
+        "name": "USD Coin",
+        "version": "2"
+      }
+    },
+    {
+      "x402Version": 1,
+      "scheme": "exact",
+      "network": "fast-mainnet"
+    }
   ]
 }
 ```
@@ -364,6 +375,7 @@ List supported networks.
 | Network | Type | Chain ID |
 |---------|------|----------|
 | `fast-mainnet` | Fast | — |
+| `ethereum` | EVM | 1 |
 | `arbitrum` | EVM | 42161 |
 | `base` | EVM | 8453 |
 
@@ -373,6 +385,7 @@ List supported networks.
 |---------|------|----------|
 | `fast-testnet` | Fast | — |
 | `ethereum-sepolia` | EVM | 11155111 |
+| `base-sepolia` | EVM | 84532 |
 | `arbitrum-sepolia` | EVM | 421614 |
 
 ---

@@ -54,14 +54,14 @@ console.log('Settled:', settleResult.txHash);
 
 ```typescript
 interface FacilitatorConfig {
-  evmPrivateKey: `0x${string}`;  // Required: for settling EVM payments
-  rpcUrls?: {                    // Optional: custom RPC endpoints
-    'base'?: string;
-    'arbitrum'?: string;
-    // ...
-  };
+  evmPrivateKey?: `0x${string}`;             // Needed for EVM settlement
+  fastRpcUrl?: string;                       // Override Fast verification RPC
+  committeePublicKeys?: Record<string, string[]>;
+  chains?: Record<string, Chain>;            // Advanced chain overrides
 }
 ```
+
+For Ethereum Sepolia verification, you can also override the default RPC with the `ETH_SEPOLIA_RPC` environment variable.
 
 ---
 
@@ -109,18 +109,27 @@ Settle an EVM payment on-chain. Not needed for Fast payments.
 
 ### GET /supported
 
-List supported networks.
+List supported payment kinds.
 
 **Response:**
 ```json
 {
-  "networks": [
-    "fast-mainnet",
-    "arbitrum",
-    "base",
-    "fast-testnet",
-    "ethereum-sepolia",
-    "arbitrum-sepolia"
+  "paymentKinds": [
+    {
+      "x402Version": 1,
+      "scheme": "exact",
+      "network": "base",
+      "extra": {
+        "asset": "0x...",
+        "name": "USD Coin",
+        "version": "2"
+      }
+    },
+    {
+      "x402Version": 1,
+      "scheme": "exact",
+      "network": "fast-mainnet"
+    }
   ]
 }
 ```
@@ -171,6 +180,7 @@ No-op — transaction already on-chain when certificate was created.
 | Network | Type | Chain ID |
 |---------|------|----------|
 | `fast-mainnet` | Fast | — |
+| `ethereum` | EVM | 1 |
 | `arbitrum` | EVM | 42161 |
 | `base` | EVM | 8453 |
 
@@ -180,6 +190,7 @@ No-op — transaction already on-chain when certificate was created.
 |---------|------|----------|
 | `fast-testnet` | Fast | — |
 | `ethereum-sepolia` | EVM | 11155111 |
+| `base-sepolia` | EVM | 84532 |
 | `arbitrum-sepolia` | EVM | 421614 |
 
 ---
