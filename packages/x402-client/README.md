@@ -62,7 +62,7 @@ const result = await x402Pay({
 
 ### Auto-Bridge (Fast → EVM)
 
-Provide both wallets to automatically bridge fastUSDC → USDC when EVM balance is insufficient:
+Provide both wallets to automatically bridge from Fast to EVM USDC when EVM balance is insufficient:
 
 ```typescript
 const result = await x402Pay({
@@ -139,7 +139,7 @@ interface X402PayResult {
 
 1. Detect EVM payment required
 2. Check EVM USDC balance → insufficient
-3. Bridge fastUSDC → USDC via AllSet (~3-4s)
+3. Bridge Fast → EVM USDC via AllSet (~3-4s)
 4. Continue with EVM payment flow
 
 ---

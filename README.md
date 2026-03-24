@@ -9,7 +9,7 @@ x402 uses HTTP status code `402 Payment Required` to enable pay-per-request APIs
 - **No accounts needed** — just sign and pay
 - **Instant settlement** — ~300ms on Fast, ~15s on EVM
 - **Multi-chain** — Fast plus Arbitrum, Base, and Ethereum variants
-- **Auto-bridge** — fastUSDC → USDC when needed
+- **Auto-bridge** — Fast → EVM USDC when needed
 
 ## Packages
 
@@ -150,7 +150,7 @@ const result = await x402Pay({
 
 ### Auto-Bridge (Fast → EVM)
 
-Provide both wallets to automatically bridge fastUSDC → USDC when paying EVM endpoints:
+Provide both wallets to automatically bridge from Fast to EVM USDC when paying EVM endpoints:
 
 ```typescript
 const result = await x402Pay({
@@ -174,7 +174,7 @@ const result = await x402Pay({
 // Flow:
 // 1. Detects EVM endpoint requires USDC
 // 2. Checks EVM wallet balance → insufficient
-// 3. Bridges fastUSDC → USDC via AllSet (~3-4s)
+// 3. Bridges Fast → EVM USDC via AllSet (~3-4s)
 // 4. Signs EIP-3009 authorization
 // 5. Sends payment → 200 OK
 ```
@@ -375,7 +375,7 @@ EIP-3009 metadata (`usdcName`, `usdcVersion`) is maintained locally in x402-sdk.
 |-------|-------|-----|
 | `INSUFFICIENT_BALANCE` | Not enough USDC | Check balance, or use auto-bridge |
 | `INVALID_SIGNATURE` | Key mismatch | Verify private key matches address |
-| `BRIDGE_TIMEOUT` | Bridge took too long | Retry, check Fast wallet has fastUSDC |
+| `BRIDGE_TIMEOUT` | Bridge took too long | Retry, check Fast wallet balance |
 
 ### Server Errors
 

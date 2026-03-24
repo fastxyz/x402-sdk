@@ -17,7 +17,7 @@ metadata:
 - Pay for a 402-protected API endpoint
 - Protect API routes with payment requirements
 - Run a payment facilitator service
-- Auto-bridge fastUSDC → USDC for EVM payments
+- Auto-bridge Fast → EVM USDC for EVM payments
 - Verify or settle x402 payments
 
 **DO NOT use this skill for:**
@@ -50,7 +50,7 @@ What is the user trying to do?
 
 **When:** User wants to access a 402-protected endpoint.
 
-**Prerequisites:** Wallet with USDC (EVM) or fastUSDC (Fast).
+**Prerequisites:** Wallet with USDC (EVM) or USDC/testUSDC (Fast).
 
 **Steps:**
 
@@ -206,7 +206,7 @@ app.use(paymentMiddleware(
 
 ### 4. Auto-Bridge Payment
 
-**When:** User wants to pay EVM endpoint but only has fastUSDC on Fast.
+**When:** User wants to pay EVM endpoint but only has USDC/testUSDC on Fast.
 
 **Prerequisites:** Both Fast and EVM wallets configured.
 
@@ -227,7 +227,7 @@ app.use(paymentMiddleware(
 2. SDK automatically:
    - Detects EVM payment required
    - Checks EVM USDC balance
-   - If insufficient, bridges fastUSDC → USDC (~3-4s)
+   - If insufficient, bridges Fast → EVM USDC (~3-4s)
    - Signs EIP-3009 authorization
    - Completes payment
 
