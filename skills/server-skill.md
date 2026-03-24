@@ -350,7 +350,6 @@ When payment is required:
 | Network | Type | Token |
 |---------|------|-------|
 | `fast-mainnet` | Fast | USDC |
-| `ethereum` | EVM | USDC |
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
 
@@ -360,7 +359,6 @@ When payment is required:
 |---------|------|-------|
 | `fast-testnet` | Fast | testUSDC |
 | `ethereum-sepolia` | EVM | USDC |
-| `base-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |
 
 ---

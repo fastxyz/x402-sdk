@@ -35,7 +35,7 @@ What network does the endpoint require?
 ├── Fast network (fast-testnet, fast-mainnet)
 │   └── Use Fast wallet only
 │
-├── EVM network (ethereum-sepolia, base-sepolia, arbitrum, base, etc.)
+├── EVM network (ethereum-sepolia, arbitrum, base, etc.)
 │   │
 │   └── Do you have USDC on that EVM chain?
 │       ├── YES → Use EVM wallet only
@@ -316,7 +316,6 @@ interface X402PayResult {
 |---------|------|-------|
 | `fast-testnet` | Fast | testUSDC |
 | `ethereum-sepolia` | EVM | USDC |
-| `base-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |
 
 ---

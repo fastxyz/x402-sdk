@@ -160,7 +160,6 @@ interface X402PayResult {
 |---------|------|-------|
 | `fast-testnet` | Fast | testUSDC |
 | `ethereum-sepolia` | EVM | USDC |
-| `base-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |
 
 ---

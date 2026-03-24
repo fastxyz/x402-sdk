@@ -375,7 +375,6 @@ List supported payment kinds.
 | Network | Type | Chain ID |
 |---------|------|----------|
 | `fast-mainnet` | Fast | — |
-| `ethereum` | EVM | 1 |
 | `arbitrum` | EVM | 42161 |
 | `base` | EVM | 8453 |
 
@@ -385,7 +384,6 @@ List supported payment kinds.
 |---------|------|----------|
 | `fast-testnet` | Fast | — |
 | `ethereum-sepolia` | EVM | 11155111 |
-| `base-sepolia` | EVM | 84532 |
 | `arbitrum-sepolia` | EVM | 421614 |
 
 ---

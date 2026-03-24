@@ -179,7 +179,6 @@ No-op — transaction already on-chain when certificate was created.
 | Network | Type | Chain ID |
 |---------|------|----------|
 | `fast-mainnet` | Fast | — |
-| `ethereum` | EVM | 1 |
 | `arbitrum` | EVM | 42161 |
 | `base` | EVM | 8453 |
 
@@ -189,7 +188,6 @@ No-op — transaction already on-chain when certificate was created.
 |---------|------|----------|
 | `fast-testnet` | Fast | — |
 | `ethereum-sepolia` | EVM | 11155111 |
-| `base-sepolia` | EVM | 84532 |
 | `arbitrum-sepolia` | EVM | 421614 |
 
 ---

@@ -247,7 +247,6 @@ app.use(paymentMiddleware(
 | Network | Type | Token |
 |---------|------|-------|
 | `fast-mainnet` | Fast | USDC |
-| `ethereum` | EVM | USDC |
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
 
@@ -257,9 +256,7 @@ app.use(paymentMiddleware(
 |---------|------|-------|
 | `fast-testnet` | Fast | testUSDC |
 | `ethereum-sepolia` | EVM | USDC |
-| `base-sepolia` | EVM | USDC |
 | `arbitrum-sepolia` | EVM | USDC |
-`@fastxyz/x402-client` supports `fast-testnet`, `fast-mainnet`, `ethereum-sepolia`, `base-sepolia`, `arbitrum-sepolia`, `arbitrum`, and `base`. `@fastxyz/x402-server` and `@fastxyz/x402-facilitator` also support `ethereum`.
 
 ---
 
