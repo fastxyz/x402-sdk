@@ -41,6 +41,7 @@ const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
     usdcName: "USD Coin",
     usdcVersion: "2",
     fallbackUsdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    rpcEnvVar: "ARB_RPC_URL",
   },
   "base-sepolia": {
     chain: baseSepolia,
@@ -52,6 +53,7 @@ const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
     chain: base,
     usdcName: "USD Coin",
     usdcVersion: "2",
+    rpcEnvVar: "BASE_RPC_URL",
   },
   ethereum: {
     chain: mainnet,
