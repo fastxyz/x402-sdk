@@ -42,8 +42,8 @@
   },
   "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
-    "@fastxyz/allset-sdk": "^0.1.6",
-    "@fastxyz/sdk": "^0.2.3",
+    "@fastxyz/allset-sdk": "^0.1.7",
+    "@fastxyz/sdk": "^0.2.4",
     "@mysten/bcs": "^2.0.2",
     "@noble/ed25519": "^2.1.0",
     "@noble/hashes": "^1.5.0",

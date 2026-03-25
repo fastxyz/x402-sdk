@@ -9,7 +9,7 @@ import { AllSetProvider } from "@fastxyz/allset-sdk/node";
 import type { NetworkConfig } from "./types.js";
 
 const FAST_MAINNET_USDC_TOKEN_ID =
-  "0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5";
+  "0xc655a12330da6af361d281b197996d2bc135aaed3b66278e729c2222291e9130";
 
 /**
  * EIP-3009 metadata for USDC contracts (x402-specific, not in SDKs)
@@ -28,11 +28,6 @@ const EIP3009_METADATA: Record<string, { name: string; version: string }> = {
  */
 const FALLBACK_CONFIGS: Record<string, NetworkConfig> = {
   // Mainnets not yet in allset-sdk
-  arbitrum: {
-    asset: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
-    decimals: 6,
-    extra: { name: "USD Coin", version: "2" },
-  },
   ethereum: {
     asset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     decimals: 6,
@@ -50,12 +45,12 @@ const FALLBACK_CONFIGS: Record<string, NetworkConfig> = {
  * Build network configs by combining allset-sdk data with local EIP-3009 metadata
  */
 function buildNetworkConfigs(): Record<string, NetworkConfig> {
-  const allset = new AllSetProvider({ network: "testnet" });
+  const testnetProvider = new AllSetProvider({ network: "testnet" });
+  const mainnetProvider = new AllSetProvider({ network: "mainnet" });
   const configs: Record<string, NetworkConfig> = {};
 
   // Fast networks - get testUSDC token ID from allset-sdk
-  const ethereumSepoliaToken = allset.getTokenConfig("ethereum-sepolia", "USDC");
-  const baseToken = allset.getTokenConfig("base", "USDC");
+  const ethereumSepoliaToken = testnetProvider.getTokenConfig("ethereum-sepolia", "USDC");
 
   if (ethereumSepoliaToken) {
     // testUSDC for testnet
@@ -67,13 +62,27 @@ function buildNetworkConfigs(): Record<string, NetworkConfig> {
 
   configs["fast-mainnet"] = {
     asset: FAST_MAINNET_USDC_TOKEN_ID,
-    decimals: baseToken?.decimals ?? 6,
+    decimals: 6,
   };
 
-  // EVM networks from allset-sdk
-  const evmNetworks = ["ethereum-sepolia", "arbitrum-sepolia", "base"];
-  for (const network of evmNetworks) {
-    const tokenConfig = allset.getTokenConfig(network, "USDC");
+  // EVM testnet networks from allset-sdk
+  const testnetNetworks = ["ethereum-sepolia", "arbitrum-sepolia"];
+  for (const network of testnetNetworks) {
+    const tokenConfig = testnetProvider.getTokenConfig(network, "USDC");
+    const metadata = EIP3009_METADATA[network];
+    if (tokenConfig) {
+      configs[network] = {
+        asset: tokenConfig.evmAddress,
+        decimals: tokenConfig.decimals,
+        ...(metadata && { extra: { name: metadata.name, version: metadata.version } }),
+      };
+    }
+  }
+
+  // EVM mainnet networks from allset-sdk
+  const mainnetNetworks = ["base", "arbitrum"];
+  for (const network of mainnetNetworks) {
+    const tokenConfig = mainnetProvider.getTokenConfig(network, "USDC");
     const metadata = EIP3009_METADATA[network];
     if (tokenConfig) {
       configs[network] = {
