@@ -117,6 +117,14 @@ export interface NetworkConfig {
 export type RoutesConfig = Record<string, RouteConfig>;
 
 /**
+ * Middleware options
+ */
+export interface MiddlewareOptions {
+  /** Enable debug logging (default: true) */
+  debug?: boolean;
+}
+
+/**
  * Decoded X-PAYMENT payload
  */
 export interface XPaymentPayload {

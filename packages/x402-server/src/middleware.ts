@@ -9,6 +9,7 @@ import type {
   RoutesConfig,
   PaymentRequirement,
   PayToConfig,
+  MiddlewareOptions,
 } from "./types.js";
 import {
   createPaymentRequired,
@@ -33,6 +34,14 @@ interface Response {
 }
 
 type NextFunction = () => void | Promise<void>;
+
+/**
+ * Logger function - logs to console by default, can be overridden
+ */
+function log(message: string, options?: MiddlewareOptions): void {
+  if (options?.debug === false) return;
+  console.log(`[x402-server] ${message}`);
+}
 
 /**
  * Match a route pattern to a request
@@ -171,8 +180,11 @@ function resolvePayTo(payTo: PayToConfig, network: string): string {
 export function paymentMiddleware(
   payTo: PayToConfig,
   routes: RoutesConfig,
-  facilitator: FacilitatorConfig
+  facilitator: FacilitatorConfig,
+  options?: MiddlewareOptions
 ) {
+  const opts = { debug: true, ...options };
+  
   return async function x402Middleware(
     req: Request,
     res: Response,
@@ -186,6 +198,8 @@ export function paymentMiddleware(
       return next();
     }
     
+    log(`→ ${req.method} ${req.path} (${routeConfig.network}, ${routeConfig.price})`, opts);
+    
     // Check for X-PAYMENT header
     const paymentHeader = req.header("X-PAYMENT");
     
@@ -195,12 +209,14 @@ export function paymentMiddleware(
       resolvedPayTo = resolvePayTo(payTo, routeConfig.network);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      log(`✗ Address resolution error: ${errorMessage}`, opts);
       res.status(500);
       return res.json({ error: errorMessage });
     }
     
     if (!paymentHeader) {
       // Return 402 Payment Required
+      log(`← 402 Payment Required (no X-PAYMENT header)`, opts);
       try {
         const paymentRequired = createPaymentRequired(
           resolvedPayTo,
@@ -211,10 +227,13 @@ export function paymentMiddleware(
         return res.json(paymentRequired);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
+        log(`✗ Error creating payment requirement: ${errorMessage}`, opts);
         res.status(500);
         return res.json({ error: errorMessage });
       }
     }
+    
+    log(`  X-PAYMENT header present (${paymentHeader.length} chars)`, opts);
     
     // Create payment requirement for verification
     const paymentRequirement = createPaymentRequirement(
@@ -227,6 +246,7 @@ export function paymentMiddleware(
     
     try {
       // Step 1: Verify payment with facilitator
+      log(`  → Verifying payment with facilitator...`, opts);
       const verifyResult = await verifyPayment(
         paymentHeader,
         paymentRequirement,
@@ -234,6 +254,7 @@ export function paymentMiddleware(
       );
       
       if (!verifyResult.isValid) {
+        log(`  ✗ Verification failed: ${verifyResult.invalidReason}`, opts);
         res.status(402);
         return res.json({
           error: verifyResult.invalidReason || "Payment verification failed",
@@ -242,8 +263,11 @@ export function paymentMiddleware(
         });
       }
       
+      log(`  ✓ Payment verified (payer: ${verifyResult.payer?.slice(0, 20)}...)`, opts);
+      
       // Step 2: For Fast, payment is already on-chain - serve content immediately
       if (isFast) {
+        log(`← 200 OK (Fast payment - no settlement needed)`, opts);
         // Set response header with verification info
         res.setHeader(
           "X-PAYMENT-RESPONSE",
@@ -259,6 +283,7 @@ export function paymentMiddleware(
       }
       
       // Step 3: For EVM, must settle before serving content
+      log(`  → Settling EVM payment...`, opts);
       const settleResult = await settlePayment(
         paymentHeader,
         paymentRequirement,
@@ -266,6 +291,7 @@ export function paymentMiddleware(
       );
       
       if (!settleResult.success) {
+        log(`  ✗ Settlement failed: ${settleResult.errorReason}`, opts);
         res.status(402);
         return res.json({
           error: settleResult.errorReason || "Payment settlement failed",
@@ -273,6 +299,9 @@ export function paymentMiddleware(
           payer: verifyResult.payer,
         });
       }
+      
+      log(`  ✓ Payment settled (tx: ${settleResult.txHash?.slice(0, 20)}...)`, opts);
+      log(`← 200 OK`, opts);
       
       // Set response header with settlement info
       res.setHeader(
@@ -290,6 +319,7 @@ export function paymentMiddleware(
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      log(`✗ Payment error: ${errorMessage}`, opts);
       res.status(500);
       return res.json({
         error: `Payment processing error: ${errorMessage}`,
@@ -305,12 +335,14 @@ export function paymentMiddleware(
 export function paywall(
   payTo: PayToConfig,
   config: RouteConfig,
-  facilitator: FacilitatorConfig
+  facilitator: FacilitatorConfig,
+  options?: MiddlewareOptions
 ) {
   return paymentMiddleware(
     payTo,
     { "*": config },
-    facilitator
+    facilitator,
+    options
   );
 }
 
