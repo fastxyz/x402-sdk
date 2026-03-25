@@ -35,6 +35,7 @@ const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
     chain: arbitrumSepolia,
     usdcName: "USD Coin",
     usdcVersion: "2",
+    rpcEnvVar: "ARB_SEPOLIA_RPC_URL",
   },
   arbitrum: {
     chain: arbitrum,
@@ -48,6 +49,7 @@ const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
     usdcName: "USDC",
     usdcVersion: "2",
     fallbackUsdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    rpcEnvVar: "BASE_SEPOLIA_RPC_URL",
   },
   base: {
     chain: base,
@@ -60,6 +62,7 @@ const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
     usdcName: "USD Coin",
     usdcVersion: "2",
     fallbackUsdcAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    rpcEnvVar: "ETH_RPC_URL",
   },
   "ethereum-sepolia": {
     chain: sepolia,
