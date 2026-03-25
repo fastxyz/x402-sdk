@@ -108,6 +108,8 @@ export interface FacilitatorConfig {
   committeePublicKeys?: Record<string, string[]>;
   /** Custom chain configs */
   chains?: Record<string, Chain>;
+  /** Enable debug logging (default: true) */
+  debug?: boolean;
 }
 
 /**
