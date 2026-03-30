@@ -78,6 +78,26 @@ export interface BridgeResult {
   error?: string;
 }
 
+interface BridgeNetworkContext {
+  normalizedNetwork: string;
+  allsetProviderNetwork: 'testnet' | 'mainnet';
+  fastNetwork: 'testnet' | 'mainnet';
+  tokenName: 'USDC' | 'testUSDC';
+}
+
+export function resolveBridgeNetworkContext(network: string): BridgeNetworkContext {
+  const normalizedNetwork = normalizeEvmNetwork(network) ?? network;
+  const isSepolia = normalizedNetwork.includes('sepolia');
+
+  return {
+    normalizedNetwork,
+    // allset-sdk currently exposes Base mainnet under the "testnet" provider namespace.
+    allsetProviderNetwork: isSepolia || normalizedNetwork === 'base' ? 'testnet' : 'mainnet',
+    fastNetwork: isSepolia ? 'testnet' : 'mainnet',
+    tokenName: isSepolia ? 'testUSDC' : 'USDC',
+  };
+}
+
 // ─── Public Functions ─────────────────────────────────────────────────────────
 
 /**
@@ -85,10 +105,8 @@ export interface BridgeResult {
  * Configurations are loaded from @fastxyz/allset-sdk.
  */
 export function getBridgeConfig(network: string): BridgeChainConfig | null {
-  const normalizedNetwork = normalizeEvmNetwork(network) ?? network;
-  // Determine which AllSet network to use based on chain name
-  const isTestnet = normalizedNetwork.includes('sepolia') || normalizedNetwork === 'base';
-  const allset = getAllSetProvider(isTestnet ? 'testnet' : 'mainnet');
+  const { normalizedNetwork, allsetProviderNetwork } = resolveBridgeNetworkContext(network);
+  const allset = getAllSetProvider(allsetProviderNetwork);
   
   // Map x402 network names to allset-sdk chain names
   const chainName = normalizedNetwork === 'ethereum-sepolia' ? 'ethereum-sepolia'
@@ -142,7 +160,7 @@ export async function getFastBalance(wallet: X402FastWallet): Promise<bigint> {
  */
 export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
   const { fastWallet, evmReceiverAddress, amount, network, verbose = false, logs = [] } = params;
-  const normalizedNetwork = normalizeEvmNetwork(network) ?? network;
+  const { normalizedNetwork, allsetProviderNetwork, fastNetwork, tokenName } = resolveBridgeNetworkContext(network);
   
   const log = (msg: string) => {
     if (verbose) {
@@ -151,11 +169,6 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
     }
   };
 
-  // Determine network type
-  const isTestnet = normalizedNetwork.includes('sepolia') || normalizedNetwork === 'base';
-  const allsetNetwork = isTestnet ? 'testnet' : 'mainnet';
-  const tokenName = isTestnet ? 'testUSDC' : 'USDC';
-  
   log(`━━━ AllSet Bridge START ━━━`);
   log(`  Amount: ${Number(amount) / 1e6} ${tokenName}`);
   log(`  From: ${fastWallet.address}`);
@@ -164,10 +177,10 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
 
   try {
     // Get AllSet provider
-    const allset = getAllSetProvider(allsetNetwork);
+    const allset = getAllSetProvider(allsetProviderNetwork);
     
     // Get Fast provider for the wallet
-    const fastProvider = getFastProvider(allsetNetwork);
+    const fastProvider = getFastProvider(fastNetwork);
     
     // Create a FastWallet from raw keys using @fastxyz/sdk
     log(`[Step 1] Creating FastWallet from keys...`);

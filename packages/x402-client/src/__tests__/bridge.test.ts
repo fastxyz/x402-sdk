@@ -9,6 +9,7 @@ import { describe, it, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { 
   getBridgeConfig,
+  resolveBridgeNetworkContext,
 } from '../bridge.js';
 
 const originalFetch = globalThis.fetch;
@@ -69,6 +70,28 @@ describe('AllSet Bridge', () => {
       assert.ok(typeof config.usdcAddress === 'string');
       assert.ok(typeof config.fastBridgeAddress === 'string');
       assert.ok(typeof config.relayerUrl === 'string');
+    });
+  });
+
+  describe('resolveBridgeNetworkContext', () => {
+    it('should keep sepolia networks on testnet Fast and testUSDC', () => {
+      const context = resolveBridgeNetworkContext('arbitrum-sepolia');
+      assert.deepStrictEqual(context, {
+        normalizedNetwork: 'arbitrum-sepolia',
+        allsetProviderNetwork: 'testnet',
+        fastNetwork: 'testnet',
+        tokenName: 'testUSDC',
+      });
+    });
+
+    it('should keep Base mainnet on mainnet Fast USDC while using the AllSet testnet provider namespace', () => {
+      const context = resolveBridgeNetworkContext('eip155:8453');
+      assert.deepStrictEqual(context, {
+        normalizedNetwork: 'base',
+        allsetProviderNetwork: 'testnet',
+        fastNetwork: 'mainnet',
+        tokenName: 'USDC',
+      });
     });
   });
 
