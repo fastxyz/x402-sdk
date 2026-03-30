@@ -1,7 +1,7 @@
 /**
  * AllSet bridge integration for x402-client
  * 
- * Bridges fastUSDC/testUSDC from Fast to USDC on EVM chains when needed.
+ * Bridges USDC/testUSDC from Fast to USDC on EVM chains when needed.
  * Uses @fastxyz/allset-sdk for bridge operations.
  */
 
@@ -18,11 +18,11 @@ const FAST_RPC_URLS = {
   mainnet: 'https://api.fast.xyz/proxy',
 } as const;
 
-/** fastUSDC token ID on Fast mainnet */
-const fastUSDC_TOKEN_ID = 'b4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5';
+/** USDC token ID on Fast mainnet */
+const MAINNET_USDC_TOKEN_ID = 'c655a12330da6af361d281b197996d2bc135aaed3b66278e729c2222291e9130';
 
 /** testUSDC token ID on Fast testnet */
-const testUSDC_TOKEN_ID = 'd73a0679a2be46981e2a8aedecd951c8b6690e7d5f8502b34ed3ff4cc2163b46';
+const TESTNET_USDC_TOKEN_ID = 'd73a0679a2be46981e2a8aedecd951c8b6690e7d5f8502b34ed3ff4cc2163b46';
 
 // ─── Cached Providers ─────────────────────────────────────────────────────────
 
@@ -58,7 +58,7 @@ export interface BridgeChainConfig {
 }
 
 export interface BridgeParams {
-  /** Fast wallet with fastUSDC/testUSDC */
+  /** Fast wallet with USDC/testUSDC */
   fastWallet: X402FastWallet;
   /** EVM address to receive USDC */
   evmReceiverAddress: string;
@@ -112,7 +112,7 @@ export function getBridgeConfig(network: string): BridgeChainConfig | null {
 }
 
 /**
- * Get fastUSDC/testUSDC balance on Fast network.
+ * Get USDC/testUSDC balance on Fast network.
  * Uses @fastxyz/sdk's FastProvider.
  */
 export async function getFastBalance(wallet: X402FastWallet): Promise<bigint> {
@@ -123,10 +123,10 @@ export async function getFastBalance(wallet: X402FastWallet): Promise<bigint> {
     const accountInfo = await provider.getAccountInfo(wallet.address);
     if (!accountInfo?.token_balance) return 0n;
 
-    // Check for both mainnet fastUSDC and testnet testUSDC
+    // Check for both mainnet USDC and testnet testUSDC
     for (const [tokenId, hexAmount] of accountInfo.token_balance) {
       const tokenHex = Buffer.from(tokenId).toString('hex');
-      if (tokenHex === fastUSDC_TOKEN_ID || tokenHex === testUSDC_TOKEN_ID) {
+      if (tokenHex === MAINNET_USDC_TOKEN_ID || tokenHex === TESTNET_USDC_TOKEN_ID) {
         return BigInt('0x' + hexAmount);
       }
     }
@@ -137,7 +137,7 @@ export async function getFastBalance(wallet: X402FastWallet): Promise<bigint> {
 }
 
 /**
- * Bridge fastUSDC/testUSDC from Fast to USDC on EVM via AllSet.
+ * Bridge USDC/testUSDC from Fast to USDC on EVM via AllSet.
  * Uses @fastxyz/allset-sdk's sendToExternal().
  */
 export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<BridgeResult> {
@@ -154,7 +154,7 @@ export async function bridgeFastusdcToUsdc(params: BridgeParams): Promise<Bridge
   // Determine network type
   const isTestnet = normalizedNetwork.includes('sepolia') || normalizedNetwork === 'base';
   const allsetNetwork = isTestnet ? 'testnet' : 'mainnet';
-  const tokenName = isTestnet ? 'testUSDC' : 'fastUSDC';
+  const tokenName = isTestnet ? 'testUSDC' : 'USDC';
   
   log(`━━━ AllSet Bridge START ━━━`);
   log(`  Amount: ${Number(amount) / 1e6} ${tokenName}`);

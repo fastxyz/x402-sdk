@@ -15,6 +15,14 @@ import { settle } from "./settle.js";
 import { EVM_CHAINS, SUPPORTED_EVM_NETWORKS, SUPPORTED_FAST_NETWORKS } from "./chains.js";
 
 /**
+ * Logger function - logs to console by default
+ */
+function log(message: string, config?: FacilitatorConfig): void {
+  if (config?.debug === false) return;
+  console.log(`[x402-facilitator] ${message}`);
+}
+
+/**
  * JSON.parse reviver that converts numeric strings to BigInt when they look like
  * large integers (used for timestamp_nanos and other BigInt fields in Fast transactions)
  */
@@ -60,10 +68,12 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
     method: "post",
     path: "/verify",
     handler: async (req: Request, res: Response) => {
+      log(`→ POST /verify`, config);
       try {
         const { paymentPayload, paymentRequirements } = req.body;
 
         if (!paymentPayload || !paymentRequirements) {
+          log(`  ✗ Missing parameters`, config);
           res.status(400).json({
             isValid: false,
             invalidReason: "missing_parameters",
@@ -77,6 +87,7 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
           try {
             decoded = parseX402Payload(Buffer.from(paymentPayload, "base64").toString());
           } catch {
+            log(`  ✗ Invalid payload encoding`, config);
             res.status(400).json({
               isValid: false,
               invalidReason: "invalid_payload_encoding",
@@ -87,10 +98,13 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
           decoded = paymentPayload;
         }
 
+        log(`  Network: ${decoded.network}, Scheme: ${decoded.scheme}`, config);
         const result = await verify(decoded, paymentRequirements, config);
+        log(`  ${result.isValid ? '✓' : '✗'} Verify result: ${result.isValid ? 'valid' : result.invalidReason}`, config);
         res.json(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        log(`  ✗ Error: ${message}`, config);
         res.status(500).json({
           isValid: false,
           invalidReason: `verification_error: ${message}`,
@@ -104,10 +118,12 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
     method: "post",
     path: "/settle",
     handler: async (req: Request, res: Response) => {
+      log(`→ POST /settle`, config);
       try {
         const { paymentPayload, paymentRequirements } = req.body;
 
         if (!paymentPayload || !paymentRequirements) {
+          log(`  ✗ Missing parameters`, config);
           res.status(400).json({
             success: false,
             errorReason: "missing_parameters",
@@ -121,6 +137,7 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
           try {
             decoded = parseX402Payload(Buffer.from(paymentPayload, "base64").toString());
           } catch {
+            log(`  ✗ Invalid payload encoding`, config);
             res.status(400).json({
               success: false,
               errorReason: "invalid_payload_encoding",
@@ -131,10 +148,13 @@ export function createFacilitatorRoutes(config: FacilitatorConfig = {}) {
           decoded = paymentPayload;
         }
 
+        log(`  Network: ${decoded.network}, settling...`, config);
         const result = await settle(decoded, paymentRequirements, config);
+        log(`  ${result.success ? '✓' : '✗'} Settle result: ${result.success ? `tx=${result.txHash?.slice(0, 20)}...` : result.errorReason}`, config);
         res.json(result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        log(`  ✗ Error: ${message}`, config);
         res.status(500).json({
           success: false,
           errorReason: `settlement_error: ${message}`,

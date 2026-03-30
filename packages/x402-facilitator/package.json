@@ -1,6 +1,6 @@
 {
   "name": "@fastxyz/x402-facilitator",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "x402 payment protocol - facilitator SDK for verifying and settling payments on-chain",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,8 +32,8 @@
   },
   "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
-    "@fastxyz/allset-sdk": "^0.1.6",
-    "@fastxyz/sdk": "^0.2.3",
+    "@fastxyz/allset-sdk": "^0.1.8",
+    "@fastxyz/sdk": "^0.2.5",
     "@mysten/bcs": "^1.2.0",
     "viem": "^2.21.0"
   },

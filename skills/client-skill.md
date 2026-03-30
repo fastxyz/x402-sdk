@@ -3,7 +3,7 @@ name: x402-client
 description: >
   Client SDK for paying 402-protected APIs. Use when the user wants to pay for content behind
   a 402 paywall, sign EIP-3009 authorizations for EVM payments, submit Fast transaction
-  certificates, or auto-bridge fastUSDC to USDC when paying EVM endpoints.
+  certificates, or auto-bridge Fast to EVM USDC when paying EVM endpoints.
 metadata:
   package: "@fastxyz/x402-client"
   short-description: Pay for 402-protected content with crypto.
@@ -17,7 +17,7 @@ metadata:
 - Pay for a 402-protected API endpoint
 - Sign EIP-3009 authorization for EVM payment
 - Submit Fast transaction and get certificate
-- Auto-bridge fastUSDC → USDC for EVM payments
+- Auto-bridge Fast → EVM USDC for EVM payments
 - Debug payment failures
 
 **DO NOT use this skill for:**
@@ -39,7 +39,7 @@ What network does the endpoint require?
 │   │
 │   └── Do you have USDC on that EVM chain?
 │       ├── YES → Use EVM wallet only
-│       └── NO → Do you have fastUSDC on Fast?
+│       └── NO → Do you have USDC/testUSDC on Fast?
 │                ├── YES → Use both wallets (auto-bridge)
 │                └── NO → Fund a wallet first
 │
@@ -119,7 +119,7 @@ What network does the endpoint require?
 
 ### 3. Pay with Auto-Bridge
 
-**When:** Endpoint requires EVM payment but you only have fastUSDC on Fast.
+**When:** Endpoint requires EVM payment but you only have USDC/testUSDC on Fast.
 
 **Steps:**
 
@@ -147,7 +147,7 @@ What network does the endpoint require?
 2. SDK automatically:
    - Detects EVM payment required
    - Checks EVM USDC balance → insufficient
-   - Bridges fastUSDC → USDC via AllSet (~3-4s)
+   - Bridges Fast → EVM USDC via AllSet (~3-4s)
    - Signs EIP-3009 authorization
    - Completes payment
 
@@ -181,9 +181,9 @@ What network does the endpoint require?
    ```
 
 3. Check common issues:
-   - `INSUFFICIENT_BALANCE` → Fund wallet with USDC/fastUSDC
+   - `INSUFFICIENT_BALANCE` → Fund wallet with USDC or testUSDC
    - `INVALID_SIGNATURE` → Verify privateKey matches address
-   - `BRIDGE_TIMEOUT` → Check Fast wallet has fastUSDC, retry
+   - `BRIDGE_TIMEOUT` → Check Fast wallet balance, retry
 
 ---
 
@@ -257,7 +257,7 @@ interface FastWallet {
 
 | Error | Meaning | Fix |
 |-------|---------|-----|
-| `INSUFFICIENT_BALANCE` | Not enough USDC/fastUSDC | Fund wallet or use auto-bridge |
+| `INSUFFICIENT_BALANCE` | Not enough USDC/testUSDC | Fund wallet or use auto-bridge |
 | `INVALID_SIGNATURE` | Key doesn't match address | Verify wallet config |
 | `BRIDGE_TIMEOUT` | Bridge took too long | Check Fast balance, retry |
 | `NETWORK_NOT_SUPPORTED` | Unknown network in 402 | Check endpoint configuration |

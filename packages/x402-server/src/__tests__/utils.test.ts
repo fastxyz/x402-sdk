@@ -39,7 +39,7 @@ describe('x402-server utils', () => {
       );
       assert.strictEqual(
         NETWORK_CONFIGS['fast-mainnet'].asset,
-        '0xb4cf1b9e227bb6a21b959338895dfb39b8d2a96dfa1ce5dd633561c193124cb5'
+        '0xc655a12330da6af361d281b197996d2bc135aaed3b66278e729c2222291e9130'
       );
     });
 

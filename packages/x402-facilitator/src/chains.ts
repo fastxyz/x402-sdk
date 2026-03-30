@@ -35,29 +35,34 @@ const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
     chain: arbitrumSepolia,
     usdcName: "USD Coin",
     usdcVersion: "2",
+    rpcEnvVar: "ARB_SEPOLIA_RPC_URL",
   },
   arbitrum: {
     chain: arbitrum,
     usdcName: "USD Coin",
     usdcVersion: "2",
     fallbackUsdcAddress: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
+    rpcEnvVar: "ARB_RPC_URL",
   },
   "base-sepolia": {
     chain: baseSepolia,
     usdcName: "USDC",
     usdcVersion: "2",
     fallbackUsdcAddress: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+    rpcEnvVar: "BASE_SEPOLIA_RPC_URL",
   },
   base: {
     chain: base,
     usdcName: "USD Coin",
     usdcVersion: "2",
+    rpcEnvVar: "BASE_RPC_URL",
   },
   ethereum: {
     chain: mainnet,
     usdcName: "USD Coin",
     usdcVersion: "2",
     fallbackUsdcAddress: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    rpcEnvVar: "ETH_RPC_URL",
   },
   "ethereum-sepolia": {
     chain: sepolia,
@@ -68,15 +73,24 @@ const EIP3009_METADATA: Record<string, Eip3009Metadata> = {
 };
 
 /**
+ * Mainnet chains (use mainnet provider)
+ */
+const MAINNET_CHAINS = new Set(["base", "arbitrum", "ethereum"]);
+
+/**
  * Build EVM chain configs by combining allset-sdk data with local EIP-3009 metadata
  */
 function buildEvmChains(): Record<string, EvmChainConfig> {
-  const allset = new AllSetProvider({ network: "testnet" });
+  const testnetProvider = new AllSetProvider({ network: "testnet" });
+  const mainnetProvider = new AllSetProvider({ network: "mainnet" });
   const chains: Record<string, EvmChainConfig> = {};
 
   for (const [network, metadata] of Object.entries(EIP3009_METADATA)) {
+    // Use appropriate provider based on network
+    const provider = MAINNET_CHAINS.has(network) ? mainnetProvider : testnetProvider;
+    
     // Try to get USDC address from allset-sdk
-    const tokenConfig = allset.getTokenConfig(network, "USDC");
+    const tokenConfig = provider.getTokenConfig(network, "USDC");
     const usdcAddress =
       tokenConfig?.evmAddress ?? metadata.fallbackUsdcAddress ?? "";
 
