@@ -24,6 +24,10 @@ describe('EVM Payment Handler', () => {
       assert.ok(EVM_NETWORKS.includes('arbitrum'));
       assert.ok(EVM_NETWORKS.includes('base'));
     });
+
+    it('should keep CAIP-2 aliases out of the exported canonical list', () => {
+      assert.ok(!(EVM_NETWORKS as readonly string[]).includes('eip155:8453'));
+    });
   });
 
   describe('handleEvmPayment', () => {
@@ -181,6 +185,48 @@ describe('EVM Payment Handler', () => {
       assert.strictEqual(result.payment.amount, '0.5');
       assert.strictEqual(result.payment.recipient, '0x1131623344cFdb04D06a9eD511BEc56FF6Ae4372');
       assert.ok(result.payment.txHash);
+    });
+
+    it('should accept CAIP-2 network ids when building the EIP-3009 domain', async () => {
+      const paymentRequired = mock402Response('eip155:8453', '100000');
+      let paymentPayload: Record<string, unknown> | null = null;
+
+      globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(init.body as string) : null;
+
+        if (body?.method === 'eth_call') {
+          return new Response(JSON.stringify({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: '0x00000000000000000000000000000000000000000000000000000000000186a0',
+          }), { status: 200 });
+        }
+
+        if (init?.headers && (init.headers as Record<string, string>)['X-PAYMENT']) {
+          const header = (init.headers as Record<string, string>)['X-PAYMENT'];
+          paymentPayload = JSON.parse(Buffer.from(header, 'base64').toString()) as Record<string, unknown>;
+          return new Response(JSON.stringify({ success: true, txHash: '0xbase123' }), { status: 200 });
+        }
+
+        return new Response('{}', { status: 200 });
+      };
+
+      const result = await handleEvmPayment(
+        'https://api.example.com/data',
+        'GET',
+        {},
+        undefined,
+        paymentRequired,
+        paymentRequired.accepts![0],
+        mockEvmWallet,
+        false,
+        []
+      );
+
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.payment?.network, 'eip155:8453');
+      assert.ok(paymentPayload);
+      assert.strictEqual(paymentPayload['network'], 'eip155:8453');
     });
 
     it('should handle verbose logging', async () => {

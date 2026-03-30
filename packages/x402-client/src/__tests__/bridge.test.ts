@@ -44,6 +44,14 @@ describe('AllSet Bridge', () => {
       assert.ok(config.fastBridgeAddress.startsWith('fast'));
     });
 
+    it('should return config for CAIP-2 base mainnet ids', () => {
+      const config = getBridgeConfig('eip155:8453');
+      assert.ok(config);
+      assert.strictEqual(config.chainId, 8453);
+      assert.ok(config.usdcAddress.startsWith('0x'));
+      assert.ok(config.fastBridgeAddress.startsWith('fast'));
+    });
+
     it('should return null for unsupported network', () => {
       const config = getBridgeConfig('ethereum-mainnet');
       assert.strictEqual(config, null);

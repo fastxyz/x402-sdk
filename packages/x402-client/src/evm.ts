@@ -16,6 +16,7 @@ import type {
   Eip3009Authorization 
 } from './types.js';
 import { bridgeFastusdcToUsdc, getFastBalance, getBridgeConfig } from './bridge.js';
+import { CANONICAL_EVM_NETWORKS, normalizeEvmNetwork } from './networks.js';
 
 /**
  * Network configuration
@@ -35,7 +36,7 @@ const NETWORK_MAP: Record<string, NetworkConfig> = {
   'base': { chain: base, network: 'mainnet', chainId: 8453 },
 };
 
-export const EVM_NETWORKS = Object.keys(NETWORK_MAP);
+export const EVM_NETWORKS = [...CANONICAL_EVM_NETWORKS];
 
 /**
  * Get EVM USDC balance
@@ -128,7 +129,8 @@ export async function handleEvmPayment(
   log(`  Fast wallet available: ${fastWallet ? 'yes' : 'no'}`);
 
   // Get network config
-  const networkConfig = NETWORK_MAP[evmReq.network];
+  const normalizedNetwork = normalizeEvmNetwork(evmReq.network);
+  const networkConfig = normalizedNetwork ? NETWORK_MAP[normalizedNetwork] : undefined;
   if (!networkConfig) {
     throw new Error(`Unsupported EVM network: ${evmReq.network}. Supported: ${EVM_NETWORKS.join(', ')}`);
   }
