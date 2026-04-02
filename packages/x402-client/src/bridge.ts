@@ -106,17 +106,11 @@ export function resolveBridgeNetworkContext(network: string): BridgeNetworkConte
 export function getBridgeConfig(network: string): BridgeChainConfig | null {
   const { normalizedNetwork, allsetProviderNetwork } = resolveBridgeNetworkContext(network);
   const allset = getAllSetProvider(allsetProviderNetwork);
-  
-  // Map x402 network names to allset-sdk chain names
-  const chainName = normalizedNetwork === 'ethereum-sepolia' ? 'ethereum-sepolia'
-    : normalizedNetwork === 'arbitrum-sepolia' ? 'arbitrum-sepolia'
-    : normalizedNetwork === 'base' ? 'base'
-    : normalizedNetwork;
-  
-  const chainConfig = allset.getChainConfig(chainName);
+
+  const chainConfig = allset.getChainConfig(normalizedNetwork);
   if (!chainConfig) return null;
-  
-  const tokenConfig = allset.getTokenConfig(chainName, 'USDC');
+
+  const tokenConfig = allset.getTokenConfig(normalizedNetwork, 'USDC');
   if (!tokenConfig) return null;
   
   return {
