@@ -3,6 +3,7 @@
  * Aligned with reference implementation
  */
 
+import { normalizeEvmNetwork } from "./chains.js";
 import type { Chain } from "viem";
 
 /**
@@ -147,6 +148,7 @@ export function getNetworkType(network: string): NetworkType {
  * Get chain ID from network name
  */
 export function getNetworkId(network: string): number {
+  const normalizedNetwork = normalizeEvmNetwork(network);
   const networkIds: Record<string, number> = {
     "ethereum": 1,
     "ethereum-sepolia": 11155111,
@@ -157,5 +159,5 @@ export function getNetworkId(network: string): number {
     "optimism": 10,
     "polygon": 137,
   };
-  return networkIds[network] || 0;
+  return networkIds[normalizedNetwork] || 0;
 }

@@ -10,6 +10,7 @@ import {
   encodePayload,
   decodePayload,
   NETWORK_CONFIGS,
+  normalizeEvmNetwork,
 } from '../utils.js';
 
 describe('x402-server utils', () => {
@@ -98,10 +99,26 @@ describe('x402-server utils', () => {
       assert.ok(config.asset.startsWith('0x'));
     });
 
+    it('should return canonical config for CAIP-2 aliases', () => {
+      const config = getNetworkConfig('eip155:8453');
+      assert.deepStrictEqual(config, NETWORK_CONFIGS['base']);
+    });
+
     it('should return default config for unknown networks', () => {
       const config = getNetworkConfig('unknown-network');
       assert.ok(config);
       assert.strictEqual(config.decimals, 6);
+    });
+  });
+
+  describe('normalizeEvmNetwork', () => {
+    it('should map CAIP-2 aliases to canonical names', () => {
+      assert.strictEqual(normalizeEvmNetwork('eip155:42161'), 'arbitrum');
+      assert.strictEqual(normalizeEvmNetwork('eip155:84532'), 'base-sepolia');
+    });
+
+    it('should leave canonical names unchanged', () => {
+      assert.strictEqual(normalizeEvmNetwork('base'), 'base');
     });
   });
 

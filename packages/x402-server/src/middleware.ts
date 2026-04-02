@@ -18,7 +18,7 @@ import {
   settlePayment,
   encodePaymentResponse,
 } from "./payment.js";
-import { assertSupportedPaymentNetwork } from "./utils.js";
+import { assertSupportedPaymentNetwork, normalizeEvmNetwork } from "./utils.js";
 
 // Express types (minimal to avoid hard dependency)
 interface Request {
@@ -99,11 +99,12 @@ function isFastNetwork(network: string): boolean {
  * Check if network is EVM-based
  */
 function isEvmNetwork(network: string): boolean {
+  const normalizedNetwork = normalizeEvmNetwork(network);
   const evmNetworks = [
     "ethereum", "arbitrum", "arbitrum-sepolia", 
     "base", "base-sepolia", "optimism", "polygon"
   ];
-  return evmNetworks.includes(network) || network.endsWith("-sepolia");
+  return evmNetworks.includes(normalizedNetwork) || normalizedNetwork.endsWith("-sepolia");
 }
 
 /**

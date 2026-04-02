@@ -11,6 +11,17 @@ import type { NetworkConfig } from "./types.js";
 const FAST_MAINNET_USDC_TOKEN_ID =
   "0xc655a12330da6af361d281b197996d2bc135aaed3b66278e729c2222291e9130";
 
+const EVM_NETWORK_ALIASES: Record<string, string> = {
+  "eip155:1": "ethereum",
+  "eip155:11155111": "ethereum-sepolia",
+  "eip155:42161": "arbitrum",
+  "eip155:421614": "arbitrum-sepolia",
+  "eip155:8453": "base",
+  "eip155:84532": "base-sepolia",
+  "eip155:10": "optimism",
+  "eip155:137": "polygon",
+};
+
 /**
  * EIP-3009 metadata for USDC contracts (x402-specific, not in SDKs)
  */
@@ -108,6 +119,10 @@ function buildNetworkConfigs(): Record<string, NetworkConfig> {
  */
 export const NETWORK_CONFIGS: Record<string, NetworkConfig> = buildNetworkConfigs();
 
+export function normalizeEvmNetwork(network: string): string {
+  return EVM_NETWORK_ALIASES[network] ?? network;
+}
+
 /**
  * Reject deprecated network aliases that no longer map to a valid payment flow.
  */
@@ -145,8 +160,10 @@ export function parsePrice(price: string, decimals: number = 6): string {
  * Get network config, with fallback to generic USDC
  */
 export function getNetworkConfig(network: string): NetworkConfig {
-  if (network in NETWORK_CONFIGS) {
-    return NETWORK_CONFIGS[network];
+  const normalizedNetwork = normalizeEvmNetwork(network);
+
+  if (normalizedNetwork in NETWORK_CONFIGS) {
+    return NETWORK_CONFIGS[normalizedNetwork];
   }
 
   // Default to generic USDC config for unknown networks

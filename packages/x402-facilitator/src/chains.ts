@@ -17,6 +17,17 @@ import {
 import type { Chain } from "viem";
 import type { EvmChainConfig } from "./types.js";
 
+const EVM_NETWORK_ALIASES: Record<string, string> = {
+  "eip155:1": "ethereum",
+  "eip155:11155111": "ethereum-sepolia",
+  "eip155:42161": "arbitrum",
+  "eip155:421614": "arbitrum-sepolia",
+  "eip155:8453": "base",
+  "eip155:84532": "base-sepolia",
+  "eip155:10": "optimism",
+  "eip155:137": "polygon",
+};
+
 /**
  * EIP-3009 metadata for USDC contracts (x402-specific, not in SDKs)
  */
@@ -163,11 +174,15 @@ export const FAST_TRUSTED_COMMITTEE_PUBLIC_KEYS: Record<string, string[]> = {
   ],
 };
 
+export function normalizeEvmNetwork(network: string): string {
+  return EVM_NETWORK_ALIASES[network] ?? network;
+}
+
 /**
  * Get chain config for a network
  */
 export function getEvmChainConfig(network: string): EvmChainConfig | null {
-  return EVM_CHAINS[network] || null;
+  return EVM_CHAINS[normalizeEvmNetwork(network)] || null;
 }
 
 /**
