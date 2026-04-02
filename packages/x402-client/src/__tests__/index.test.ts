@@ -34,6 +34,7 @@ describe('x402-client', () => {
       assert.ok(Array.isArray(EVM_NETWORKS));
       assert.ok(EVM_NETWORKS.includes('arbitrum-sepolia'));
       assert.ok(EVM_NETWORKS.includes('base-sepolia'));
+      assert.ok(!(EVM_NETWORKS as readonly string[]).includes('eip155:8453'));
     });
   });
 
@@ -132,6 +133,38 @@ describe('x402-client', () => {
         }),
         /No matching wallet/
       );
+    });
+
+    it('should accept CAIP-2 EVM network ids during wallet matching', async () => {
+      let paymentHeaderSent = false;
+
+      globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+        const body = init?.body ? JSON.parse(init.body as string) : null;
+
+        if (body?.method === 'eth_call') {
+          return new Response(JSON.stringify({
+            jsonrpc: '2.0',
+            id: body.id,
+            result: '0x00000000000000000000000000000000000000000000000000000000000186a0',
+          }), { status: 200 });
+        }
+
+        if (init?.headers && (init.headers as Record<string, string>)['X-PAYMENT']) {
+          paymentHeaderSent = true;
+          return new Response(JSON.stringify({ success: true, data: 'paid content' }), { status: 200 });
+        }
+
+        return new Response(JSON.stringify(mock402Response('eip155:8453')), { status: 402 });
+      };
+
+      const result = await x402Pay({
+        url: 'https://api.example.com/paid',
+        wallet: mockEvmWallet,
+      });
+
+      assert.strictEqual(result.success, true);
+      assert.ok(paymentHeaderSent, 'X-PAYMENT header should be sent for CAIP-2 EVM quotes');
+      assert.strictEqual(result.payment?.network, 'eip155:8453');
     });
 
     it('should accept array of wallets', async () => {

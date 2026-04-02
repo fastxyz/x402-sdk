@@ -6,6 +6,7 @@ import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import type { FastTransactionCertificate } from "@fastxyz/sdk/core";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { verify } from "./verify.js";
+import { getEvmChainConfig, normalizeEvmNetwork } from "./chains.js";
 import {
   bytesToHex,
   createFastTransactionSigningMessage,
@@ -884,6 +885,11 @@ describe("verify", () => {
   });
 
   describe("EVM payments", () => {
+    it("normalizes CAIP-2 aliases to the canonical EVM chain config", () => {
+      expect(normalizeEvmNetwork("eip155:8453")).toBe("base");
+      expect(getEvmChainConfig("eip155:8453")).toBe(getEvmChainConfig("base"));
+    });
+
     it("rejects invalid payload structure", async () => {
       const payload: PaymentPayload = {
         x402Version: 1,
@@ -907,6 +913,41 @@ describe("verify", () => {
       const result = await verify(payload, requirement);
       expect(result.isValid).toBe(false);
       expect(result.invalidReason).toBe("invalid_payload");
+    });
+
+    it("does not reject CAIP-2 aliases as invalid networks before signature verification", async () => {
+      const payload: PaymentPayload = {
+        x402Version: 1,
+        scheme: "exact",
+        network: "eip155:8453",
+        payload: {
+          signature: "0x" + "ab".repeat(65),
+          authorization: {
+            from: "0x1111111111111111111111111111111111111111",
+            to: "0x2222222222222222222222222222222222222222",
+            value: "100000",
+            validAfter: "0",
+            validBefore: String(Math.floor(Date.now() / 1000) + 3600),
+            nonce: "0x" + "00".repeat(32),
+          },
+        },
+      };
+
+      const requirement: PaymentRequirement = {
+        scheme: "exact",
+        network: "eip155:8453",
+        maxAmountRequired: "100000",
+        resource: "/api/data",
+        description: "Test",
+        mimeType: "application/json",
+        payTo: "0x2222222222222222222222222222222222222222",
+        maxTimeoutSeconds: 60,
+        asset: "0x833589fCD6EDB6E08f4c7C32D4f71b54bdA02913",
+      };
+
+      const result = await verify(payload, requirement);
+      expect(result.isValid).toBe(false);
+      expect(result.invalidReason).toBe("invalid_exact_evm_payload_signature");
     });
 
     it("rejects wrong scheme", async () => {
