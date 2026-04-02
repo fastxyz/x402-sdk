@@ -32,7 +32,7 @@
   },
   "homepage": "https://github.com/fastxyz/x402-sdk#readme",
   "dependencies": {
-    "@fastxyz/allset-sdk": "0.1.9"
+    "@fastxyz/allset-sdk": "0.1.10"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
