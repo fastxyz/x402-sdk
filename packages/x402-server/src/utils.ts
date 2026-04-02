@@ -80,7 +80,7 @@ function buildNetworkConfigs(): Record<string, NetworkConfig> {
   }
 
   // EVM mainnet networks from allset-sdk
-  const mainnetNetworks = ["base", "arbitrum"];
+  const mainnetNetworks = ["base", "arbitrum", "ethereum"];
   for (const network of mainnetNetworks) {
     const tokenConfig = mainnetProvider.getTokenConfig(network, "USDC");
     const metadata = EIP3009_METADATA[network];

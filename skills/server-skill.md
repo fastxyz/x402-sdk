@@ -27,6 +27,21 @@ metadata:
 
 ---
 
+## Supported Networks
+
+| Type | Network | Chain ID | Environment |
+|------|---------|----------|-------------|
+| EVM | `ethereum` | 1 | Mainnet |
+| EVM | `ethereum-sepolia` | 11155111 | Testnet |
+| EVM | `arbitrum` | 42161 | Mainnet |
+| EVM | `arbitrum-sepolia` | 421614 | Testnet |
+| EVM | `base` | 8453 | Mainnet |
+| EVM | `base-sepolia` | 84532 | Testnet |
+| Fast | `fast-mainnet` | — | Mainnet |
+| Fast | `fast-testnet` | — | Testnet |
+
+---
+
 ## Decision Tree: Payment Address Setup
 
 ```

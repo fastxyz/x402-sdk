@@ -88,7 +88,7 @@ function buildEvmChains(): Record<string, EvmChainConfig> {
   for (const [network, metadata] of Object.entries(EIP3009_METADATA)) {
     // Use appropriate provider based on network
     const provider = MAINNET_CHAINS.has(network) ? mainnetProvider : testnetProvider;
-    
+
     // Try to get USDC address from allset-sdk
     const tokenConfig = provider.getTokenConfig(network, "USDC");
     const usdcAddress =
