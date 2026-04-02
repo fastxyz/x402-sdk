@@ -1,6 +1,6 @@
 {
   "name": "@fastxyz/x402-facilitator",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "x402 payment protocol - facilitator SDK for verifying and settling payments on-chain",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
