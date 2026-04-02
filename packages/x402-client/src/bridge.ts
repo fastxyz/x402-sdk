@@ -91,8 +91,7 @@ export function resolveBridgeNetworkContext(network: string): BridgeNetworkConte
 
   return {
     normalizedNetwork,
-    // allset-sdk currently exposes Base mainnet under the "testnet" provider namespace.
-    allsetProviderNetwork: isSepolia || normalizedNetwork === 'base' ? 'testnet' : 'mainnet',
+    allsetProviderNetwork: isSepolia ? 'testnet' : 'mainnet',
     fastNetwork: isSepolia ? 'testnet' : 'mainnet',
     tokenName: isSepolia ? 'testUSDC' : 'USDC',
   };

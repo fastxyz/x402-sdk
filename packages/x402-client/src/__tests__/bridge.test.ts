@@ -84,11 +84,11 @@ describe('AllSet Bridge', () => {
       });
     });
 
-    it('should keep Base mainnet on mainnet Fast USDC while using the AllSet testnet provider namespace', () => {
+    it('should keep Base mainnet on mainnet Fast USDC and the AllSet mainnet provider namespace', () => {
       const context = resolveBridgeNetworkContext('eip155:8453');
       assert.deepStrictEqual(context, {
         normalizedNetwork: 'base',
-        allsetProviderNetwork: 'testnet',
+        allsetProviderNetwork: 'mainnet',
         fastNetwork: 'mainnet',
         tokenName: 'USDC',
       });
