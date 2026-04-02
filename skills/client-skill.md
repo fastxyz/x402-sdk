@@ -27,21 +27,6 @@ metadata:
 
 ---
 
-## Supported Networks
-
-| Type | Network | Chain ID | Environment |
-|------|---------|----------|-------------|
-| EVM | `ethereum` | 1 | Mainnet |
-| EVM | `ethereum-sepolia` | 11155111 | Testnet |
-| EVM | `arbitrum` | 42161 | Mainnet |
-| EVM | `arbitrum-sepolia` | 421614 | Testnet |
-| EVM | `base` | 8453 | Mainnet |
-| EVM | `base-sepolia` | 84532 | Testnet |
-| Fast | `fast-mainnet` | — | Mainnet |
-| Fast | `fast-testnet` | — | Testnet |
-
----
-
 ## Decision Tree: Which Wallet?
 
 ```
@@ -50,7 +35,7 @@ What network does the endpoint require?
 ├── Fast network (fast-testnet, fast-mainnet)
 │   └── Use Fast wallet only
 │
-├── EVM network (ethereum, ethereum-sepolia, arbitrum, arbitrum-sepolia, base, base-sepolia)
+├── EVM network (ethereum, ethereum-sepolia, arbitrum, arbitrum-sepolia, base)
 │   │
 │   └── Do you have USDC on that EVM chain?
 │       ├── YES → Use EVM wallet only
@@ -324,6 +309,7 @@ interface X402PayResult {
 | `fast-mainnet` | Fast | USDC |
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
+| `ethereum` | EVM | USDC |
 
 ### Testnet
 
