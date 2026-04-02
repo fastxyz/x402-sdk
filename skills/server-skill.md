@@ -352,6 +352,7 @@ When payment is required:
 | `fast-mainnet` | Fast | USDC |
 | `arbitrum` | EVM | USDC |
 | `base` | EVM | USDC |
+| `ethereum` | EVM | USDC |
 
 ### Testnet
 

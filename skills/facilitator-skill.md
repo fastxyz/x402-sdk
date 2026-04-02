@@ -377,6 +377,7 @@ List supported payment kinds.
 | `fast-mainnet` | Fast | — |
 | `arbitrum` | EVM | 42161 |
 | `base` | EVM | 8453 |
+| `ethereum` | EVM | 1 |
 
 ### Testnet
 
